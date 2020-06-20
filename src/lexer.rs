@@ -16,7 +16,6 @@ fn get_single_token(tok_str : &str) -> Token {
   } else {
     return match tok_str {
       ":" => Token::Colon,
-      ";" => Token::SemiColon,
       "," => Token::Comma,
       "->"=> Token::FwdArrow,
       "<-"=> Token::BwdArrow,

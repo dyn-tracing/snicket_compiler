@@ -9,7 +9,6 @@ pub enum Token<'a> {
 
   // Separators
   Colon,
-  SemiColon,
   Comma,
   FwdArrow,
   BwdArrow,
