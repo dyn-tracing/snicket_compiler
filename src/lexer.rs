@@ -2,7 +2,7 @@ extern crate regex;
 use self::regex::Regex;
 
 lazy_static! {
-  static ref TOKENS      : Regex = Regex::new(r"[0-9]+|[A-Za-z_][A-Za-z0-9_]*|<-|->|-|\*|\{|\}|\(|\)|\[|\]|:|-|\*|\.\.|\||\S+").unwrap();
+  static ref TOKENS      : Regex = Regex::new(r"[0-9]+|[A-Za-z_][A-Za-z0-9_]*|-->|-\*>|\{|\}|\(|\)|:|,|\S+").unwrap();
   static ref IDENTIFIERS : Regex = Regex::new(r"^[A-Za-z_][A-Za-z0-9_]*$").unwrap();
   static ref VALUES      : Regex = Regex::new(r"^([0-9]+)$").unwrap();
 }
@@ -17,20 +17,13 @@ fn get_single_token(tok_str : &str) -> Token {
     return match tok_str {
       ":" => Token::Colon,
       "," => Token::Comma,
-      "->"=> Token::FwdArrow,
-      "<-"=> Token::BwdArrow,
+      "-->"=> Token::Edge,
+      "-*>"=> Token::Path,
 
       "(" => Token::ParenLeft,
       ")" => Token::ParenRight,
-      "[" => Token::SquareLeft,
-      "]" => Token::SquareRight,
       "{" => Token::BraceLeft,
       "}" => Token::BraceRight,
-
-      "-" => Token::Relationship,
-      "*" => Token::Iterator,
-      ".."=> Token::Ellipsis,
-      "|" => Token::Pipe,
 
       _   => panic!("Unrecognized token string: {}", tok_str)
     }
@@ -52,7 +45,7 @@ mod tests {
   
   #[test]
   fn test_lexer_1() {
-    let input_program = r"(n)->(m)";
+    let input_program = r"(n)-->(m)";
     println!("{:?}", get_tokens(input_program));
   }
 
@@ -76,37 +69,37 @@ mod tests {
 
   #[test]
   fn test_lexer_5() {
-    let input_program = r"(m)<-[:KNOWS]-(n)";
+    let input_program = r"(m)-->(n)";
     println!("{:?}", get_tokens(input_program));
   }
 
   #[test]
   fn test_lexer_6() {
-    let input_program = r"(n)-[*]->(m)";
+    let input_program = r"(n)-*>(m)";
     println!("{:?}", get_tokens(input_program));
   }
 
   #[test]
   fn test_lexer_7() {
-    let input_program = r"(n)-[:KNOWS|LOVES]->(m)";
+    let input_program = r"(n)-->(m)";
     println!("{:?}", get_tokens(input_program));
   }
 
   #[test]
   fn test_lexer_8() {
-    let input_program = r"(n)-[:KNOWS]->(m {property: {value}})";
+    let input_program = r"(n)-->(m {property: {value}})";
     println!("{:?}", get_tokens(input_program));
   }
 
   #[test]
   fn test_lexer_9() {
-    let input_program = r"(n)-[*1..5]->(m)";
+    let input_program = r"(n)-*>(m)";
     println!("{:?}", get_tokens(input_program));
   }
 
   #[test]
   fn test_lexer_10() {
-    let input_program = r"(l)->(m)<-(n)";
+    let input_program = r"(l)-->(m),(n)-->(m)";
     println!("{:?}", get_tokens(input_program));
   }
 }

@@ -10,20 +10,12 @@ pub enum Token<'a> {
   // Separators
   Colon,
   Comma,
-  FwdArrow,
-  BwdArrow,
+  Edge,
+  Path,
 
   // Grouping operators
   ParenLeft,
   ParenRight,
   BraceLeft,
   BraceRight,
-  SquareLeft,
-  SquareRight,
-
-  // Others
-  Relationship,
-  Iterator,
-  Ellipsis,
-  Pipe,
 }
