@@ -11,7 +11,8 @@ pub enum Token<'a> {
   Colon,
   SemiColon,
   Comma,
-  Arrow,
+  FwdArrow,
+  BwdArrow,
 
   // Grouping operators
   ParenLeft,
@@ -21,19 +22,9 @@ pub enum Token<'a> {
   SquareLeft,
   SquareRight,
 
-  // Binary arithmetic operators + conditional operator
-  Plus,
-  Minus,
-  Mul,
-  Div,
-  Modulo,
-  Cond,
-
-  // Comparison operators
-  Equal,
-  NotEqual,
-  LTEQOp,
-  GTEQOp,
-  LessThan,
-  GreaterThan,
+  // Others
+  Relationship,
+  Iterator,
+  Ellipsis,
+  Pipe,
 }
