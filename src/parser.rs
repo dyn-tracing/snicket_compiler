@@ -72,18 +72,18 @@ fn parse_filters<'a>(token_iter : &mut TokenIterator<'a>) -> Filters<'a> {
 
 fn parse_filter<'a>(token_iter : &mut TokenIterator<'a>) -> Filter<'a> {
   match_token(token_iter, Token::Where, "Filter must start with the keyword WHERE.");
-  let id = parse_identifier(token_iter);
+  let node = parse_identifier(token_iter);
   let operator_token = token_iter.next().unwrap();
   match operator_token {
     &Token::Colon  =>  {
                          let label = parse_identifier(token_iter);
-                         return Filter::Label(id, label); 
+                         return Filter::Label(node, label); 
                        } ,
     &Token::Period =>  {
                          let property = parse_identifier(token_iter);
                          match_token(token_iter, Token::Equals, "Only support equality in properties.");
                          let val = parse_value(token_iter);
-                         return Filter::Property(id, property, val);
+                         return Filter::Property(node, property, val);
                        },
     _              => panic!("Unrecognized token: {:?}", operator_token)
   }
