@@ -1,0 +1,77 @@
+use grammar::*;
+use tree_fold::TreeFold;
+
+pub struct PrettyPrinter {
+  pretty_print_str : String,
+}
+
+impl PrettyPrinter {
+  pub fn new() -> PrettyPrinter {
+    PrettyPrinter{ pretty_print_str : "".to_string() }
+  }
+}
+
+impl<'a> TreeFold<'a> for PrettyPrinter {
+  fn visit_pattern(&mut self, tree : &'a Pattern) {
+    self.pretty_print_str.push_str("MATCH ");
+    self.pretty_print_str.push_str(tree.from_node.get_str());
+    match &tree.relationship_type {
+      Relationship::Path() => { self.pretty_print_str.push_str("-*>"); },
+      Relationship::Edge() => { self.pretty_print_str.push_str("-->"); }
+    };
+    self.pretty_print_str.push_str(tree.to_node.get_str());
+    self.pretty_print_str.push_str("\n");
+  }
+
+  fn visit_filter(&mut self, tree : &'a Filter) {
+    self.pretty_print_str.push_str("WHERE ");
+    match &tree {
+      Filter::Label(node, label) => { self.pretty_print_str.push_str(node.get_str());
+                                      self.pretty_print_str.push_str(" : ");
+                                      self.pretty_print_str.push_str(label.get_str()); }
+      Filter::Property(node, property, val) => { self.pretty_print_str.push_str(node.get_str());
+                                                 self.pretty_print_str.push_str(".");
+                                                 self.pretty_print_str.push_str(property.get_str());
+                                                 self.pretty_print_str.push_str(" == ");
+                                                 self.pretty_print_str.push_str(&val.get_string()); }
+    };
+    self.pretty_print_str.push_str("\n");
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::super::lexer;
+  use super::super::parser;
+  use super::PrettyPrinter;
+  use super::super::tree_fold::TreeFold;
+ 
+  fn run_pretty_printer_and_reparse(input_program : &str) {
+    // Lexing
+    let tokens = & mut lexer::get_tokens(input_program);
+
+    // parsing
+    let token_iter = & mut tokens.iter().peekable();
+    let parse_tree = parser::parse_prog(token_iter);
+    assert!(token_iter.peek().is_none(), "token_iter is not empty.");
+    println!("Parse tree: {:?}\n", parse_tree);
+
+    // Run pretty printer
+    let mut pretty_printer = PrettyPrinter::new();
+    pretty_printer.visit_prog(&parse_tree);
+    println!("Pretty printed code: {}", pretty_printer.pretty_print_str);
+
+    // Reparse pretty printed code
+    let new_tokens = &mut lexer::get_tokens(&pretty_printer.pretty_print_str);
+    let new_token_iter = &mut new_tokens.iter().peekable();
+    let new_parse_tree = parser::parse_prog(new_token_iter);
+    assert!(new_token_iter.peek().is_none(), "new_token_iter is not empty.");
+    assert!(new_parse_tree == parse_tree, "Old and new parse trees don't match.");
+  }
+
+  #[test]
+  fn test_pretty_printer(){
+    let input_program = r"MATCH n-->m MATCH n-*>m WHERE n:Node WHERE m:Node WHERE n.abc == 5";
+    run_pretty_printer_and_reparse(input_program);
+  }
+}

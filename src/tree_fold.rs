@@ -1,0 +1,39 @@
+// A tree fold trait. This trait walks through an immutable tree and updates self.
+// Implementations of this trait can override
+// methods that process specific types of tree nodes, while using default
+// methods for other types of tree nodes.
+
+use grammar::*;
+
+pub trait TreeFold<'a> {
+  fn visit_prog(&mut self, tree : &'a Prog) {
+    self.visit_patterns(&tree.patterns);
+    self.visit_filters(&tree.filters);
+  }
+
+  fn visit_patterns(&mut self, tree : &'a Patterns) {
+    for pattern in &tree.pattern_vector { self.visit_pattern(pattern); }
+  }
+ 
+  fn visit_pattern(&mut self, tree : &'a Pattern) {
+    self.visit_identifier(&tree.from_node);
+    self.visit_identifier(&tree.to_node);
+  }
+
+  fn visit_filters(&mut self, tree : &'a Filters) {
+    for filter in &tree.filter_vector { self.visit_filter(filter); }
+  }
+
+  fn visit_filter(&mut self, tree : &'a Filter) {
+    match tree {
+      &Filter::Label(ref id, ref label) => { self.visit_identifier(id); self.visit_identifier(label); },
+      &Filter::Property(ref id, ref property, ref value) => { self. visit_identifier(id); self.visit_identifier(property); self.visit_value(value); }
+    }
+  }
+
+  // The awkward let _ is required to suppress the unused variables warning
+  // https://github.com/rust-lang/rust/issues/26487
+  fn visit_identifier(&mut self, tree : &'a Identifier) { let _ = tree; let _ = self; }
+  
+  fn visit_value(&mut self, tree : &'a Value) { let _ = tree; let _ = self; }
+}

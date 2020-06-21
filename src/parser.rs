@@ -34,7 +34,7 @@ fn parse_patterns<'a>(token_iter : &mut TokenIterator<'a>) -> Patterns<'a> {
   let mut pattern_vector = Vec::<Pattern>::new();
   loop {
     if !token_iter.peek().is_some() || !is_pattern(*token_iter.peek().unwrap()) {
-      if (pattern_vector.is_empty()) {
+      if pattern_vector.is_empty() {
         panic!("Need at least one pattern and the pattern must start with MATCH.");
       } else {
         return Patterns{pattern_vector};
