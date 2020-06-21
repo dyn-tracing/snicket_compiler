@@ -5,17 +5,17 @@ pub enum Token<'a> {
   Identifier(&'a str),
   Value(u32),
 
-  // Keywords: TODO
+  // Keywords
+  Match,
+  Where,
 
-  // Separators
-  Colon,
-  Comma,
+  // Operators
   Edge,
   Path,
+  Colon,
+  Equals,
+  Period,
 
-  // Grouping operators
-  ParenLeft,
-  ParenRight,
-  BraceLeft,
-  BraceRight,
+  // Separators
+  Comma,
 }

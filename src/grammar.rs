@@ -2,6 +2,7 @@
 #[derive(PartialEq)]
 pub struct Prog<'a> {
   pub patterns : Patterns<'a>,
+  pub filters  : Filters<'a>
 }
 
 #[derive(Debug)]
@@ -13,47 +14,27 @@ pub struct Patterns<'a> {
 #[derive(Debug)]
 #[derive(PartialEq)]
 pub struct Pattern<'a> {
-  pub from_node         : QualifiedIdentifier<'a>,
-  pub to_node           : QualifiedIdentifier<'a>,
-  pub relationship_type : Relationship<'a>
+  pub from_node         : Identifier<'a>,
+  pub to_node           : Identifier<'a>,
+  pub relationship_type : Relationship
 }
 
 #[derive(Debug)]
 #[derive(PartialEq)]
-pub struct QualifiedIdentifier<'a> {
-  pub labels     : Labels<'a>,
-  pub properties : Properties<'a>,
-  pub identifier : Identifier<'a>
+pub struct Filters<'a> {
+  pub filter_vector : Vec<Filter<'a>>
 }
 
 #[derive(Debug)]
 #[derive(PartialEq)]
-pub struct Labels<'a> {
-  pub label_vector   : Vec<Label<'a>>
+pub enum Filter<'a> {
+  Label(Identifier<'a>, Identifier<'a>), // xyz : Person
+  Property(Identifier<'a>, Identifier<'a>, Value) // xyz.abc == 5
 }
 
 #[derive(Debug)]
 #[derive(PartialEq)]
-pub struct Properties<'a> {
-  pub property_vector   : Vec<Property<'a>>
-}
-
-#[derive(Debug)]
-#[derive(PartialEq)]
-pub struct Label<'a> {
-  pub label : Identifier<'a>
-}
-
-#[derive(Debug)]
-#[derive(PartialEq)]
-pub struct Property<'a> {
-  pub key : Identifier<'a>,
-  pub val : Value<'a>
-}
-
-#[derive(Debug)]
-#[derive(PartialEq)]
-pub enum Relationship<'a> {
+pub enum Relationship {
   Path(),
   Edge()
 }
