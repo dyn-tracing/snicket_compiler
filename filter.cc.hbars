@@ -75,7 +75,7 @@ FilterHeadersStatus PathBasedCounterContext::onRequestHeaders(uint32_t) {
     LOG_WARN("x-wasm-path:" + path);
 
     const std::regex base_regex(
-        ".*,.*RecommendationService.*,.*ProductCatalogService.*");
+        "{{path_regex_pattern}}");
 
     if (std::regex_match(path, base_regex)) {
       LOG_WARN("Incremented counter.");
