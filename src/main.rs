@@ -1,6 +1,7 @@
 extern crate dyntracing;
 extern crate handlebars;
 
+use dyntracing::{code_gen, lexer, parser, tree_fold::TreeFold};
 use handlebars::Handlebars;
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -21,8 +22,22 @@ fn main() {
         Ok(_) => print!("Successfully read {}", display),
     }
 
+    let query = r"MATCH frontend-->recommendationservice MATCH recommendationservice-->productcatalogservice";
+    let tokens = lexer::get_tokens(query);
+    let mut token_iter = tokens.iter().peekable();
+    let parse_tree = parser::parse_prog(&mut token_iter);
+
+    let mut code_gen = code_gen::CodeGen::new();
+    code_gen.visit_prog(&parse_tree);
+
+    assert_eq!(code_gen.paths.len(), 1);
+    assert_eq!(
+        code_gen.paths[0],
+        vec!["frontend", "recommendationservice", "productcatalogservice"]
+    );
+
     let mut data = BTreeMap::new();
-    data.insert("path", "a,b,c");
+    data.insert("path", code_gen.paths[0].join(","));
 
     let handlebars = Handlebars::new();
 
