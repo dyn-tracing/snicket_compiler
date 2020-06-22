@@ -231,4 +231,41 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn test_lexer_11() {
+        let input_program: &str =
+            r"MATCH a-->b MATCH b-->c WHERE a.path == 1 WHERE b.path == 2 WHERE c.path == 3";
+        assert_eq!(
+            get_tokens(input_program),
+            vec![
+                Token::Match,
+                Token::Identifier("a"),
+                Token::Edge,
+                Token::Identifier("b"),
+                Token::Match,
+                Token::Identifier("b"),
+                Token::Edge,
+                Token::Identifier("c"),
+                Token::Where,
+                Token::Identifier("a"),
+                Token::Period,
+                Token::Identifier("path"),
+                Token::Equals,
+                Token::Value(1),
+                Token::Where,
+                Token::Identifier("b"),
+                Token::Period,
+                Token::Identifier("path"),
+                Token::Equals,
+                Token::Value(2),
+                Token::Where,
+                Token::Identifier("c"),
+                Token::Period,
+                Token::Identifier("path"),
+                Token::Equals,
+                Token::Value(3),
+            ]
+        )
+    }
 }
