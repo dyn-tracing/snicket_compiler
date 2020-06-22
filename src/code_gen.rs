@@ -39,7 +39,7 @@ mod tests {
 
     #[test]
     fn test_match() {
-        let tokens: Vec<Token> = lexer::get_tokens(r"MATCH a-->b MATCH b-->c");
+        let tokens: Vec<Token> = lexer::get_tokens(r"MATCH a-->b,b-->c,");
         let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
         let parse_tree: Prog = parser::parse_prog(&mut token_iter);
 
@@ -52,7 +52,7 @@ mod tests {
 
     #[test]
     fn test_match_handle_ordering() {
-        let tokens: Vec<Token> = lexer::get_tokens(r"MATCH b-->c MATCH a-->b");
+        let tokens: Vec<Token> = lexer::get_tokens(r"MATCH b-->c,a-->b,");
         let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
         let parse_tree: Prog = parser::parse_prog(&mut token_iter);
 

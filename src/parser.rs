@@ -14,7 +14,8 @@ fn match_token<'a>(
     error_msg: &'static str,
 ) {
     if token_iter.peek().is_none() {
-        panic!("token_iter is empty. Can't consume next token");
+        panic!("Invalid token: Null, expected {:?}.\nError message: {:?}",
+                expected, error_msg);
     } else {
         let next_token = token_iter.next().unwrap();
         if *next_token != expected {
@@ -28,37 +29,39 @@ fn match_token<'a>(
 
 pub fn parse_prog<'a>(token_iter: &mut TokenIterator<'a>) -> Prog<'a> {
     let patterns = parse_patterns(token_iter);
-    let filters = parse_filters(token_iter);
+    let filters = if token_iter.peek().is_none() { Filters { filter_vector : Vec::new() } }
+                  else  { parse_filters(token_iter) };
     Prog { patterns, filters }
 }
 
 fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {
-    let is_pattern = |token: &Token| match token {
-        Token::Match => true,
+    let is_ident = |token : &Token|  match token {
+        Token::Identifier(_) => true,
         _ => false,
     };
 
     let mut pattern_vector = Vec::<Pattern>::new();
+    match_token(
+        token_iter,
+        Token::Match,
+        "Patterns must start with the keyword MATCH.",
+    );
     loop {
-        if token_iter.peek().is_none() || !is_pattern(&token_iter.peek().unwrap()) {
+        if token_iter.peek().is_none() || !is_ident(&token_iter.peek().unwrap()) {
             if pattern_vector.is_empty() {
-                panic!("Need at least one pattern and the pattern must start with MATCH.");
+                panic!("Need at least one pattern.");
             } else {
                 return Patterns { pattern_vector };
             }
         } else {
             let pattern = parse_pattern(token_iter);
+            match_token(token_iter, Token::Comma, "Expected comma as separator between patterns.");
             pattern_vector.push(pattern);
         }
     }
 }
 
 fn parse_pattern<'a>(token_iter: &mut TokenIterator<'a>) -> Pattern<'a> {
-    match_token(
-        token_iter,
-        Token::Match,
-        "Pattern must start with the keyword MATCH.",
-    );
     let from_node = parse_identifier(token_iter);
     let rel_type_token = token_iter.next().unwrap();
     let relationship_type = match rel_type_token {
@@ -76,21 +79,23 @@ fn parse_pattern<'a>(token_iter: &mut TokenIterator<'a>) -> Pattern<'a> {
 
 fn parse_filters<'a>(token_iter: &mut TokenIterator<'a>) -> Filters<'a> {
     let mut filter_vector = Vec::<Filter<'a>>::new();
+    match_token(
+	token_iter,
+	Token::Where,
+	"Filters must start with the keyword WHERE.",
+    );
     loop {
         if token_iter.peek().is_none() {
             return Filters { filter_vector };
         } else {
-            filter_vector.push(parse_filter(token_iter));
+            let filter = parse_filter(token_iter);
+            match_token(token_iter, Token::Comma, "Expected comma as separator between filters.");
+            filter_vector.push(filter);
         }
     }
 }
 
 fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
-    match_token(
-        token_iter,
-        Token::Where,
-        "Filter must start with the keyword WHERE.",
-    );
     let node = parse_identifier(token_iter);
     let operator_token = token_iter.next().unwrap();
     match &operator_token {
@@ -173,30 +178,29 @@ mod tests {
         test_parse_identifier_fail,
         "Invalid token: Value(5), expected Token::Identifier"
     );
-    test_parser_success!(r"MATCH n-->m", parse_pattern, test_parse_pattern1);
-    test_parser_success!(r"MATCH n-*>m", parse_pattern, test_parse_pattern2);
+    test_parser_success!(r"MATCH n-->m,", parse_patterns, test_parse_pattern1);
+    test_parser_success!(r"MATCH n-*>m,", parse_patterns, test_parse_pattern2);
     test_parser_fail!(
         r"n",
-        parse_pattern,
+        parse_patterns,
         test_parse_pattern_fail,
-        "Invalid token: Identifier(\"n\"), expected Match"
+        "Patterns must start with the keyword MATCH."
     );
-    test_parser_success!(r"WHERE n.abc == 5", parse_filter, test_parse_filter);
-    test_parser_success!(r"WHERE n:Node", parse_filter, test_parse_filter2);
+    test_parser_success!(r"WHERE n.abc == 5,", parse_filters, test_parse_filter);
+    test_parser_success!(r"WHERE n:Node,", parse_filters, test_parse_filter2);
     test_parser_fail!(
         r"n",
-        parse_filter,
+        parse_filters,
         test_parse_filter_fail,
-        "Invalid token: Identifier(\"n\"), expected Where"
+        "Filters must start with the keyword WHERE."
     );
     test_parser_success!(
-        r"MATCH n-->m MATCH n-*>m WHERE n:Node WHERE m:Node WHERE
-                         n.abc == 5",
+        r"MATCH n-->m , n-*>m, WHERE n:Node, m:Node , n.abc == 5,",
         parse_prog,
         test_parse_prog
     );
     test_parser_success!(
-        r"MATCH n-->m MATCH n-*>m",
+        r"MATCH n-->m , n-*>m,",
         parse_prog,
         test_parse_prog_no_filter
     );
@@ -204,6 +208,6 @@ mod tests {
         r"n-->m",
         parse_prog,
         test_parse_prog_fail,
-        "Need at least one pattern and the pattern must start with MATCH."
+        "Patterns must start with the keyword MATCH."
     );
 }

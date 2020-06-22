@@ -13,8 +13,14 @@ impl PrettyPrinter {
 }
 
 impl<'a> TreeFold<'a> for PrettyPrinter {
-    fn visit_pattern(&mut self, tree: &'a Pattern) {
+    fn visit_patterns(&mut self, tree: &'a Patterns) {
         self.pretty_print_str.push_str("MATCH ");
+        for pattern in &tree.pattern_vector {
+            self.visit_pattern(pattern);
+        }
+    }
+
+    fn visit_pattern(&mut self, tree: &'a Pattern) {
         self.pretty_print_str.push_str(tree.from_node.id_name);
         match &tree.relationship_type {
             Relationship::Path() => {
@@ -25,11 +31,17 @@ impl<'a> TreeFold<'a> for PrettyPrinter {
             }
         };
         self.pretty_print_str.push_str(tree.to_node.id_name);
-        self.pretty_print_str.push_str("\n");
+        self.pretty_print_str.push_str(", ");
+    }
+
+    fn visit_filters(&mut self, tree: &'a Filters) {
+        self.pretty_print_str.push_str("WHERE ");
+        for filter in &tree.filter_vector {
+            self.visit_filter(filter);
+        }
     }
 
     fn visit_filter(&mut self, tree: &'a Filter) {
-        self.pretty_print_str.push_str("WHERE ");
         match &tree {
             Filter::Label(node, label) => {
                 self.pretty_print_str.push_str(node.id_name);
@@ -44,7 +56,7 @@ impl<'a> TreeFold<'a> for PrettyPrinter {
                 self.pretty_print_str.push_str(&val.to_string());
             }
         };
-        self.pretty_print_str.push_str("\n");
+        self.pretty_print_str.push_str(", ");
     }
 }
 
@@ -86,7 +98,7 @@ mod tests {
 
     #[test]
     fn test_pretty_printer() {
-        let input_program = r"MATCH n-->m MATCH n-*>m WHERE n:Node WHERE m:Node WHERE n.abc == 5";
+        let input_program = r"MATCH n-->m, n-*>m, WHERE n:Node, m:Node, n.abc == 5,";
         run_pretty_printer_and_reparse(input_program);
     }
 }
