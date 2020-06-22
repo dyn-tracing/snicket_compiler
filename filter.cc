@@ -1,5 +1,4 @@
 // NOLINT(namespace-envoy)
-#include <regex>
 #include <string>
 #include <unordered_map>
 
@@ -11,7 +10,7 @@ class PathBasedCounterRootContext : public RootContext {
 public:
   explicit PathBasedCounterRootContext(uint32_t id, StringView root_id)
       : RootContext(id, root_id) {
-    counter_ = Counter<>::New("num_requests");
+    counter_ = Counter<>::New("istio_path_based_requests");
   }
   bool onConfigure(size_t /* configuration_size */) override;
 
@@ -58,26 +57,23 @@ bool PathBasedCounterRootContext::onConfigure(size_t) {
 }
 
 FilterHeadersStatus PathBasedCounterContext::onRequestHeaders(uint32_t) {
-  auto path_header = getRequestHeader(":path");
-  if (path_header->data() == nullptr) {
+  std::string workload_name;
+  if (!getValue({"node", "metadata", "WORKLOAD_NAME"}, &workload_name)) {
+    LOG_WARN("Workload name not found");
     return FilterHeadersStatus::Continue;
   }
 
-  auto current_path = path_header->toString();
   auto cumulative_path = getRequestHeader("x-wasm-path");
   if (cumulative_path->data() == nullptr) {
-    addRequestHeader("x-wasm-path", current_path);
-    LOG_WARN("x-wasm-path:" + current_path);
+    addRequestHeader("x-wasm-path", workload_name);
+    LOG_WARN("x-wasm-path:" + workload_name);
   } else {
-    std::string path = cumulative_path->toString() + "," + current_path;
+    std::string path = cumulative_path->toString() + "," + workload_name;
 
     replaceRequestHeader("x-wasm-path", path);
     LOG_WARN("x-wasm-path:" + path);
 
-    const std::regex base_regex(
-        ".*,.*RecommendationService.*,.*ProductCatalogService.*");
-
-    if (std::regex_match(path, base_regex)) {
+    if (path == "frontend,recommendationservice,productcatalogservice") {
       LOG_WARN("Incremented counter.");
       root_->counter_->increment(1);
     }
