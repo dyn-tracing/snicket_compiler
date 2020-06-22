@@ -11,17 +11,17 @@ lazy_static! {
 use token::Token;
 fn get_single_token(tok_str: &str) -> Token {
     if KEYWORDS.is_match(tok_str) {
-        return match tok_str {
+        match tok_str {
             "MATCH" => Token::Match,
             "WHERE" => Token::Where,
             _ => panic!("Unrecognized token string: {}", tok_str),
-        };
+        }
     } else if IDENTIFIERS.is_match(tok_str) {
-        return Token::Identifier(tok_str);
+        Token::Identifier(tok_str)
     } else if VALUES.is_match(tok_str) {
-        return Token::Value(tok_str.parse::<u32>().unwrap());
+        Token::Value(tok_str.parse::<u32>().unwrap())
     } else {
-        return match tok_str {
+        match tok_str {
             "-->" => Token::Edge,
             "-*>" => Token::Path,
             ":" => Token::Colon,
@@ -29,17 +29,17 @@ fn get_single_token(tok_str: &str) -> Token {
             "==" => Token::Equals,
             "," => Token::Comma,
             _ => panic!("Unrecognized token string: {}", tok_str),
-        };
+        }
     }
 }
 
 pub fn get_tokens(input_program: &str) -> Vec<Token> {
     let mut token_array = Vec::new();
     for cap in TOKENS.captures_iter(input_program) {
-        let ref tok_str = cap.get(0).unwrap().as_str();
+        let tok_str = cap.get(0).unwrap().as_str();
         token_array.push(get_single_token(tok_str));
     }
-    return token_array;
+    token_array
 }
 
 #[cfg(test)]

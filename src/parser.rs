@@ -13,13 +13,11 @@ fn match_token<'a>(
     expected: Token<'a>,
     error_msg: &'static str,
 ) {
-    if !token_iter.peek().is_some() {
+    if token_iter.peek().is_none() {
         panic!("token_iter is empty. Can't consume next token");
     } else {
         let next_token = token_iter.next().unwrap();
-        if *next_token == expected {
-            return;
-        } else {
+        if *next_token != expected {
             panic!(
                 "\nInvalid token: {:?}, expected {:?}.\nError message: {:?}",
                 next_token, expected, error_msg
@@ -31,18 +29,18 @@ fn match_token<'a>(
 pub fn parse_prog<'a>(token_iter: &mut TokenIterator<'a>) -> Prog<'a> {
     let patterns = parse_patterns(token_iter);
     let filters = parse_filters(token_iter);
-    return Prog { patterns, filters };
+    Prog { patterns, filters }
 }
 
 fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {
-    let is_pattern = |token| match token {
-        &Token::Match => true,
+    let is_pattern = |token: &Token| match token {
+        Token::Match => true,
         _ => false,
     };
 
     let mut pattern_vector = Vec::<Pattern>::new();
     loop {
-        if !token_iter.peek().is_some() || !is_pattern(*token_iter.peek().unwrap()) {
+        if token_iter.peek().is_none() || !is_pattern(&token_iter.peek().unwrap()) {
             if pattern_vector.is_empty() {
                 panic!("Need at least one pattern and the pattern must start with MATCH.");
             } else {
@@ -69,17 +67,17 @@ fn parse_pattern<'a>(token_iter: &mut TokenIterator<'a>) -> Pattern<'a> {
         _ => panic!("Unsupported relationship type: {:?}", rel_type_token),
     };
     let to_node = parse_identifier(token_iter);
-    return Pattern {
+    Pattern {
         from_node,
         to_node,
         relationship_type,
-    };
+    }
 }
 
 fn parse_filters<'a>(token_iter: &mut TokenIterator<'a>) -> Filters<'a> {
     let mut filter_vector = Vec::<Filter<'a>>::new();
     loop {
-        if !token_iter.peek().is_some() {
+        if token_iter.peek().is_none() {
             return Filters { filter_vector };
         } else {
             filter_vector.push(parse_filter(token_iter));
@@ -95,12 +93,12 @@ fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
     );
     let node = parse_identifier(token_iter);
     let operator_token = token_iter.next().unwrap();
-    match operator_token {
-        &Token::Colon => {
+    match &operator_token {
+        Token::Colon => {
             let label = parse_identifier(token_iter);
-            return Filter::Label(node, label);
+            Filter::Label(node, label)
         }
-        &Token::Period => {
+        Token::Period => {
             let property = parse_identifier(token_iter);
             match_token(
                 token_iter,
@@ -108,7 +106,7 @@ fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
                 "Only support equality in properties.",
             );
             let val = parse_value(token_iter);
-            return Filter::Property(node, property, val);
+            Filter::Property(node, property, val)
         }
         _ => panic!("Unrecognized token: {:?}", operator_token),
     }
@@ -116,8 +114,8 @@ fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
 
 fn parse_identifier<'a>(token_iter: &mut TokenIterator<'a>) -> Identifier<'a> {
     let identifier_token = token_iter.next().unwrap();
-    match identifier_token {
-        &Token::Identifier(id_name) => Identifier { id_name },
+    match &identifier_token {
+        Token::Identifier(id_name) => Identifier { id_name },
         _ => panic!(
             "Invalid token: {:?}, expected Token::Identifier",
             identifier_token
@@ -127,8 +125,8 @@ fn parse_identifier<'a>(token_iter: &mut TokenIterator<'a>) -> Identifier<'a> {
 
 fn parse_value<'a>(token_iter: &mut TokenIterator<'a>) -> Value {
     let value_token = token_iter.next().unwrap();
-    match value_token {
-        &Token::Value(value) => return Value { value },
+    match &value_token {
+        Token::Value(value) => Value { value: *value },
         _ => panic!("Invalid token: {:?}, expected Token::Value", value_token),
     }
 }

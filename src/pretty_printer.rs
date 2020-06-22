@@ -1,15 +1,14 @@
 use grammar::*;
 use tree_fold::TreeFold;
 
+#[derive(Default)]
 pub struct PrettyPrinter {
     pretty_print_str: String,
 }
 
 impl PrettyPrinter {
     pub fn new() -> PrettyPrinter {
-        PrettyPrinter {
-            pretty_print_str: "".to_string(),
-        }
+        PrettyPrinter::default()
     }
 }
 

@@ -2,15 +2,14 @@ use grammar::*;
 use std::collections::HashSet;
 use tree_fold::TreeFold;
 
+#[derive(Default)]
 pub struct DefUse<'a> {
     pub known_nodes: HashSet<&'a str>,
 }
 
 impl<'a> DefUse<'a> {
     pub fn new() -> DefUse<'a> {
-        DefUse {
-            known_nodes: HashSet::new(),
-        }
+        DefUse::default()
     }
 }
 
@@ -35,10 +34,10 @@ impl<'a> TreeFold<'a> for DefUse<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::lexer;
-    use super::super::parser;
-    use super::super::tree_fold::TreeFold;
     use super::DefUse;
+    use lexer;
+    use parser;
+    use tree_fold::TreeFold;
 
     fn run_def_use(input_program: &str) {
         // Lexing

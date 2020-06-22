@@ -29,12 +29,12 @@ pub trait TreeFold<'a> {
     }
 
     fn visit_filter(&mut self, tree: &'a Filter) {
-        match tree {
-            &Filter::Label(ref id, ref label) => {
+        match &tree {
+            Filter::Label(ref id, ref label) => {
                 self.visit_identifier(id);
                 self.visit_identifier(label);
             }
-            &Filter::Property(ref id, ref property, ref value) => {
+            Filter::Property(ref id, ref property, ref value) => {
                 self.visit_identifier(id);
                 self.visit_identifier(property);
                 self.visit_value(value);
