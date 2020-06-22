@@ -1,5 +1,4 @@
-extern crate regex;
-use self::regex::Regex;
+use regex::Regex;
 
 lazy_static! {
     static ref TOKENS: Regex =
