@@ -4,6 +4,15 @@ version = "0.1.0"
 authors = ["Anirudh Sivaraman <sk.anirudh@gmail.com>"]
 
 [dependencies]
-regex = "0.2.2"
+handlebars = "3.1.0"
 lazy_static = "1.4.0"
+regex = "0.2.2"
 serde_json = "1.0.0"
+
+[lib]
+name = "dyntracing"
+path = "src/lib.rs"
+
+[[bin]]
+name = "dyntracing"
+path = "src/main.rs"
