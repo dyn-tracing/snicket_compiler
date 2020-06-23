@@ -4,12 +4,17 @@ use tree_fold::TreeFold;
 
 #[derive(Default)]
 pub struct DefUse<'a> {
-    pub known_nodes: HashSet<&'a str>,
+    pub known_nodes : HashSet<&'a str>,
+    pub known_edges : HashSet<&'a str>,
 }
 
 impl<'a> DefUse<'a> {
     pub fn new() -> DefUse<'a> {
         DefUse::default()
+    }
+    fn is_undefined(&self,
+                    id : &'a str) -> bool {
+        self.known_edges.get(id).is_none() && self.known_nodes.get(id).is_none()
     }
 }
 
@@ -19,13 +24,21 @@ impl<'a> TreeFold<'a> for DefUse<'a> {
         let to_node = &tree.to_node;
         self.known_nodes.insert(from_node.id_name);
         self.known_nodes.insert(to_node.id_name);
+        let edge_name = match &tree.relationship_type {
+                            Relationship::Path(id) |
+                            Relationship::Edge(id) =>
+                            id
+                        }.id_name;
+        assert!(self.is_undefined(edge_name), "Edge {:?} already defined.", edge_name);
+        self.known_edges.insert(edge_name);
     }
 
     fn visit_filter(&mut self, tree: &'a Filter) {
         match &tree {
-            Filter::Label(node, _) | Filter::Property(node, _, _) => {
-                if !self.known_nodes.contains(node.id_name) {
-                    panic!("Node {:?} not defined.", node.id_name);
+            Filter::Label(id, _) | Filter::Property(id, _, _) => {
+                if !self.known_nodes.contains(id.id_name) &&
+                   !self.known_edges.contains(id.id_name) {
+                    panic!("Edge/Node {:?} not defined.", id.id_name);
                 }
             }
         }
@@ -81,17 +94,27 @@ mod tests {
         test_def_use_label_filter
     );
     test_pass!(
-        r"MATCH n-->m : a, n-*>m : b, WHERE n.a == 5,",
+        r"MATCH n-->m : a, n-*>m : b, WHERE a.x == 5,",
         test_def_use_prop_filter
     );
     test_fail!(
         r"MATCH n-->m : a, n-*>m : b, WHERE x.a == 5,",
         test_fail_def_use_prop_filter,
-        "Node \"x\" not defined."
+        "Edge/Node \"x\" not defined."
     );
     test_fail!(
         r"MATCH n-->m : a, n-*>m : b, WHERE x : a,",
         test_fail_def_use_label_filter,
-        "Node \"x\" not defined."
+        "Edge/Node \"x\" not defined."
+    );
+    test_fail!(
+        r"MATCH n-->m : a, n-*>m : a, WHERE x : a,",
+        test_fail_def_use_redef_edge,
+        "Edge \"a\" already defined."
+    );
+    test_fail!(
+        r"MATCH n-->m : a, n-*>m : n, WHERE x : a,",
+        test_fail_def_use_node_edge,
+        "Edge \"n\" already defined."
     );
 }
