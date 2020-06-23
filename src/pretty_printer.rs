@@ -23,14 +23,22 @@ impl<'a> TreeFold<'a> for PrettyPrinter {
     fn visit_pattern(&mut self, tree: &'a Pattern) {
         self.pretty_print_str.push_str(tree.from_node.id_name);
         match &tree.relationship_type {
-            Relationship::Path() => {
+            Relationship::Path(_) => {
                 self.pretty_print_str.push_str("-*>");
             }
-            Relationship::Edge() => {
+            Relationship::Edge(_) => {
                 self.pretty_print_str.push_str("-->");
             }
         };
         self.pretty_print_str.push_str(tree.to_node.id_name);
+        self.pretty_print_str.push_str(":");
+        self.pretty_print_str.push_str(
+            match &tree.relationship_type {
+                Relationship::Path(id) | 
+                Relationship::Edge(id) =>
+                id
+            }.id_name
+        );
         self.pretty_print_str.push_str(", ");
     }
 
@@ -98,7 +106,7 @@ mod tests {
 
     #[test]
     fn test_pretty_printer() {
-        let input_program = r"MATCH n-->m, n-*>m, WHERE n:Node, m:Node, n.abc == 5,";
+        let input_program = r"MATCH n-->m : a, n-*>m : b, WHERE n:Node, m:Node, n.abc == 5,";
         run_pretty_printer_and_reparse(input_program);
     }
 }

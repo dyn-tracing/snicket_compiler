@@ -75,16 +75,22 @@ fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {
 fn parse_pattern<'a>(token_iter: &mut TokenIterator<'a>) -> Pattern<'a> {
     let from_node = parse_identifier(token_iter);
     let rel_type_token = token_iter.next().unwrap();
-    let relationship_type = match rel_type_token {
-        Token::Edge => Relationship::Edge(),
-        Token::Path => Relationship::Path(),
-        _ => panic!("Unsupported relationship type: {:?}", rel_type_token),
-    };
     let to_node = parse_identifier(token_iter);
+    match_token(
+        token_iter,
+        Token::Colon,
+        "Pattern must end with relationship name."
+    );
+    let rel_name = parse_identifier(token_iter);
     Pattern {
         from_node,
         to_node,
-        relationship_type,
+        relationship_type :
+        match rel_type_token {
+            Token::Edge => Relationship::Edge(rel_name),
+            Token::Path => Relationship::Path(rel_name),
+            _ => panic!("Unsupported relationship type: {:?}", rel_type_token),
+        }
     }
 }
 
@@ -193,8 +199,8 @@ mod tests {
         test_parse_identifier_fail,
         "Invalid token: Value(5), expected Token::Identifier"
     );
-    test_parser_success!(r"MATCH n-->m,", parse_patterns, test_parse_pattern1);
-    test_parser_success!(r"MATCH n-*>m,", parse_patterns, test_parse_pattern2);
+    test_parser_success!(r"MATCH n-->m : a,", parse_patterns, test_parse_pattern1);
+    test_parser_success!(r"MATCH n-*>m : b,", parse_patterns, test_parse_pattern2);
     test_parser_fail!(
         r"n",
         parse_patterns,
@@ -210,12 +216,12 @@ mod tests {
         "Filters must start with the keyword WHERE."
     );
     test_parser_success!(
-        r"MATCH n-->m , n-*>m, WHERE n:Node, m:Node , n.abc == 5,",
+        r"MATCH n-->m : a, n-*>m : b, WHERE n:Node, m:Node , n.abc == 5,",
         parse_prog,
         test_parse_prog
     );
     test_parser_success!(
-        r"MATCH n-->m , n-*>m,",
+        r"MATCH n-->m : a, n-*>m : b,",
         parse_prog,
         test_parse_prog_no_filter
     );

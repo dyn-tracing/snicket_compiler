@@ -15,7 +15,7 @@ pub struct Patterns<'a> {
 pub struct Pattern<'a> {
     pub from_node: Identifier<'a>,
     pub to_node: Identifier<'a>,
-    pub relationship_type: Relationship,
+    pub relationship_type: Relationship<'a>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -30,9 +30,9 @@ pub enum Filter<'a> {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Relationship {
-    Path(),
-    Edge(),
+pub enum Relationship<'a> {
+    Path(Identifier<'a>),
+    Edge(Identifier<'a>),
 }
 
 #[derive(Debug, PartialEq)]

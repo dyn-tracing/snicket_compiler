@@ -75,22 +75,22 @@ mod tests {
         };
     }
 
-    test_pass!(r"MATCH n-->m, n-*>m,", test_def_use_no_filter);
+    test_pass!(r"MATCH n-->m : a, n-*>m : b,", test_def_use_no_filter);
     test_pass!(
-        r"MATCH n-->m,n-*>m, WHERE n : Node,",
+        r"MATCH n-->m : a, n-*>m : b, WHERE n : Node,",
         test_def_use_label_filter
     );
     test_pass!(
-        r"MATCH n-->m,n-*>m, WHERE n.a == 5,",
+        r"MATCH n-->m : a, n-*>m : b, WHERE n.a == 5,",
         test_def_use_prop_filter
     );
     test_fail!(
-        r"MATCH n-->m, n-*>m, WHERE x.a == 5,",
+        r"MATCH n-->m : a, n-*>m : b, WHERE x.a == 5,",
         test_fail_def_use_prop_filter,
         "Node \"x\" not defined."
     );
     test_fail!(
-        r"MATCH n-->m, n-*>m, WHERE x : a,",
+        r"MATCH n-->m : a, n-*>m : b, WHERE x : a,",
         test_fail_def_use_label_filter,
         "Node \"x\" not defined."
     );
