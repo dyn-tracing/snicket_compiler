@@ -14,8 +14,10 @@ fn match_token<'a>(
     error_msg: &'static str,
 ) {
     if token_iter.peek().is_none() {
-        panic!("Invalid token: Null, expected {:?}.\nError message: {:?}",
-                expected, error_msg);
+        panic!(
+            "Invalid token: Null, expected {:?}.\nError message: {:?}",
+            expected, error_msg
+        );
     } else {
         let next_token = token_iter.next().unwrap();
         if *next_token != expected {
@@ -29,13 +31,18 @@ fn match_token<'a>(
 
 pub fn parse_prog<'a>(token_iter: &mut TokenIterator<'a>) -> Prog<'a> {
     let patterns = parse_patterns(token_iter);
-    let filters = if token_iter.peek().is_none() { Filters { filter_vector : Vec::new() } }
-                  else  { parse_filters(token_iter) };
+    let filters = if token_iter.peek().is_none() {
+        Filters {
+            filter_vector: Vec::new(),
+        }
+    } else {
+        parse_filters(token_iter)
+    };
     Prog { patterns, filters }
 }
 
 fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {
-    let is_ident = |token : &Token|  match token {
+    let is_ident = |token: &Token| match token {
         Token::Identifier(_) => true,
         _ => false,
     };
@@ -55,7 +62,11 @@ fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {
             }
         } else {
             let pattern = parse_pattern(token_iter);
-            match_token(token_iter, Token::Comma, "Expected comma as separator between patterns.");
+            match_token(
+                token_iter,
+                Token::Comma,
+                "Expected comma as separator between patterns.",
+            );
             pattern_vector.push(pattern);
         }
     }
@@ -80,16 +91,20 @@ fn parse_pattern<'a>(token_iter: &mut TokenIterator<'a>) -> Pattern<'a> {
 fn parse_filters<'a>(token_iter: &mut TokenIterator<'a>) -> Filters<'a> {
     let mut filter_vector = Vec::<Filter<'a>>::new();
     match_token(
-	token_iter,
-	Token::Where,
-	"Filters must start with the keyword WHERE.",
+        token_iter,
+        Token::Where,
+        "Filters must start with the keyword WHERE.",
     );
     loop {
         if token_iter.peek().is_none() {
             return Filters { filter_vector };
         } else {
             let filter = parse_filter(token_iter);
-            match_token(token_iter, Token::Comma, "Expected comma as separator between filters.");
+            match_token(
+                token_iter,
+                Token::Comma,
+                "Expected comma as separator between filters.",
+            );
             filter_vector.push(filter);
         }
     }
