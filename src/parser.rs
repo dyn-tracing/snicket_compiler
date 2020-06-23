@@ -79,18 +79,17 @@ fn parse_pattern<'a>(token_iter: &mut TokenIterator<'a>) -> Pattern<'a> {
     match_token(
         token_iter,
         Token::Colon,
-        "Pattern must end with relationship name."
+        "Pattern must end with relationship name.",
     );
     let rel_name = parse_identifier(token_iter);
     Pattern {
         from_node,
         to_node,
-        relationship_type :
-        match rel_type_token {
+        relationship_type: match rel_type_token {
             Token::Edge => Relationship::Edge(rel_name),
             Token::Path => Relationship::Path(rel_name),
             _ => panic!("Unsupported relationship type: {:?}", rel_type_token),
-        }
+        },
     }
 }
 

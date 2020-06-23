@@ -4,16 +4,15 @@ use tree_fold::TreeFold;
 
 #[derive(Default)]
 pub struct DefUse<'a> {
-    pub known_nodes : HashSet<&'a str>,
-    pub known_edges : HashSet<&'a str>,
+    pub known_nodes: HashSet<&'a str>,
+    pub known_edges: HashSet<&'a str>,
 }
 
 impl<'a> DefUse<'a> {
     pub fn new() -> DefUse<'a> {
         DefUse::default()
     }
-    fn is_undefined(&self,
-                    id : &'a str) -> bool {
+    fn is_undefined(&self, id: &'a str) -> bool {
         self.known_edges.get(id).is_none() && self.known_nodes.get(id).is_none()
     }
 }
@@ -25,19 +24,22 @@ impl<'a> TreeFold<'a> for DefUse<'a> {
         self.known_nodes.insert(from_node.id_name);
         self.known_nodes.insert(to_node.id_name);
         let edge_name = match &tree.relationship_type {
-                            Relationship::Path(id) |
-                            Relationship::Edge(id) =>
-                            id
-                        }.id_name;
-        assert!(self.is_undefined(edge_name), "Edge {:?} already defined.", edge_name);
+            Relationship::Path(id) | Relationship::Edge(id) => id,
+        }
+        .id_name;
+        assert!(
+            self.is_undefined(edge_name),
+            "Edge {:?} already defined.",
+            edge_name
+        );
         self.known_edges.insert(edge_name);
     }
 
     fn visit_filter(&mut self, tree: &'a Filter) {
         match &tree {
             Filter::Label(id, _) | Filter::Property(id, _, _) => {
-                if !self.known_nodes.contains(id.id_name) &&
-                   !self.known_edges.contains(id.id_name) {
+                if !self.known_nodes.contains(id.id_name) && !self.known_edges.contains(id.id_name)
+                {
                     panic!("Edge/Node {:?} not defined.", id.id_name);
                 }
             }
