@@ -14,7 +14,6 @@ Filter will be in:
 ./bazel-bin/filter.wasm
 ```
 
-# Push to WebAssembly Hub
 Tag the filter and set the config.
 ```
 wasme build precompiled ./bazel-bin/filter.wasm \
@@ -22,7 +21,5 @@ wasme build precompiled ./bazel-bin/filter.wasm \
   --config runtime-config.json
 ```
 
-```
-wasme push webassemblyhub.io/<your_username>/<filter_name>:<tag>
-```
-
+To push and deploy, look at tutorials on WebAssembly Hub
+https://docs.solo.io/web-assembly-hub/latest/tutorial_code/getting_started/
