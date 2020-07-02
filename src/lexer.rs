@@ -266,6 +266,28 @@ mod tests {
                 Token::Equals,
                 Token::Value(3),
             ]
-        )
+        );
+    }
+
+    #[test]
+    fn test_lexer_12() {
+        let input_program: &str = r"MATCH a-->b MATCH b-->c MATCH a-->d";
+        assert_eq!(
+            get_tokens(input_program),
+            vec![
+                Token::Match,
+                Token::Identifier("a"),
+                Token::Edge,
+                Token::Identifier("b"),
+                Token::Match,
+                Token::Identifier("b"),
+                Token::Edge,
+                Token::Identifier("c"),
+                Token::Match,
+                Token::Identifier("a"),
+                Token::Edge,
+                Token::Identifier("d"),
+            ]
+        );
     }
 }
