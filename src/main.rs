@@ -5,7 +5,6 @@ extern crate serde;
 use dyntracing::{code_gen, lexer, parser, tree_fold::TreeFold};
 use handlebars::Handlebars;
 use serde::Serialize;
-use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
