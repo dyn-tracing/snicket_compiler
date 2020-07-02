@@ -23,7 +23,6 @@ cc_binary(
         "external/envoy_wasm_api/proxy_wasm_intrinsics.js",
     ],
     deps = [
-        ":filter_cc_proto",
         "@envoy_wasm_api//:proxy_wasm_intrinsics",
     ],
 )
