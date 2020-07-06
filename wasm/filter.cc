@@ -201,7 +201,7 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t) {
           std::accumulate(words.begin(), words.end(), std::string(),
                           [workload_name](const std::string &a,
                                           const std::string &b) -> std::string {
-                            return a + (a.length() > 0 ? "," : "") + "-" + b;
+                            return a + (a.length() > 0 ? "," : "") + b;
                           });
       addResponseHeader("x-wasm", joined);
       LOG_WARN("inbound: x-wasm -> " + joined);
