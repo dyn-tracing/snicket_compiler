@@ -1,17 +1,24 @@
 This compiles an example filter for envoy WASM.
 
-# Install bazel
-https://docs.bazel.build/versions/master/install.html#installing-bazel
+# Build wasme
+We use [wasme](https://github.com/solo-io/wasme) to build, push and deploy
+our WASM filter.
 
-# build filter
-build with
+However, it only supports deploying filters [`EnvoyFilter_SIDECAR_INBOUND`](https://pkg.go.dev/istio.io/api@v0.0.0-20191109011911-e51134872853/networking/v1alpha3?tab=doc#EnvoyFilter_PatchContext).
+I have modified WASME code to deploy using `EnvoyFilter_ANY` and it's at [taegyunkim/wasme:patch-context](https://github.com/taegyunkim/wasme/tree/patch-context)
+
 ```
-bazel build :filter.wasm
+git clone -b patch-context git@github.com:taegyunkim/wasme.git
+cd wasme
+make wasme
+cd _output
+export PATH=$PWD:$PATH
 ```
 
-Filter will be in:
+# Build Filter
+Install bazel https://docs.bazel.build/versions/master/install.html#installing-bazel
 ```
-./bazel-bin/filter.wasm
+bazel-build :filter.wasm
 ```
 
 Tag the filter and set the config.
