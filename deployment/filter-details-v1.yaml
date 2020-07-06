@@ -1,0 +1,33 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: details-v1-example-filter
+  namespace: default
+spec:
+  configPatches:
+    - applyTo: HTTP_FILTER
+      match:
+        context: ANY
+        listener:
+          filterChain:
+            filter:
+              name: envoy.http_connection_manager
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          config:
+            config:
+              name: example-filter
+              rootId: bidi_root_id
+              vmConfig:
+                code:
+                  local:
+                    filename: /var/local/lib/wasm-filters/filter.wasm
+                runtime: envoy.wasm.runtime.v8
+                vmId: example-filter
+                allow_precompiled: true
+          name: envoy.filters.http.wasm
+  workloadSelector:
+    labels:
+      app: details
+      version: v1
