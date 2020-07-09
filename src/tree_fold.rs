@@ -34,9 +34,11 @@ pub trait TreeFold<'a> {
                 self.visit_identifier(id);
                 self.visit_identifier(label);
             }
-            Filter::Property(ref id, ref property, ref value) => {
+            Filter::Property(ref id, ref properties, ref value) => {
                 self.visit_identifier(id);
-                self.visit_identifier(property);
+                for property in properties {
+                    self.visit_identifier(property);
+                }
                 self.visit_value(value);
             }
         }

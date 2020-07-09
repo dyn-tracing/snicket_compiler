@@ -55,10 +55,12 @@ impl<'a> TreeFold<'a> for PrettyPrinter {
                 self.pretty_print_str.push_str(" : ");
                 self.pretty_print_str.push_str(label.id_name);
             }
-            Filter::Property(node, property, val) => {
+            Filter::Property(node, properties, val) => {
                 self.pretty_print_str.push_str(node.id_name);
-                self.pretty_print_str.push_str(".");
-                self.pretty_print_str.push_str(property.id_name);
+                for property in properties {
+                    self.pretty_print_str.push_str(".");
+                    self.pretty_print_str.push_str(property.id_name);
+                }
                 self.pretty_print_str.push_str(" == ");
                 self.pretty_print_str.push_str(&val.to_string());
             }
