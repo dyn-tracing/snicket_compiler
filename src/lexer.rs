@@ -290,4 +290,22 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn test_lexer_nested_properties() {
+        let input = r"WHERE a.x.y == 5";
+        assert_eq!(
+            get_tokens(input),
+            vec![
+                Token::Where,
+                Token::Identifier("a"),
+                Token::Period,
+                Token::Identifier("x"),
+                Token::Period,
+                Token::Identifier("y"),
+                Token::Equals,
+                Token::Value(5),
+            ]
+        );
+    }
 }

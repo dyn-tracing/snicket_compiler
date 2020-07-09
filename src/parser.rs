@@ -124,14 +124,22 @@ fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
             Filter::Label(node, label)
         }
         Token::Period => {
-            let property = parse_identifier(token_iter);
+            let mut properties = Vec::new();
+            let mut property = parse_identifier(token_iter);
+            properties.push(property);
+            while let Some(Token::Period) = token_iter.peek() {
+                // Consume token period
+                token_iter.next();
+                property = parse_identifier(token_iter);
+                properties.push(property);
+            }
             match_token(
                 token_iter,
                 Token::Equals,
                 "Only support equality in properties.",
             );
             let val = parse_value(token_iter);
-            Filter::Property(node, property, val)
+            Filter::Property(node, properties, val)
         }
         _ => panic!("Unrecognized token: {:?}", operator_token),
     }
@@ -229,5 +237,10 @@ mod tests {
         parse_prog,
         test_parse_prog_fail,
         "Patterns must start with the keyword MATCH."
+    );
+    test_parser_success!(
+        r"MATCH n-->m :a, WHERE n.x.y.z == 5,",
+        parse_prog,
+        test_parse_nested_properties
     );
 }

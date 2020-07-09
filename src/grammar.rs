@@ -25,8 +25,8 @@ pub struct Filters<'a> {
 
 #[derive(Debug, PartialEq)]
 pub enum Filter<'a> {
-    Label(Identifier<'a>, Identifier<'a>),           // xyz : Person
-    Property(Identifier<'a>, Identifier<'a>, Value), // xyz.abc == 5
+    Label(Identifier<'a>, Identifier<'a>), // xyz : Person
+    Property(Identifier<'a>, Vec<Identifier<'a>>, Value), // xyz.abc == 5, xyz.a.b.c == 5
 }
 
 #[derive(Debug, PartialEq)]
