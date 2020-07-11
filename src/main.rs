@@ -26,7 +26,7 @@ fn main() {
     let mut template_str = String::new();
     match template_file.read_to_string(&mut template_str) {
         Err(msg) => panic!("Failed to read {}: {}", display, msg),
-        Ok(_) => print!("Successfully read {}", display),
+        Ok(_) => println!("Successfully read {}", display),
     }
 
     let query = r"MATCH productpagev1-->reviewsv2 : x, reviewsv2-->ratingsv1 : y, productpagev1-->detailsv1: z,";
@@ -68,7 +68,7 @@ fn main() {
 
     let handlebars = Handlebars::new();
 
-    print!(
+    println!(
         "{}",
         handlebars
             .render_template(&template_str, &data)
