@@ -308,4 +308,20 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn test_lexer_str_value() {
+        let input = "WHERE a.x == k";
+        assert_eq!(
+            get_tokens(input),
+            vec![
+                Token::Where,
+                Token::Identifier("a"),
+                Token::Period,
+                Token::Identifier("x"),
+                Token::Equals,
+                Token::Identifier("k"),
+            ]
+        );
+    }
 }
