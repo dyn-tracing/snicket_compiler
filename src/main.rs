@@ -29,7 +29,7 @@ fn main() {
         Ok(_) => print!("Successfully read {}", display),
     }
 
-    let query = r"MATCH a-->b : x,b-->c : y, a-->d: z,";
+    let query = r"MATCH productpagev1-->reviewsv2 : x, reviewsv2-->ratingsv1 : y, productpagev1-->detailsv1: z,";
     let tokens = lexer::get_tokens(query);
     let mut token_iter = tokens.iter().peekable();
     let parse_tree = parser::parse_prog(&mut token_iter);
@@ -38,7 +38,7 @@ fn main() {
     code_gen.visit_prog(&parse_tree);
 
     assert_eq!(code_gen.paths.len(), 2);
-    assert_eq!(code_gen.paths, vec![vec!["a", "b", "c"], vec!["a", "d"],]);
+    assert_eq!(code_gen.paths, vec![vec!["productpagev1", "reviewsv2", "ratingsv1"], vec!["productpagev1", "detailsv1"],]);
 
     let paths: Vec<String> = code_gen
         .paths
@@ -47,7 +47,7 @@ fn main() {
         .collect();
 
     assert_eq!(paths.len(), 2);
-    assert_eq!(paths, vec!["a-b-c", "a-d"]);
+    assert_eq!(paths, vec!["productpagev1-reviewsv2-ratingsv1", "productpagev1-detailsv1"]);
 
     let data = Data {
         root: "a".to_string(),
