@@ -62,7 +62,7 @@ fn main() {
     );
 
     let data = Data {
-        root: "a".to_string(),
+        root: "productpagev1".to_string(),
         paths,
     };
 

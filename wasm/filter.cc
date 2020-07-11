@@ -44,9 +44,10 @@ public:
       workload_name_ = workload_name;
       LOG_WARN("Intialized workload_name: " + workload_name_);
 
-      if (workload_name_ == "productpage-v1") {
-        paths = {"productpage-v1-details-v1",
-                 "productpage-v1-reviews-v2-ratings-v1"};
+      if (workload_name_ == "productpagev1") {
+        paths = {
+             "productpagev1-reviewsv2-ratingsv1",  "productpagev1-detailsv1",
+        };
         counter_ = Counter<>::New("wasm_path_based_requests");
       }
     } else {
@@ -181,7 +182,7 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t) {
       }
       std::set<std::string> words_set{words.begin(), words.end()};
 
-      if (workload_name == "productpage-v1") {
+      if (workload_name == "productpagev1") {
         bool matches = true;
         for (const auto &path : root_->getPathsVector()) {
           if (words_set.find(path) == words_set.end()) {
