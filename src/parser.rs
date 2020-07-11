@@ -156,11 +156,15 @@ fn parse_identifier<'a>(token_iter: &mut TokenIterator<'a>) -> Identifier<'a> {
     }
 }
 
-fn parse_value<'a>(token_iter: &mut TokenIterator<'a>) -> Value {
+fn parse_value<'a>(token_iter: &mut TokenIterator<'a>) -> Value<'a> {
     let value_token = token_iter.next().unwrap();
     match &value_token {
-        Token::Value(value) => Value { value: *value },
-        _ => panic!("Invalid token: {:?}, expected Token::Value", value_token),
+        Token::Value(value) => Value::U32(*value),
+        Token::Identifier(s) => Value::Str(s),
+        _ => panic!(
+            "Invalid token: {:?}, expected Token::Value or Token::Identifier",
+            value_token
+        ),
     }
 }
 
@@ -242,5 +246,10 @@ mod tests {
         r"MATCH n-->m :a, WHERE n.x.y.z == 5,",
         parse_prog,
         test_parse_nested_properties
+    );
+    test_parser_success!(
+        r"MATCH n-->m: a, WHERE n.x == k,",
+        parse_prog,
+        test_parse_str_value
     );
 }

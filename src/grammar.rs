@@ -26,7 +26,7 @@ pub struct Filters<'a> {
 #[derive(Debug, PartialEq)]
 pub enum Filter<'a> {
     Label(Identifier<'a>, Identifier<'a>), // xyz : Person
-    Property(Identifier<'a>, Vec<Identifier<'a>>, Value), // xyz.abc == 5, xyz.a.b.c == 5
+    Property(Identifier<'a>, Vec<Identifier<'a>>, Value<'a>), // xyz.abc == 5, xyz.a.b.c == 5, x.a == k
 }
 
 #[derive(Debug, PartialEq)]
@@ -41,12 +41,16 @@ pub struct Identifier<'a> {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Value {
-    pub value: u32,
+pub enum Value<'a> {
+    U32(u32),
+    Str(&'a str),
 }
 
-impl fmt::Display for Value {
+impl<'a> fmt::Display for Value<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.value.to_string())
+        match self {
+            Value::U32(i) => write!(f, "{}", i),
+            Value::Str(s) => write!(f, "{}", s),
+        }
     }
 }
