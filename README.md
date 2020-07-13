@@ -74,7 +74,9 @@ export GATEWAY_URL=$INGRESS_HOST:$INGRESS_PORT
 curl -s http://${GATEWAY_URL}/productpage | grep -o "<title>.*</title>"
 ```
 
-6. Build WASME
+6. Generate `wasm/filter.cc` file by running `cargo run`
+
+7. Build WASME
    We use [wasme](https://github.com/solo-io/wasme) to build, push and deploy
    our WASM filter.
 
@@ -93,6 +95,7 @@ export PATH=$PWD:$PATH
    Install bazel https://docs.bazel.build/versions/master/install.html#installing-bazel
 
 ```
+cd wasm
 bazel-build :filter.wasm
 ```
 
