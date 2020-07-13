@@ -46,7 +46,7 @@ public:
 
       if (workload_name_ == "productpagev1") {
         paths = {
-             "productpagev1-reviewsv2-ratingsv1",  "productpagev1-detailsv1",
+            "productpagev1-reviewsv2-ratingsv1","productpagev1-detailsv1",
         };
         counter_ = Counter<>::New("wasm_path_based_requests");
       }

@@ -68,11 +68,10 @@ fn main() {
 
     let handlebars = Handlebars::new();
 
-    println!(
-        "{}",
-        handlebars
-            .render_template(&template_str, &data)
-            .ok()
-            .unwrap()
-    );
+    let output = handlebars
+        .render_template(&template_str, &data)
+        .expect("handlebar render failed");
+
+    let mut file = File::create("./wasm/filter.cc").expect("file create failed.");
+    file.write_all(output.as_bytes()).expect("write failed");
 }
