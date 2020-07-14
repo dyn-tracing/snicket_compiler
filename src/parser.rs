@@ -307,7 +307,54 @@ mod tests {
         parse_prog,
         test_parse_str_value
     );
+
+    #[test]
+    fn test_parse_prog_str_value() {
+        let input = r"MATCH n-->m: a, WHERE n.x == k,";
+        let tokens = &mut get_tokens(input);
+        let token_iter = &mut tokens.iter().peekable();
+        let prog = parse_prog(token_iter);
+        assert_eq!(
+            prog,
+            Prog {
+                patterns: Patterns {
+                    pattern_vector: vec![Pattern {
+                        from_node: Identifier { id_name: "n" },
+                        to_node: Identifier { id_name: "m" },
+                        relationship_type: Relationship::Edge(Identifier { id_name: "a" })
+                    }]
+                },
+                filters: Filters {
+                    filter_vector: vec![Filter::Property(
+                        Identifier { id_name: "n" },
+                        vec![Identifier { id_name: "x" }],
+                        Value::Str("k")
+                    )]
+                },
+                actions: Actions {
+                    action_vector: Vec::new()
+                },
+            }
+        )
+    }
+
     test_parser_success!(r"RETURN n.x,", parse_actions, test_parse_return_action);
+    #[test]
+    fn test_parse_actions_return() {
+        let input = r"RETURN n.x,";
+        let tokens = &mut get_tokens(input);
+        let token_iter = &mut tokens.iter().peekable();
+        let actions = parse_actions(token_iter);
+        assert_eq!(
+            actions,
+            Actions {
+                action_vector: vec![Action::Property(
+                    Identifier { id_name: "n" },
+                    vec![Identifier { id_name: "x" }]
+                )]
+            }
+        )
+    }
     test_parser_success!(
         r"MATCH n-->m: a, WHERE n.y == o, RETURN n.x,",
         parse_prog,
