@@ -44,6 +44,17 @@ pub trait TreeFold<'a> {
         }
     }
 
+    fn visit_action(&mut self, tree: &'a Action) {
+        match &tree {
+            Action::Property(ref id, ref properties) => {
+                self.visit_identifier(id);
+                for property in properties {
+                    self.visit_identifier(property);
+                }
+            }
+        }
+    }
+
     fn visit_identifier(&mut self, _tree: &'a Identifier) {}
 
     fn visit_value(&mut self, _tree: &'a Value) {}

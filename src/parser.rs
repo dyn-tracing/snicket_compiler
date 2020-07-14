@@ -38,15 +38,28 @@ pub fn parse_prog<'a>(token_iter: &mut TokenIterator<'a>) -> Prog<'a> {
     } else {
         parse_filters(token_iter)
     };
-    Prog { patterns, filters }
+    let actions = if token_iter.peek().is_none() {
+        Actions {
+            action_vector: Vec::new(),
+        }
+    } else {
+        parse_actions(token_iter)
+    };
+    Prog {
+        patterns,
+        filters,
+        actions,
+    }
+}
+
+fn is_identifier(token: &Token) -> bool {
+    match token {
+        Token::Identifier(_) => true,
+        _ => false,
+    }
 }
 
 fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {
-    let is_ident = |token: &Token| match token {
-        Token::Identifier(_) => true,
-        _ => false,
-    };
-
     let mut pattern_vector = Vec::<Pattern>::new();
     match_token(
         token_iter,
@@ -54,7 +67,7 @@ fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {
         "Patterns must start with the keyword MATCH.",
     );
     loop {
-        if token_iter.peek().is_none() || !is_ident(&token_iter.peek().unwrap()) {
+        if token_iter.peek().is_none() || !is_identifier(&token_iter.peek().unwrap()) {
             if pattern_vector.is_empty() {
                 panic!("Need at least one pattern.");
             } else {
@@ -101,7 +114,7 @@ fn parse_filters<'a>(token_iter: &mut TokenIterator<'a>) -> Filters<'a> {
         "Filters must start with the keyword WHERE.",
     );
     loop {
-        if token_iter.peek().is_none() {
+        if token_iter.peek().is_none() || !is_identifier(&token_iter.peek().unwrap()) {
             return Filters { filter_vector };
         } else {
             let filter = parse_filter(token_iter);
@@ -140,6 +153,48 @@ fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
             );
             let val = parse_value(token_iter);
             Filter::Property(node, properties, val)
+        }
+        _ => panic!("Unrecognized token: {:?}", operator_token),
+    }
+}
+
+fn parse_actions<'a>(token_iter: &mut TokenIterator<'a>) -> Actions<'a> {
+    let mut action_vector = Vec::<Action<'a>>::new();
+    match_token(
+        token_iter,
+        Token::Return,
+        "Actions must start with the keyword RETURN.",
+    );
+    loop {
+        if token_iter.peek().is_none() {
+            return Actions { action_vector };
+        } else {
+            let action = parse_action(token_iter);
+            match_token(
+                token_iter,
+                Token::Comma,
+                "Expected comma as separator between filters.",
+            );
+            action_vector.push(action);
+        }
+    }
+}
+
+fn parse_action<'a>(token_iter: &mut TokenIterator<'a>) -> Action<'a> {
+    let node = parse_identifier(token_iter);
+    let operator_token = token_iter.next().unwrap();
+    match &operator_token {
+        Token::Period => {
+            let mut properties = Vec::new();
+            let mut property = parse_identifier(token_iter);
+            properties.push(property);
+            while let Some(Token::Period) = token_iter.peek() {
+                // Consume token period
+                token_iter.next();
+                property = parse_identifier(token_iter);
+                properties.push(property);
+            }
+            Action::Property(node, properties)
         }
         _ => panic!("Unrecognized token: {:?}", operator_token),
     }
@@ -251,5 +306,11 @@ mod tests {
         r"MATCH n-->m: a, WHERE n.x == k,",
         parse_prog,
         test_parse_str_value
+    );
+    test_parser_success!(r"RETURN n.x,", parse_actions, test_parse_return_action);
+    test_parser_success!(
+        r"MATCH n-->m: a, WHERE n.y == o, RETURN n.x,",
+        parse_prog,
+        test_parse_return
     );
 }
