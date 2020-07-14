@@ -39,13 +39,6 @@ pub fn parse_prog<'a>(token_iter: &mut TokenIterator<'a>) -> Prog<'a> {
     }
 }
 
-fn is_identifier(token: &Token) -> bool {
-    match token {
-        Token::Identifier(_) => true,
-        _ => false,
-    }
-}
-
 macro_rules! parse_panic {
     ($next_token:ident, $expected_token:expr, $error_msg:expr) => {
         panic!(
@@ -62,6 +55,11 @@ fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {
             let mut pattern_vec = Vec::<Pattern>::new();
             while let Some(Token::Identifier(_)) = token_iter.peek() {
                 pattern_vec.push(parse_pattern(token_iter));
+                consume_token(
+                    token_iter,
+                    Token::Comma,
+                    "Expected comma as separator between patterns.",
+                );
             }
             Patterns(pattern_vec)
         }
@@ -83,11 +81,6 @@ fn parse_pattern<'a>(token_iter: &mut TokenIterator<'a>) -> Pattern<'a> {
         "Pattern must end with relationship name.",
     );
     let rel_name = parse_identifier(token_iter);
-    consume_token(
-        token_iter,
-        Token::Comma,
-        "Expected comma as separator between patterns.",
-    );
     Pattern {
         from_node,
         to_node,
@@ -100,27 +93,25 @@ fn parse_pattern<'a>(token_iter: &mut TokenIterator<'a>) -> Pattern<'a> {
 }
 
 fn parse_filters<'a>(token_iter: &mut TokenIterator<'a>) -> Filters<'a> {
-    if token_iter.peek().is_none() {
-        return Filters(vec![]);
-    }
-    let mut filter_vec = Vec::<Filter<'a>>::new();
-    consume_token(
-        token_iter,
-        Token::Where,
-        "Filters must start with the keyword WHERE.",
-    );
-    loop {
-        if token_iter.peek().is_none() || !is_identifier(&token_iter.peek().unwrap()) {
-            return Filters(filter_vec);
-        } else {
-            let filter = parse_filter(token_iter);
-            consume_token(
-                token_iter,
-                Token::Comma,
-                "Expected comma as separator between filters.",
-            );
-            filter_vec.push(filter);
+    match token_iter.next() {
+        None => Filters::new(),
+        Some(Token::Where) => {
+            let mut filter_vec = Vec::<Filter>::new();
+            while let Some(Token::Identifier(_)) = token_iter.peek() {
+                filter_vec.push(parse_filter(token_iter));
+                consume_token(
+                    token_iter,
+                    Token::Comma,
+                    "Expected comma as separator between filters.",
+                );
+            }
+            Filters(filter_vec)
         }
+        Some(next_token) => parse_panic!(
+            next_token,
+            Token::Where,
+            "Filters must start with the keyword WHERE."
+        ),
     }
 }
 
@@ -148,6 +139,7 @@ fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
                 "Only support equality in properties.",
             );
             let val = parse_value(token_iter);
+
             Filter::Property(node, properties, val)
         }
         _ => panic!("Unrecognized token: {:?}", operator_token),
@@ -155,27 +147,25 @@ fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
 }
 
 fn parse_actions<'a>(token_iter: &mut TokenIterator<'a>) -> Actions<'a> {
-    if token_iter.peek().is_none() {
-        return Actions(vec![]);
-    }
-    let mut action_vector = Vec::<Action<'a>>::new();
-    consume_token(
-        token_iter,
-        Token::Return,
-        "Actions must start with the keyword RETURN.",
-    );
-    loop {
-        if token_iter.peek().is_none() {
-            return Actions(action_vector);
-        } else {
-            let action = parse_action(token_iter);
-            consume_token(
-                token_iter,
-                Token::Comma,
-                "Expected comma as separator between filters.",
-            );
-            action_vector.push(action);
+    match token_iter.next() {
+        None => Actions::new(),
+        Some(Token::Return) => {
+            let mut action_vec: Vec<Action> = Vec::new();
+            while let Some(Token::Identifier(_)) = token_iter.peek() {
+                action_vec.push(parse_action(token_iter));
+                consume_token(
+                    token_iter,
+                    Token::Comma,
+                    "Expected comma as separator between filters.",
+                )
+            }
+            Actions(action_vec)
         }
+        Some(next_token) => parse_panic!(
+            next_token,
+            Token::Return,
+            "Actions must start with the keyword RETURN."
+        ),
     }
 }
 
