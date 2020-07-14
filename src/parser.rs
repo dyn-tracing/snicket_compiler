@@ -52,12 +52,14 @@ pub fn parse_prog<'a>(token_iter: &mut TokenIterator<'a>) -> Prog<'a> {
     }
 }
 
-fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {
-    let is_ident = |token: &Token| match token {
+fn is_identifier(token: &Token) -> bool {
+    match token {
         Token::Identifier(_) => true,
         _ => false,
-    };
+    }
+}
 
+fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {
     let mut pattern_vector = Vec::<Pattern>::new();
     match_token(
         token_iter,
@@ -65,7 +67,7 @@ fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {
         "Patterns must start with the keyword MATCH.",
     );
     loop {
-        if token_iter.peek().is_none() || !is_ident(&token_iter.peek().unwrap()) {
+        if token_iter.peek().is_none() || !is_identifier(&token_iter.peek().unwrap()) {
             if pattern_vector.is_empty() {
                 panic!("Need at least one pattern.");
             } else {
@@ -112,7 +114,7 @@ fn parse_filters<'a>(token_iter: &mut TokenIterator<'a>) -> Filters<'a> {
         "Filters must start with the keyword WHERE.",
     );
     loop {
-        if token_iter.peek().is_none() {
+        if token_iter.peek().is_none() || !is_identifier(&token_iter.peek().unwrap()) {
             return Filters { filter_vector };
         } else {
             let filter = parse_filter(token_iter);
@@ -304,5 +306,11 @@ mod tests {
         r"MATCH n-->m: a, WHERE n.x == k,",
         parse_prog,
         test_parse_str_value
+    );
+    test_parser_success!(r"RETURN n.x,", parse_actions, test_parse_return_action);
+    test_parser_success!(
+        r"MATCH n-->m: a, WHERE n.y == o, RETURN n.x,",
+        parse_prog,
+        test_parse_return
     );
 }
