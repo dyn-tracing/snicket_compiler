@@ -38,7 +38,14 @@ pub fn parse_prog<'a>(token_iter: &mut TokenIterator<'a>) -> Prog<'a> {
     } else {
         parse_filters(token_iter)
     };
-    Prog { patterns, filters }
+    let actions = if token_iter.peek().is_none() {
+        Actions {
+            action_vector: Vec::new(),
+        }
+    } else {
+        parse_actions(token_iter)
+    };
+    Prog { patterns, filters, actions }
 }
 
 fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {
@@ -140,6 +147,48 @@ fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
             );
             let val = parse_value(token_iter);
             Filter::Property(node, properties, val)
+        }
+        _ => panic!("Unrecognized token: {:?}", operator_token),
+    }
+}
+
+fn parse_actions<'a>(token_iter: &mut TokenIterator<'a>) -> Actions<'a> {
+    let mut action_vector = Vec::<Action<'a>>::new();
+    match_token(
+        token_iter,
+        Token::Return,
+        "Actions must start with the keyword RETURN.",
+    );
+    loop {
+        if token_iter.peek().is_none() {
+            return Actions { action_vector };
+        } else {
+            let action = parse_action(token_iter);
+            match_token(
+                token_iter,
+                Token::Comma,
+                "Expected comma as separator between filters.",
+            );
+            action_vector.push(action);
+        }
+    }
+}
+
+fn parse_action<'a>(token_iter: &mut TokenIterator<'a>) -> Action<'a> {
+    let node = parse_identifier(token_iter);
+    let operator_token = token_iter.next().unwrap();
+    match &operator_token {
+        Token::Period => {
+            let mut properties = Vec::new();
+            let mut property = parse_identifier(token_iter);
+            properties.push(property);
+            while let Some(Token::Period) = token_iter.peek() {
+                // Consume token period
+                token_iter.next();
+                property = parse_identifier(token_iter);
+                properties.push(property);
+            }
+            Action::Property(node, properties)
         }
         _ => panic!("Unrecognized token: {:?}", operator_token),
     }

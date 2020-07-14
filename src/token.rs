@@ -7,6 +7,7 @@ pub enum Token<'a> {
     // Keywords
     Match,
     Where,
+    Return,
 
     // Operators
     Edge,

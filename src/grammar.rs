@@ -3,7 +3,8 @@ use std::fmt;
 #[derive(Debug, PartialEq)]
 pub struct Prog<'a> {
     pub patterns: Patterns<'a>,
-    pub filters: Filters<'a>,
+    pub filters : Filters<'a>,
+    pub actions : Actions<'a>
 }
 
 #[derive(Debug, PartialEq)]
@@ -27,6 +28,16 @@ pub struct Filters<'a> {
 pub enum Filter<'a> {
     Label(Identifier<'a>, Identifier<'a>), // xyz : Person
     Property(Identifier<'a>, Vec<Identifier<'a>>, Value<'a>), // xyz.abc == 5, xyz.a.b.c == 5, x.a == k
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Actions<'a> {
+    pub action_vector : Vec<Action<'a>>,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Action<'a> {
+    Property(Identifier<'a>, Vec<Identifier<'a>>), // xyz.abc, xyz.a.b.c
 }
 
 #[derive(Debug, PartialEq)]
