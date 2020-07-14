@@ -8,9 +8,7 @@ pub struct Prog<'a> {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Patterns<'a> {
-    pub pattern_vector: Vec<Pattern<'a>>,
-}
+pub struct Patterns<'a>(pub Vec<Pattern<'a>>);
 
 #[derive(Debug, PartialEq)]
 pub struct Pattern<'a> {

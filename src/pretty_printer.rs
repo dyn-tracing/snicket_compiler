@@ -13,9 +13,9 @@ impl PrettyPrinter {
 }
 
 impl<'a> TreeFold<'a> for PrettyPrinter {
-    fn visit_patterns(&mut self, tree: &'a Patterns) {
+    fn visit_patterns(&mut self, patterns: &'a Patterns) {
         self.pretty_print_str.push_str("MATCH ");
-        for pattern in &tree.pattern_vector {
+        for pattern in &patterns.0 {
             self.visit_pattern(pattern);
         }
     }

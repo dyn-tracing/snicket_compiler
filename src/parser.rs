@@ -60,7 +60,7 @@ fn is_identifier(token: &Token) -> bool {
 }
 
 fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {
-    let mut pattern_vector = Vec::<Pattern>::new();
+    let mut pattern_vec = Vec::<Pattern>::new();
     match_token(
         token_iter,
         Token::Match,
@@ -68,10 +68,10 @@ fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {
     );
     loop {
         if token_iter.peek().is_none() || !is_identifier(&token_iter.peek().unwrap()) {
-            if pattern_vector.is_empty() {
+            if pattern_vec.is_empty() {
                 panic!("Need at least one pattern.");
             } else {
-                return Patterns { pattern_vector };
+                return Patterns(pattern_vec);
             }
         } else {
             let pattern = parse_pattern(token_iter);
@@ -80,7 +80,7 @@ fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {
                 Token::Comma,
                 "Expected comma as separator between patterns.",
             );
-            pattern_vector.push(pattern);
+            pattern_vec.push(pattern);
         }
     }
 }
@@ -317,13 +317,11 @@ mod tests {
         assert_eq!(
             prog,
             Prog {
-                patterns: Patterns {
-                    pattern_vector: vec![Pattern {
-                        from_node: Identifier { id_name: "n" },
-                        to_node: Identifier { id_name: "m" },
-                        relationship_type: Relationship::Edge(Identifier { id_name: "a" })
-                    }]
-                },
+                patterns: Patterns(vec![Pattern {
+                    from_node: Identifier { id_name: "n" },
+                    to_node: Identifier { id_name: "m" },
+                    relationship_type: Relationship::Edge(Identifier { id_name: "a" })
+                }]),
                 filters: Filters {
                     filter_vector: vec![Filter::Property(
                         Identifier { id_name: "n" },
