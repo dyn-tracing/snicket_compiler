@@ -45,7 +45,11 @@ pub fn parse_prog<'a>(token_iter: &mut TokenIterator<'a>) -> Prog<'a> {
     } else {
         parse_actions(token_iter)
     };
-    Prog { patterns, filters, actions }
+    Prog {
+        patterns,
+        filters,
+        actions,
+    }
 }
 
 fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {

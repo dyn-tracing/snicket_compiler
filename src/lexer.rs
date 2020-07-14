@@ -14,7 +14,7 @@ fn get_single_token(tok_str: &str) -> Token {
         match tok_str {
             "MATCH" => Token::Match,
             "WHERE" => Token::Where,
-            "RETURN"=> Token::Return,
+            "RETURN" => Token::Return,
             _ => panic!("Unrecognized token string: {}", tok_str),
         }
     } else if IDENTIFIERS.is_match(tok_str) {
