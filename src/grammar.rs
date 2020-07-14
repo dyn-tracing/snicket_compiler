@@ -18,9 +18,7 @@ pub struct Pattern<'a> {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Filters<'a> {
-    pub filter_vector: Vec<Filter<'a>>,
-}
+pub struct Filters<'a>(pub Vec<Filter<'a>>);
 
 #[derive(Debug, PartialEq)]
 pub enum Filter<'a> {

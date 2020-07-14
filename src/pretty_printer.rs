@@ -41,9 +41,9 @@ impl<'a> TreeFold<'a> for PrettyPrinter {
         self.pretty_print_str.push_str(", ");
     }
 
-    fn visit_filters(&mut self, tree: &'a Filters) {
+    fn visit_filters(&mut self, filters: &'a Filters) {
         self.pretty_print_str.push_str("WHERE ");
-        for filter in &tree.filter_vector {
+        for filter in &filters.0 {
             self.visit_filter(filter);
         }
     }

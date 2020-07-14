@@ -32,9 +32,7 @@ fn match_token<'a>(
 pub fn parse_prog<'a>(token_iter: &mut TokenIterator<'a>) -> Prog<'a> {
     let patterns = parse_patterns(token_iter);
     let filters = if token_iter.peek().is_none() {
-        Filters {
-            filter_vector: Vec::new(),
-        }
+        Filters(Vec::new())
     } else {
         parse_filters(token_iter)
     };
@@ -107,7 +105,7 @@ fn parse_pattern<'a>(token_iter: &mut TokenIterator<'a>) -> Pattern<'a> {
 }
 
 fn parse_filters<'a>(token_iter: &mut TokenIterator<'a>) -> Filters<'a> {
-    let mut filter_vector = Vec::<Filter<'a>>::new();
+    let mut filter_vec = Vec::<Filter<'a>>::new();
     match_token(
         token_iter,
         Token::Where,
@@ -115,7 +113,7 @@ fn parse_filters<'a>(token_iter: &mut TokenIterator<'a>) -> Filters<'a> {
     );
     loop {
         if token_iter.peek().is_none() || !is_identifier(&token_iter.peek().unwrap()) {
-            return Filters { filter_vector };
+            return Filters(filter_vec);
         } else {
             let filter = parse_filter(token_iter);
             match_token(
@@ -123,7 +121,7 @@ fn parse_filters<'a>(token_iter: &mut TokenIterator<'a>) -> Filters<'a> {
                 Token::Comma,
                 "Expected comma as separator between filters.",
             );
-            filter_vector.push(filter);
+            filter_vec.push(filter);
         }
     }
 }
@@ -322,13 +320,11 @@ mod tests {
                     to_node: Identifier { id_name: "m" },
                     relationship_type: Relationship::Edge(Identifier { id_name: "a" })
                 }]),
-                filters: Filters {
-                    filter_vector: vec![Filter::Property(
-                        Identifier { id_name: "n" },
-                        vec![Identifier { id_name: "x" }],
-                        Value::Str("k")
-                    )]
-                },
+                filters: Filters(vec![Filter::Property(
+                    Identifier { id_name: "n" },
+                    vec![Identifier { id_name: "x" }],
+                    Value::Str("k")
+                )]),
                 actions: Actions {
                     action_vector: Vec::new()
                 },
