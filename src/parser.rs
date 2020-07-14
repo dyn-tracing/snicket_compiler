@@ -30,23 +30,10 @@ fn match_token<'a>(
 }
 
 pub fn parse_prog<'a>(token_iter: &mut TokenIterator<'a>) -> Prog<'a> {
-    let patterns = parse_patterns(token_iter);
-    let filters = if token_iter.peek().is_none() {
-        Filters(Vec::new())
-    } else {
-        parse_filters(token_iter)
-    };
-    let actions = if token_iter.peek().is_none() {
-        Actions {
-            action_vector: Vec::new(),
-        }
-    } else {
-        parse_actions(token_iter)
-    };
     Prog {
-        patterns,
-        filters,
-        actions,
+        patterns: parse_patterns(token_iter),
+        filters: parse_filters(token_iter),
+        actions: parse_actions(token_iter),
     }
 }
 
@@ -58,6 +45,9 @@ fn is_identifier(token: &Token) -> bool {
 }
 
 fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {
+    if token_iter.peek().is_none() {
+        return Patterns::new();
+    }
     let mut pattern_vec = Vec::<Pattern>::new();
     match_token(
         token_iter,
@@ -105,6 +95,9 @@ fn parse_pattern<'a>(token_iter: &mut TokenIterator<'a>) -> Pattern<'a> {
 }
 
 fn parse_filters<'a>(token_iter: &mut TokenIterator<'a>) -> Filters<'a> {
+    if token_iter.peek().is_none() {
+        return Filters(vec![]);
+    }
     let mut filter_vec = Vec::<Filter<'a>>::new();
     match_token(
         token_iter,
@@ -157,6 +150,9 @@ fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
 }
 
 fn parse_actions<'a>(token_iter: &mut TokenIterator<'a>) -> Actions<'a> {
+    if token_iter.peek().is_none() {
+        return Actions(vec![]);
+    }
     let mut action_vector = Vec::<Action<'a>>::new();
     match_token(
         token_iter,
@@ -165,7 +161,7 @@ fn parse_actions<'a>(token_iter: &mut TokenIterator<'a>) -> Actions<'a> {
     );
     loop {
         if token_iter.peek().is_none() {
-            return Actions { action_vector };
+            return Actions(action_vector);
         } else {
             let action = parse_action(token_iter);
             match_token(
@@ -325,9 +321,7 @@ mod tests {
                     vec![Identifier { id_name: "x" }],
                     Value::Str("k")
                 )]),
-                actions: Actions {
-                    action_vector: Vec::new()
-                },
+                actions: Actions(Vec::new()),
             }
         )
     }
@@ -341,12 +335,10 @@ mod tests {
         let actions = parse_actions(token_iter);
         assert_eq!(
             actions,
-            Actions {
-                action_vector: vec![Action::Property(
-                    Identifier { id_name: "n" },
-                    vec![Identifier { id_name: "x" }]
-                )]
-            }
+            Actions(vec![Action::Property(
+                Identifier { id_name: "n" },
+                vec![Identifier { id_name: "x" }]
+            )])
         )
     }
     test_parser_success!(
