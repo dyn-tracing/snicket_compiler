@@ -11,8 +11,8 @@ pub trait TreeFold<'a> {
         self.visit_filters(&tree.filters);
     }
 
-    fn visit_patterns(&mut self, tree: &'a Patterns) {
-        for pattern in &tree.pattern_vector {
+    fn visit_patterns(&mut self, patterns: &'a Patterns) {
+        for pattern in &patterns.0 {
             self.visit_pattern(pattern);
         }
     }
@@ -22,8 +22,8 @@ pub trait TreeFold<'a> {
         self.visit_identifier(&tree.to_node);
     }
 
-    fn visit_filters(&mut self, tree: &'a Filters) {
-        for filter in &tree.filter_vector {
+    fn visit_filters(&mut self, filters: &'a Filters) {
+        for filter in &filters.0 {
             self.visit_filter(filter);
         }
     }

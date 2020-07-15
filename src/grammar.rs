@@ -7,9 +7,13 @@ pub struct Prog<'a> {
     pub actions: Actions<'a>,
 }
 
-#[derive(Debug, PartialEq)]
-pub struct Patterns<'a> {
-    pub pattern_vector: Vec<Pattern<'a>>,
+#[derive(Debug, Default, PartialEq)]
+pub struct Patterns<'a>(pub Vec<Pattern<'a>>);
+
+impl<'a> Patterns<'a> {
+    pub fn new() -> Self {
+        Default::default()
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -19,9 +23,13 @@ pub struct Pattern<'a> {
     pub relationship_type: Relationship<'a>,
 }
 
-#[derive(Debug, PartialEq)]
-pub struct Filters<'a> {
-    pub filter_vector: Vec<Filter<'a>>,
+#[derive(Debug, Default, PartialEq)]
+pub struct Filters<'a>(pub Vec<Filter<'a>>);
+
+impl<'a> Filters<'a> {
+    pub fn new() -> Self {
+        Default::default()
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -30,9 +38,13 @@ pub enum Filter<'a> {
     Property(Identifier<'a>, Vec<Identifier<'a>>, Value<'a>), // xyz.abc == 5, xyz.a.b.c == 5, x.a == k
 }
 
-#[derive(Debug, PartialEq)]
-pub struct Actions<'a> {
-    pub action_vector: Vec<Action<'a>>,
+#[derive(Debug, Default, PartialEq)]
+pub struct Actions<'a>(pub Vec<Action<'a>>);
+
+impl<'a> Actions<'a> {
+    pub fn new() -> Self {
+        Default::default()
+    }
 }
 
 #[derive(Debug, PartialEq)]

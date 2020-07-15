@@ -8,90 +8,79 @@ type TokenIterator<'a> = Peekable<std::slice::Iter<'a, Token<'a>>>;
 // Throw an error if either:
 // 1. token_iter is empty
 // 2. the next token does not match
-fn match_token<'a>(
+fn consume_token<'a>(
     token_iter: &mut TokenIterator<'a>,
-    expected: Token<'a>,
+    expected: &Token,
     error_msg: &'static str,
 ) {
-    if token_iter.peek().is_none() {
-        panic!(
-            "Invalid token: Null, expected {:?}.\nError message: {:?}",
-            expected, error_msg
-        );
-    } else {
-        let next_token = token_iter.next().unwrap();
-        if *next_token != expected {
+    match token_iter.next() {
+        None => {
             panic!(
-                "\nInvalid token: {:?}, expected {:?}.\nError message: {:?}",
-                next_token, expected, error_msg
+                "Invalid token: Null, expected {:?}.\nError message: {:?}",
+                expected, error_msg
             );
+        }
+        Some(next_token) => {
+            if next_token != expected {
+                panic!(
+                    "\nInvalid token: {:?}, expected {:?}.\nError message: {:?}",
+                    next_token, expected, error_msg
+                );
+            }
         }
     }
 }
 
 pub fn parse_prog<'a>(token_iter: &mut TokenIterator<'a>) -> Prog<'a> {
-    let patterns = parse_patterns(token_iter);
-    let filters = if token_iter.peek().is_none() {
-        Filters {
-            filter_vector: Vec::new(),
-        }
-    } else {
-        parse_filters(token_iter)
-    };
-    let actions = if token_iter.peek().is_none() {
-        Actions {
-            action_vector: Vec::new(),
-        }
-    } else {
-        parse_actions(token_iter)
-    };
     Prog {
-        patterns,
-        filters,
-        actions,
+        patterns: parse_patterns(token_iter),
+        filters: parse_filters(token_iter),
+        actions: parse_actions(token_iter),
     }
 }
 
-fn is_identifier(token: &Token) -> bool {
-    match token {
-        Token::Identifier(_) => true,
-        _ => false,
+// Parses multiple T and returns the result as a vector.
+fn parse_repeated<'a, T>(
+    token_iter: &mut TokenIterator<'a>,
+    parse_func: fn(&mut TokenIterator<'a>) -> T,
+    expected_token: Token,
+) -> Vec<T> {
+    match token_iter.next() {
+        None => Vec::new(),
+        Some(next_token) => {
+            if *next_token != expected_token {
+                panic!(
+                    "\nInvalid token: {}, expected {}.\nError message: {} must start with the keyword {}.",
+                    next_token, expected_token,
+                    std::any::type_name::<T>(),
+                    expected_token,
+                );
+            }
+            let mut elem_vec = Vec::new();
+            while let Some(Token::Identifier(_)) = token_iter.peek() {
+                elem_vec.push(parse_func(token_iter));
+                consume_token(token_iter, &Token::Comma, "Expected a comma (\')");
+            }
+            elem_vec
+        }
     }
 }
 
 fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {
-    let mut pattern_vector = Vec::<Pattern>::new();
-    match_token(
+    Patterns(parse_repeated::<Pattern>(
         token_iter,
+        parse_pattern,
         Token::Match,
-        "Patterns must start with the keyword MATCH.",
-    );
-    loop {
-        if token_iter.peek().is_none() || !is_identifier(&token_iter.peek().unwrap()) {
-            if pattern_vector.is_empty() {
-                panic!("Need at least one pattern.");
-            } else {
-                return Patterns { pattern_vector };
-            }
-        } else {
-            let pattern = parse_pattern(token_iter);
-            match_token(
-                token_iter,
-                Token::Comma,
-                "Expected comma as separator between patterns.",
-            );
-            pattern_vector.push(pattern);
-        }
-    }
+    ))
 }
 
 fn parse_pattern<'a>(token_iter: &mut TokenIterator<'a>) -> Pattern<'a> {
     let from_node = parse_identifier(token_iter);
     let rel_type_token = token_iter.next().unwrap();
     let to_node = parse_identifier(token_iter);
-    match_token(
+    consume_token(
         token_iter,
-        Token::Colon,
+        &Token::Colon,
         "Pattern must end with relationship name.",
     );
     let rel_name = parse_identifier(token_iter);
@@ -107,25 +96,11 @@ fn parse_pattern<'a>(token_iter: &mut TokenIterator<'a>) -> Pattern<'a> {
 }
 
 fn parse_filters<'a>(token_iter: &mut TokenIterator<'a>) -> Filters<'a> {
-    let mut filter_vector = Vec::<Filter<'a>>::new();
-    match_token(
+    Filters(parse_repeated::<Filter>(
         token_iter,
+        parse_filter,
         Token::Where,
-        "Filters must start with the keyword WHERE.",
-    );
-    loop {
-        if token_iter.peek().is_none() || !is_identifier(&token_iter.peek().unwrap()) {
-            return Filters { filter_vector };
-        } else {
-            let filter = parse_filter(token_iter);
-            match_token(
-                token_iter,
-                Token::Comma,
-                "Expected comma as separator between filters.",
-            );
-            filter_vector.push(filter);
-        }
-    }
+    ))
 }
 
 fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
@@ -146,12 +121,13 @@ fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
                 property = parse_identifier(token_iter);
                 properties.push(property);
             }
-            match_token(
+            consume_token(
                 token_iter,
-                Token::Equals,
+                &Token::Equals,
                 "Only support equality in properties.",
             );
             let val = parse_value(token_iter);
+
             Filter::Property(node, properties, val)
         }
         _ => panic!("Unrecognized token: {:?}", operator_token),
@@ -159,25 +135,11 @@ fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
 }
 
 fn parse_actions<'a>(token_iter: &mut TokenIterator<'a>) -> Actions<'a> {
-    let mut action_vector = Vec::<Action<'a>>::new();
-    match_token(
+    Actions(parse_repeated::<Action>(
         token_iter,
+        parse_action,
         Token::Return,
-        "Actions must start with the keyword RETURN.",
-    );
-    loop {
-        if token_iter.peek().is_none() {
-            return Actions { action_vector };
-        } else {
-            let action = parse_action(token_iter);
-            match_token(
-                token_iter,
-                Token::Comma,
-                "Expected comma as separator between filters.",
-            );
-            action_vector.push(action);
-        }
-    }
+    ))
 }
 
 fn parse_action<'a>(token_iter: &mut TokenIterator<'a>) -> Action<'a> {
@@ -271,7 +233,7 @@ mod tests {
         r"n",
         parse_patterns,
         test_parse_pattern_fail,
-        "Patterns must start with the keyword MATCH."
+        "Pattern must start with the keyword MATCH."
     );
     test_parser_success!(r"WHERE n.abc == 5,", parse_filters, test_parse_filter);
     test_parser_success!(r"WHERE n:Node,", parse_filters, test_parse_filter2);
@@ -279,7 +241,7 @@ mod tests {
         r"n",
         parse_filters,
         test_parse_filter_fail,
-        "Filters must start with the keyword WHERE."
+        "Filter must start with the keyword WHERE."
     );
     test_parser_success!(
         r"MATCH n-->m : a, n-*>m : b, WHERE n:Node, m:Node , n.abc == 5,",
@@ -295,7 +257,7 @@ mod tests {
         r"n-->m",
         parse_prog,
         test_parse_prog_fail,
-        "Patterns must start with the keyword MATCH."
+        "Pattern must start with the keyword MATCH."
     );
     test_parser_success!(
         r"MATCH n-->m :a, WHERE n.x.y.z == 5,",
@@ -317,23 +279,17 @@ mod tests {
         assert_eq!(
             prog,
             Prog {
-                patterns: Patterns {
-                    pattern_vector: vec![Pattern {
-                        from_node: Identifier { id_name: "n" },
-                        to_node: Identifier { id_name: "m" },
-                        relationship_type: Relationship::Edge(Identifier { id_name: "a" })
-                    }]
-                },
-                filters: Filters {
-                    filter_vector: vec![Filter::Property(
-                        Identifier { id_name: "n" },
-                        vec![Identifier { id_name: "x" }],
-                        Value::Str("k")
-                    )]
-                },
-                actions: Actions {
-                    action_vector: Vec::new()
-                },
+                patterns: Patterns(vec![Pattern {
+                    from_node: Identifier { id_name: "n" },
+                    to_node: Identifier { id_name: "m" },
+                    relationship_type: Relationship::Edge(Identifier { id_name: "a" })
+                }]),
+                filters: Filters(vec![Filter::Property(
+                    Identifier { id_name: "n" },
+                    vec![Identifier { id_name: "x" }],
+                    Value::Str("k")
+                )]),
+                actions: Actions(Vec::new()),
             }
         )
     }
@@ -347,12 +303,10 @@ mod tests {
         let actions = parse_actions(token_iter);
         assert_eq!(
             actions,
-            Actions {
-                action_vector: vec![Action::Property(
-                    Identifier { id_name: "n" },
-                    vec![Identifier { id_name: "x" }]
-                )]
-            }
+            Actions(vec![Action::Property(
+                Identifier { id_name: "n" },
+                vec![Identifier { id_name: "x" }]
+            )])
         )
     }
     test_parser_success!(
