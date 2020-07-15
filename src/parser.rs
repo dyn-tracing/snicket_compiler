@@ -39,15 +39,7 @@ pub fn parse_prog<'a>(token_iter: &mut TokenIterator<'a>) -> Prog<'a> {
     }
 }
 
-macro_rules! parse_panic {
-    ($next_token:ident, $expected_token:expr, $type_name:expr, $error_msg:expr) => {
-        panic!(
-            "\nInvalid token: {}, expected {}.\nError message: {} {} {}.",
-            $next_token, $expected_token, $type_name, $error_msg, $expected_token
-        )
-    };
-}
-
+// Parses multiple T and returns the result as a vector.
 fn parse_repeated<'a, T>(
     token_iter: &mut TokenIterator<'a>,
     parse_func: fn(&mut TokenIterator<'a>) -> T,
@@ -57,11 +49,11 @@ fn parse_repeated<'a, T>(
         None => Vec::new(),
         Some(next_token) => {
             if *next_token != expected_token {
-                parse_panic!(
-                    next_token,
-                    expected_token,
+                panic!(
+                    "\nInvalid token: {}, expected {}.\nError message: {} must start with the keyword {}.",
+                    next_token, expected_token,
                     std::any::type_name::<T>(),
-                    "must start with the keyword"
+                    expected_token,
                 );
             }
             let mut elem_vec = Vec::new();
