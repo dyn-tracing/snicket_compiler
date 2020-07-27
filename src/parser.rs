@@ -44,17 +44,22 @@ fn parse_repeated<'a, T>(
     token_iter: &mut TokenIterator<'a>,
     parse_func: fn(&mut TokenIterator<'a>) -> T,
     expected_token: Token,
+    allow_empty: bool,
 ) -> Vec<T> {
     match token_iter.next() {
         None => Vec::new(),
         Some(next_token) => {
             if *next_token != expected_token {
-                panic!(
-                    "\nInvalid token: {}, expected {}.\nError message: {} must start with the keyword {}.",
-                    next_token, expected_token,
-                    std::any::type_name::<T>(),
-                    expected_token,
-                );
+                if allow_empty {
+                    return Vec::new();
+                } else {
+                    panic!(
+                        "\nInvalid token: {}, expected {}.\nError message: {} must start with the keyword {}.",
+                        next_token, expected_token,
+                        std::any::type_name::<T>(),
+                        expected_token,
+                    );
+                }
             }
             let mut elem_vec = Vec::new();
             while let Some(Token::Identifier(_)) = token_iter.peek() {
@@ -71,6 +76,7 @@ fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {
         token_iter,
         parse_pattern,
         Token::Match,
+        false,
     ))
 }
 
@@ -100,18 +106,21 @@ fn parse_filters<'a>(token_iter: &mut TokenIterator<'a>) -> Filters<'a> {
         token_iter,
         parse_filter,
         Token::Where,
+        true,
     ))
 }
 
 fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
     let node = parse_identifier(token_iter);
-    let operator_token = token_iter.next().unwrap();
-    match &operator_token {
-        Token::Colon => {
+    match token_iter.next() {
+        None => {
+            panic!("Expected colon or period, got none.");
+        }
+        Some(Token::Colon) => {
             let label = parse_identifier(token_iter);
             Filter::Label(node, label)
         }
-        Token::Period => {
+        Some(Token::Period) => {
             let mut properties = Vec::new();
             let mut property = parse_identifier(token_iter);
             properties.push(property);
@@ -130,7 +139,7 @@ fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
 
             Filter::Property(node, properties, val)
         }
-        _ => panic!("Unrecognized token: {:?}", operator_token),
+        Some(token) => panic!("Unrecognized token: {:?}", token),
     }
 }
 
@@ -139,6 +148,7 @@ fn parse_actions<'a>(token_iter: &mut TokenIterator<'a>) -> Actions<'a> {
         token_iter,
         parse_action,
         Token::Return,
+        true,
     ))
 }
 
@@ -239,9 +249,9 @@ mod tests {
     test_parser_success!(r"WHERE n:Node,", parse_filters, test_parse_filter2);
     test_parser_fail!(
         r"n",
-        parse_filters,
+        parse_filter,
         test_parse_filter_fail,
-        "Filter must start with the keyword WHERE."
+        "Expected colon or period, got none."
     );
     test_parser_success!(
         r"MATCH n-->m : a, n-*>m : b, WHERE n:Node, m:Node , n.abc == 5,",
