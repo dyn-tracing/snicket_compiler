@@ -13,6 +13,7 @@ use std::path::Path;
 struct Data {
     root: String,
     paths: Vec<String>,
+    return_action: Vec<String>,
 }
 
 fn main() {
@@ -29,7 +30,7 @@ fn main() {
         Ok(_) => println!("Successfully read {}", display),
     }
 
-    let query = r"MATCH productpagev1-->reviewsv2 : x, reviewsv2-->ratingsv1 : y, productpagev1-->detailsv1: z,";
+    let query = r"MATCH productpagev1-->reviewsv2 : x, reviewsv2-->ratingsv1 : y, productpagev1-->detailsv1: z, RETURN node.metadata.WORKLOAD_NAME,";
     let tokens = lexer::get_tokens(query);
     let mut token_iter = tokens.iter().peekable();
     let parse_tree = parser::parse_prog(&mut token_iter);
@@ -61,9 +62,19 @@ fn main() {
         ]
     );
 
+    assert_eq!(
+        code_gen.return_action,
+        vec!["node", "metadata", "WORKLOAD_NAME"]
+    );
+
     let data = Data {
         root: "productpagev1".to_string(),
         paths,
+        return_action: code_gen
+            .return_action
+            .into_iter()
+            .map(|x| x.to_string())
+            .collect(),
     };
 
     let handlebars = Handlebars::new();
