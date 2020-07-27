@@ -46,9 +46,9 @@ fn parse_repeated<'a, T>(
     expected_token: Token,
     allow_empty: bool,
 ) -> Vec<T> {
-    match token_iter.next() {
+    match token_iter.peek() {
         None => Vec::new(),
-        Some(next_token) => {
+        Some(&next_token) => {
             if *next_token != expected_token {
                 if allow_empty {
                     return Vec::new();
@@ -61,6 +61,8 @@ fn parse_repeated<'a, T>(
                     );
                 }
             }
+            // Consume next token.
+            token_iter.next();
             let mut elem_vec = Vec::new();
             while let Some(Token::Identifier(_)) = token_iter.peek() {
                 elem_vec.push(parse_func(token_iter));
@@ -324,4 +326,27 @@ mod tests {
         parse_prog,
         test_parse_return
     );
+
+    #[test]
+    fn test_parse_action_without_where() {
+        let input = r"MATCH n-->m: a, RETURN n.x,";
+        let tokens = &mut get_tokens(input);
+        let token_iter = &mut tokens.iter().peekable();
+        let prog = parse_prog(token_iter);
+        assert_eq!(
+            prog,
+            Prog {
+                patterns: Patterns(vec![Pattern {
+                    from_node: Identifier { id_name: "n" },
+                    to_node: Identifier { id_name: "m" },
+                    relationship_type: Relationship::Edge(Identifier { id_name: "a" })
+                }]),
+                filters: Filters::new(),
+                actions: Actions(vec![Action::Property(
+                    Identifier { id_name: "n" },
+                    vec![Identifier { id_name: "x" }]
+                )])
+            }
+        )
+    }
 }

@@ -101,4 +101,15 @@ mod tests {
         assert_eq!(code_gen.paths, vec![vec!["n", "m"]]);
         assert_eq!(code_gen.return_action, vec!["n", "x"]);
     }
+
+    #[test]
+    fn test_codegen_action_without_where() {
+        let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, RETURN n.x,");
+        let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
+        let parse_tree = parser::parse_prog(&mut token_iter);
+        let mut code_gen = CodeGen::new();
+        code_gen.visit_prog(&parse_tree);
+        assert_eq!(code_gen.paths, vec![vec!["n", "m"]]);
+        assert_eq!(code_gen.return_action, vec!["n", "x"]);
+    }
 }
