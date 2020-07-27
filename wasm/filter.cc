@@ -196,16 +196,21 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t) {
             LOG_WARN(std::string(body->view()));
           };
 
-          auto result = root()->httpCall("storage-upstream",
-                                         {{":method", "GET"},
-                                          {":path", "/store"},
-                                          {":authority", "storage-upstream"},
-                                          {"key", b3_trace_id_},
-                                          {"value", "1"}},
-                                         "", {}, 1000, callback);
-          if (result != WasmResult::Ok) {
-            LOG_WARN("Failed to make a call to storage-upstream: " +
-                     toString(result));
+          std::string value;
+          if (!getValue({"node", "metadata", "WORKLOAD_NAME"}, &value)) {
+            LOG_WARN("Failed to retrieve value to store.");
+          } else {
+            auto result = root()->httpCall("storage-upstream",
+                                           {{":method", "GET"},
+                                            {":path", "/store"},
+                                            {":authority", "storage-upstream"},
+                                            {"key", b3_trace_id_},
+                                            {"value", "1"}},
+                                           "", {}, 1000, callback);
+            if (result != WasmResult::Ok) {
+              LOG_WARN("Failed to make a call to storage-upstream: " +
+                       toString(result));
+            }
           }
         }
       }
