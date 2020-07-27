@@ -3,7 +3,7 @@ use tree_fold::TreeFold;
 #[derive(Default)]
 pub struct CodeGen<'a> {
     pub paths: Vec<Vec<&'a str>>,
-    pub actions: Vec<String>,
+    pub return_action: Vec<&'a str>,
 }
 
 impl<'a> CodeGen<'a> {
@@ -36,7 +36,11 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
     }
 
     fn visit_action(&mut self, action: &'a Action) {
-        self.actions.push(action.to_string());
+        let Action::Property(id, p) = action;
+        self.return_action.push(id.id_name);
+        for i in p {
+            self.return_action.push(i.id_name);
+        }
     }
 }
 
@@ -95,6 +99,6 @@ mod tests {
         let mut code_gen = CodeGen::new();
         code_gen.visit_prog(&parse_tree);
         assert_eq!(code_gen.paths, vec![vec!["n", "m"]]);
-        assert_eq!(code_gen.actions, vec!["n.x"]);
+        assert_eq!(code_gen.return_action, vec!["n", "x"]);
     }
 }
