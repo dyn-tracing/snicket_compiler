@@ -3,6 +3,7 @@ use tree_fold::TreeFold;
 #[derive(Default)]
 pub struct CodeGen<'a> {
     pub paths: Vec<Vec<&'a str>>,
+    pub actions: Vec<String>,
 }
 
 impl<'a> CodeGen<'a> {
@@ -32,6 +33,10 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                 self.paths.push(vec![from_node, to_node]);
             }
         }
+    }
+
+    fn visit_action(&mut self, action: &'a Action) {
+        self.actions.push(action.to_string());
     }
 }
 
@@ -80,5 +85,16 @@ mod tests {
 
         assert_eq!(code_gen.paths.len(), 2);
         assert_eq!(code_gen.paths, vec![vec!["a", "b", "c"], vec!["a", "d"]]);
+    }
+
+    #[test]
+    fn test_codegen_action() {
+        let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, WHERE n.x ==k, RETURN n.x,");
+        let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
+        let parse_tree = parser::parse_prog(&mut token_iter);
+        let mut code_gen = CodeGen::new();
+        code_gen.visit_prog(&parse_tree);
+        assert_eq!(code_gen.paths, vec![vec!["n", "m"]]);
+        assert_eq!(code_gen.actions, vec!["n.x"]);
     }
 }
