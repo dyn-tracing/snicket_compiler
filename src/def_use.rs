@@ -37,7 +37,7 @@ impl<'a> TreeFold<'a> for DefUse<'a> {
 
     fn visit_filter(&mut self, tree: &'a Filter) {
         match &tree {
-            Filter::Label(id, _) | Filter::Property(id, _, _) => {
+            Filter::Property(id, _, _) => {
                 if !self.known_nodes.contains(id.id_name) && !self.known_edges.contains(id.id_name)
                 {
                     panic!("Edge/Node {:?} not defined.", id.id_name);
@@ -101,10 +101,7 @@ mod tests {
     }
 
     test_pass!(r"MATCH n-->m : a, n-*>m : b,", test_def_use_no_filter);
-    test_pass!(
-        r"MATCH n-->m : a, n-*>m : b, WHERE n : Node,",
-        test_def_use_label_filter
-    );
+
     test_pass!(
         r"MATCH n-->m : a, n-*>m : b, WHERE a.x == 5,",
         test_def_use_prop_filter
@@ -113,20 +110,5 @@ mod tests {
         r"MATCH n-->m : a, n-*>m : b, WHERE x.a == 5,",
         test_fail_def_use_prop_filter,
         "Edge/Node \"x\" not defined."
-    );
-    test_fail!(
-        r"MATCH n-->m : a, n-*>m : b, WHERE x : a,",
-        test_fail_def_use_label_filter,
-        "Edge/Node \"x\" not defined."
-    );
-    test_fail!(
-        r"MATCH n-->m : a, n-*>m : a, WHERE x : a,",
-        test_fail_def_use_redef_edge,
-        "Edge \"a\" already defined."
-    );
-    test_fail!(
-        r"MATCH n-->m : a, n-*>m : n, WHERE x : a,",
-        test_fail_def_use_node_edge,
-        "Edge \"n\" already defined."
     );
 }

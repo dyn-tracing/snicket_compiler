@@ -50,11 +50,6 @@ impl<'a> TreeFold<'a> for PrettyPrinter {
 
     fn visit_filter(&mut self, tree: &'a Filter) {
         match &tree {
-            Filter::Label(node, label) => {
-                self.pretty_print_str.push_str(node.id_name);
-                self.pretty_print_str.push_str(" : ");
-                self.pretty_print_str.push_str(label.id_name);
-            }
             Filter::Property(node, properties, val) => {
                 self.pretty_print_str.push_str(node.id_name);
                 for property in properties {
@@ -107,7 +102,7 @@ mod tests {
 
     #[test]
     fn test_pretty_printer() {
-        let input_program = r"MATCH n-->m : a, n-*>m : b, WHERE n:Node, m:Node, n.abc == 5,";
+        let input_program = r"MATCH n-->m : a, n-*>m : b, WHERE n.abc == 5,";
         run_pretty_printer_and_reparse(input_program);
     }
 }

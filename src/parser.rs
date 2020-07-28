@@ -116,11 +116,7 @@ fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
     let node = parse_identifier(token_iter);
     match token_iter.next() {
         None => {
-            panic!("Expected colon or period, got none.");
-        }
-        Some(Token::Colon) => {
-            let label = parse_identifier(token_iter);
-            Filter::Label(node, label)
+            panic!("Expected period, got none.");
         }
         Some(Token::Period) => {
             let mut properties = Vec::new();
@@ -247,16 +243,17 @@ mod tests {
         test_parse_pattern_fail,
         "Pattern must start with the keyword MATCH."
     );
+
     test_parser_success!(r"WHERE n.abc == 5,", parse_filters, test_parse_filter);
-    test_parser_success!(r"WHERE n:Node,", parse_filters, test_parse_filter2);
+
     test_parser_fail!(
         r"n",
         parse_filter,
         test_parse_filter_fail,
-        "Expected colon or period, got none."
+        "Expected period, got none."
     );
     test_parser_success!(
-        r"MATCH n-->m : a, n-*>m : b, WHERE n:Node, m:Node , n.abc == 5,",
+        r"MATCH n-->m : a, n-*>m : b, WHERE n.abc == 5,",
         parse_prog,
         test_parse_prog
     );

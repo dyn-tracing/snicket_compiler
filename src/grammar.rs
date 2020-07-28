@@ -34,7 +34,6 @@ impl<'a> Filters<'a> {
 
 #[derive(Debug, PartialEq)]
 pub enum Filter<'a> {
-    Label(Identifier<'a>, Identifier<'a>), // xyz : Person
     Property(Identifier<'a>, Vec<Identifier<'a>>, Value<'a>), // xyz.abc == 5, xyz.a.b.c == 5, x.a == k
 }
 
