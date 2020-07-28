@@ -46,7 +46,7 @@ public:
 
       if (workload_name_ == "productpagev1") {
         paths = {
-            "productpagev1-reviewsv2-ratingsv1","productpagev1-detailsv1",
+            "a-b-c","a-d",
         };
       }
     } else {
@@ -197,7 +197,7 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t) {
 
           std::string value;
           if (!getValue({
-              "node","metadata","WORKLOAD_NAME",
+              "a","service_name",
               }, &value)) {
             LOG_WARN("Failed to retrieve value to store.");
           } else {

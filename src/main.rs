@@ -3,7 +3,6 @@ extern crate handlebars;
 extern crate serde;
 
 use dyntracing::{code_gen, lexer, parser, tree_fold::TreeFold};
-use handlebars::Handlebars;
 use serde::Serialize;
 use std::fs::File;
 use std::io::prelude::*;
@@ -43,36 +42,36 @@ fn main() {
     let mut code_gen = code_gen::CodeGen::new();
     code_gen.visit_prog(&parse_tree);
 
-    assert_eq!(code_gen.paths.len(), 2);
-    assert_eq!(code_gen.paths, vec![vec!["a", "b", "c"], vec!["a", "d"],]);
+    // assert_eq!(code_gen.paths.len(), 2);
+    // assert_eq!(code_gen.paths, vec![vec!["a", "b", "c"], vec!["a", "d"],]);
 
-    let paths: Vec<String> = code_gen
-        .paths
-        .iter_mut()
-        .map(|path| path.join("-"))
-        .collect();
+    // let paths: Vec<String> = code_gen
+    //     .paths
+    //     .iter_mut()
+    //     .map(|path| path.join("-"))
+    //     .collect();
 
-    assert_eq!(paths.len(), 2);
-    assert_eq!(paths, vec!["a-b-c", "a-d"]);
+    // assert_eq!(paths.len(), 2);
+    // assert_eq!(paths, vec!["a-b-c", "a-d"]);
 
-    assert_eq!(code_gen.return_action, vec!["a", "service_name"]);
+    // assert_eq!(code_gen.return_action, vec!["a", "service_name"]);
 
-    let data = Data {
-        root: "productpagev1".to_string(),
-        paths,
-        return_action: code_gen
-            .return_action
-            .into_iter()
-            .map(|x| x.to_string())
-            .collect(),
-    };
+    // let data = Data {
+    //     root: "productpagev1".to_string(),
+    //     paths,
+    //     return_action: code_gen
+    //         .return_action
+    //         .into_iter()
+    //         .map(|x| x.to_string())
+    //         .collect(),
+    // };
 
-    let handlebars = Handlebars::new();
+    // let handlebars = Handlebars::new();
 
-    let output = handlebars
-        .render_template(&template_str, &data)
-        .expect("handlebar render failed");
+    // let output = handlebars
+    //     .render_template(&template_str, &data)
+    //     .expect("handlebar render failed");
 
-    let mut file = File::create("./wasm/filter.cc").expect("file create failed.");
-    file.write_all(output.as_bytes()).expect("write failed");
+    // let mut file = File::create("./wasm/filter.cc").expect("file create failed.");
+    // file.write_all(output.as_bytes()).expect("write failed");
 }
