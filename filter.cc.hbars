@@ -48,7 +48,6 @@ public:
         paths = {
             {{#each paths}}"{{this}}",{{/each}}
         };
-        counter_ = Counter<>::New("wasm_path_based_requests");
       }
     } else {
       LOG_WARN("Failed to set workload name");
@@ -58,13 +57,10 @@ public:
 
   StringView getWorkloadName() { return workload_name_; }
 
-  Counter<> *getCounter() { return counter_; }
-
   const std::vector<std::string> &getPathsVector() { return paths; }
 
 private:
   std::string workload_name_;
-  Counter<> *counter_ = nullptr;
   std::vector<std::string> paths;
 };
 
@@ -191,9 +187,32 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t) {
           }
         }
         if (matches) {
-          auto *counter = root_->getCounter();
-          counter->increment(1);
-          LOG_WARN("Counter incremented");
+          auto context_id = id();
+          auto callback = [context_id](uint32_t, size_t body_size, uint32_t) {
+            getContext(context_id)->setEffectiveContext();
+            auto body =
+                getBufferBytes(BufferType::HttpCallResponseBody, 0, body_size);
+            LOG_WARN(std::string(body->view()));
+          };
+
+          std::string value;
+          if (!getValue({
+              {{#each return_action}}"{{this}}",{{/each}}
+              }, &value)) {
+            LOG_WARN("Failed to retrieve value to store.");
+          } else {
+            auto result = root()->httpCall("storage-upstream",
+                                           { {":method", "GET"},
+                                            {":path", "/store"},
+                                            {":authority", "storage-upstream"},
+                                            {"key", b3_trace_id_},
+                                            {"value", "1"} },
+                                           "", {}, 1000, callback);
+            if (result != WasmResult::Ok) {
+              LOG_WARN("Failed to make a call to storage-upstream: " +
+                       toString(result));
+            }
+          }
         }
       }
 

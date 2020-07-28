@@ -3,6 +3,7 @@ use tree_fold::TreeFold;
 #[derive(Default)]
 pub struct CodeGen<'a> {
     pub paths: Vec<Vec<&'a str>>,
+    pub return_action: Vec<&'a str>,
 }
 
 impl<'a> CodeGen<'a> {
@@ -31,6 +32,14 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
             if !inserted {
                 self.paths.push(vec![from_node, to_node]);
             }
+        }
+    }
+
+    fn visit_action(&mut self, action: &'a Action) {
+        let Action::Property(id, p) = action;
+        self.return_action.push(id.id_name);
+        for i in p {
+            self.return_action.push(i.id_name);
         }
     }
 }
@@ -80,5 +89,27 @@ mod tests {
 
         assert_eq!(code_gen.paths.len(), 2);
         assert_eq!(code_gen.paths, vec![vec!["a", "b", "c"], vec!["a", "d"]]);
+    }
+
+    #[test]
+    fn test_codegen_action() {
+        let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, WHERE n.x ==k, RETURN n.x,");
+        let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
+        let parse_tree = parser::parse_prog(&mut token_iter);
+        let mut code_gen = CodeGen::new();
+        code_gen.visit_prog(&parse_tree);
+        assert_eq!(code_gen.paths, vec![vec!["n", "m"]]);
+        assert_eq!(code_gen.return_action, vec!["n", "x"]);
+    }
+
+    #[test]
+    fn test_codegen_action_without_where() {
+        let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, RETURN n.x,");
+        let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
+        let parse_tree = parser::parse_prog(&mut token_iter);
+        let mut code_gen = CodeGen::new();
+        code_gen.visit_prog(&parse_tree);
+        assert_eq!(code_gen.paths, vec![vec!["n", "m"]]);
+        assert_eq!(code_gen.return_action, vec!["n", "x"]);
     }
 }

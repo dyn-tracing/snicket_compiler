@@ -52,6 +52,19 @@ pub enum Action<'a> {
     Property(Identifier<'a>, Vec<Identifier<'a>>), // xyz.abc, xyz.a.b.c
 }
 
+impl<'a> fmt::Display for Action<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let Action::Property(id, id_vec) = self;
+        let mut result = String::new();
+        result.push_str(&id.to_string());
+        for i in id_vec {
+            result.push_str(".");
+            result.push_str(&i.to_string());
+        }
+        write!(f, "{}", result)
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Relationship<'a> {
     Path(Identifier<'a>),
@@ -61,6 +74,12 @@ pub enum Relationship<'a> {
 #[derive(Debug, PartialEq)]
 pub struct Identifier<'a> {
     pub id_name: &'a str,
+}
+
+impl<'a> fmt::Display for Identifier<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.id_name)
+    }
 }
 
 #[derive(Debug, PartialEq)]
