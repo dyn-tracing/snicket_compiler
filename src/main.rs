@@ -30,7 +30,12 @@ fn main() {
         Ok(_) => println!("Successfully read {}", display),
     }
 
-    let query = r"MATCH productpagev1-->reviewsv2 : x, reviewsv2-->ratingsv1 : y, productpagev1-->detailsv1: z, RETURN node.metadata.WORKLOAD_NAME,";
+    let query = "MATCH a-->b : x, b-->c : y, a-->d: z, \
+                    WHERE a.service_name == productpagev1, \
+                            b.service_name == reviewsv2, \
+                            c.service_name == ratingsv1, \
+                            d.service_name == detailsv1, \
+                    RETURN a.service_name,";
     let tokens = lexer::get_tokens(query);
     let mut token_iter = tokens.iter().peekable();
     let parse_tree = parser::parse_prog(&mut token_iter);
