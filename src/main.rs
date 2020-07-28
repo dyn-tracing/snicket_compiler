@@ -47,8 +47,8 @@ fn main() {
     assert_eq!(
         code_gen.paths,
         vec![
-            vec!["productpagev1", "reviewsv2", "ratingsv1"],
-            vec!["productpagev1", "detailsv1"],
+            vec!["a", "b", "c"],
+            vec!["a", "d"],
         ]
     );
 
@@ -62,8 +62,8 @@ fn main() {
     assert_eq!(
         paths,
         vec![
-            "productpagev1-reviewsv2-ratingsv1",
-            "productpagev1-detailsv1"
+            "a-b-c",
+            "a-d"
         ]
     );
 
