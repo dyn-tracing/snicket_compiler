@@ -216,10 +216,10 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t) {
         }
       }
 
-      // Now join them and attach workload name in front of each entry.
+      // Now join them.
       std::string joined =
           std::accumulate(words.begin(), words.end(), std::string(),
-                          [workload_name](const std::string &a,
+                          [](const std::string &a,
                                           const std::string &b) -> std::string {
                             return a + (a.length() > 0 ? "," : "") + b;
                           });
