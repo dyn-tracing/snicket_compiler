@@ -2,18 +2,31 @@ Repository for dynamic tracing queries.
 
 Use cypher patterns as a basis for specifying desired trace attributes: https://neo4j.com/docs/2.0/cypher-refcard/
 
-Simply run `cargo run` to see what's generated for query `MATCH a-->b : x,b-->c : y, a-->d: z,`
+# Install
+
+- Rust nightly: `rustup toolchain install nightly`
+- [Bazel](https://docs.bazel.build/versions/master/install.html)
+- [Google Cloud SDK](https://cloud.google.com/sdk/install)
+- [Docker](https://www.docker.com/products/docker-desktop)
 
 # Demo
 
 1. Setup GKE cluster
 
+First create a GCP project if you don't have one.
+
 ```
+gcloud config set project <PROJECT_ID>
+
 gcloud services enable container.googleapis.com
 
 gcloud container clusters create demo --enable-autoupgrade \
     --enable-autoscaling --min-nodes=3 --max-nodes=10 \
 		--num-nodes=5 --zone=us-central1-a
+
+# Retrieve your credentials for `kubectl`
+gcloud container clusters get-credentials $CLUSTER_NAME \
+    --zone $ZONE
 ```
 
 2. Install Istio
