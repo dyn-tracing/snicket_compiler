@@ -44,13 +44,7 @@ fn main() {
     code_gen.visit_prog(&parse_tree);
 
     assert_eq!(code_gen.paths.len(), 2);
-    assert_eq!(
-        code_gen.paths,
-        vec![
-            vec!["a", "b", "c"],
-            vec!["a", "d"],
-        ]
-    );
+    assert_eq!(code_gen.paths, vec![vec!["a", "b", "c"], vec!["a", "d"],]);
 
     let paths: Vec<String> = code_gen
         .paths
@@ -59,18 +53,9 @@ fn main() {
         .collect();
 
     assert_eq!(paths.len(), 2);
-    assert_eq!(
-        paths,
-        vec![
-            "a-b-c",
-            "a-d"
-        ]
-    );
+    assert_eq!(paths, vec!["a-b-c", "a-d"]);
 
-    assert_eq!(
-        code_gen.return_action,
-        vec!["node", "metadata", "WORKLOAD_NAME"]
-    );
+    assert_eq!(code_gen.return_action, vec!["a", "service_name"]);
 
     let data = Data {
         root: "productpagev1".to_string(),
