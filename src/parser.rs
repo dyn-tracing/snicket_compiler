@@ -289,18 +289,22 @@ mod tests {
         let prog = parse_prog(token_iter);
         assert_eq!(
             prog,
-            Prog {
-                patterns: Patterns(vec![Pattern {
-                    from_node: Identifier { id_name: "n" },
-                    to_node: Identifier { id_name: "m" },
-                    relationship_type: Relationship::Edge(Identifier { id_name: "a" })
+            Program {
+                patterns: RepeatedField::<Pattern>::from_vec(vec![Pattern {
+                    src_id: "n".to_string(),
+                    dst_id: "m".to_string(),
+                    rel_typ: Pattern_RelationshipType::EDGE,
+                    rel_id: "a".to_string(),
+                    ..Default::default()
                 }]),
-                filters: Filters(vec![Filter::Property(
-                    Identifier { id_name: "n" },
-                    vec![Identifier { id_name: "x" }],
-                    Value::Str("k")
-                )]),
-                actions: Actions(Vec::new()),
+                filters: RepeatedField::<Filter>::from_vec(vec![Filter {
+                    id: "n".to_string(),
+                    properties: RepeatedField::<String>::from_vec(vec!["x".to_string()]),
+                    value_oneof: Some(Filter_oneof_value_oneof::str("k".to_string())),
+                    ..Default::default()
+                }]),
+                actions: RepeatedField::<Action>::new(),
+                ..Default::default()
             }
         )
     }
@@ -314,11 +318,12 @@ mod tests {
         let actions = parse_actions(token_iter);
         assert_eq!(
             actions,
-            Actions(vec![Action::Property(
-                Identifier { id_name: "n" },
-                vec![Identifier { id_name: "x" }]
-            )])
-        )
+            RepeatedField::<Action>::from_vec(vec![Action {
+                id: "n".to_string(),
+                properties: RepeatedField::<String>::from_vec(vec!["x".to_string()]),
+                ..Default::default()
+            }])
+        );
     }
     test_parser_success!(
         r"MATCH n-->m: a, WHERE n.y == o, RETURN n.x,",
@@ -334,17 +339,21 @@ mod tests {
         let prog = parse_prog(token_iter);
         assert_eq!(
             prog,
-            Prog {
-                patterns: Patterns(vec![Pattern {
-                    from_node: Identifier { id_name: "n" },
-                    to_node: Identifier { id_name: "m" },
-                    relationship_type: Relationship::Edge(Identifier { id_name: "a" })
+            Program {
+                patterns: RepeatedField::<Pattern>::from_vec(vec![Pattern {
+                    src_id: "n".to_string(),
+                    dst_id: "m".to_string(),
+                    rel_typ: Pattern_RelationshipType::EDGE,
+                    rel_id: "a".to_string(),
+                    ..Default::default()
                 }]),
-                filters: Filters::new(),
-                actions: Actions(vec![Action::Property(
-                    Identifier { id_name: "n" },
-                    vec![Identifier { id_name: "x" }]
-                )])
+                filters: RepeatedField::<Filter>::new(),
+                actions: RepeatedField::<Action>::from_vec(vec![Action {
+                    id: "n".to_string(),
+                    properties: RepeatedField::<String>::from_vec(vec!["x".to_string()]),
+                    ..Default::default()
+                }]),
+                ..Default::default()
             }
         )
     }

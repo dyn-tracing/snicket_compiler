@@ -2,7 +2,7 @@ extern crate dyntracing;
 extern crate handlebars;
 extern crate serde;
 
-use dyntracing::{lexer, parser, tree_fold::TreeFold};
+use dyntracing::{lexer, parser};
 use serde::Serialize;
 use std::fs::File;
 use std::io::prelude::*;
@@ -37,8 +37,7 @@ fn main() {
                     RETURN a.service_name,";
     let tokens = lexer::get_tokens(query);
     let mut token_iter = tokens.iter().peekable();
-    let parse_tree = parser::parse_prog(&mut token_iter);
-
+    let _program = parser::parse_prog(&mut token_iter);
 
     // assert_eq!(code_gen.paths.len(), 2);
     // assert_eq!(code_gen.paths, vec![vec!["a", "b", "c"], vec!["a", "d"],]);
