@@ -8,12 +8,9 @@
 #include "gtest/gtest.h"
 
 // Returns true if node n1 property set is a subset of n2's property set
-// and n1's children is a subset of n2's children set.
-bool node_matches(const Node &n1, const Node &n2) {
-  if (n1.id() != n2.id()) {
-    return false;
-  }
-
+// and n1's children is a subset of n2's children set. Their ids can be
+// different.
+bool property_child_subset(const Node &n1, const Node &n2) {
   for (const auto &pair : n1.properties()) {
     if (!(n2.properties().contains(pair.first)) ||
         (n2.properties().at(pair.first) != pair.second)) {
@@ -21,28 +18,36 @@ bool node_matches(const Node &n1, const Node &n2) {
     }
   }
 
+  if (n1.children().size() > n2.children().size()) {
+    return false;
+  }
+
   for (const auto &child : n1.children()) {
-    for (const auto &other_child : n1.children()) {
-      if (child.id() == other_child.id()) {
-        if (!node_matches(child, other_child)) {
-          return false;
-        }
+    bool check = false;
+    for (const auto &other_child : n2.children()) {
+      if (property_child_subset(child, other_child)) {
+        check = true;
       }
+    }
+    if (!check) {
+      return false;
     }
   }
 
   return true;
 }
 
-TEST(GraphProtoTest, Parse) {
+TEST(GraphProtoTest, SingleNode) {
   Node n1;
   n1.set_id("n1");
   Node n2;
   n2.set_id("n2");
-  EXPECT_FALSE(node_matches(n1, n2));
+  EXPECT_TRUE(property_child_subset(n1, n2));
   n2.set_id("n1");
-  EXPECT_TRUE(node_matches(n1, n2));
+  EXPECT_TRUE(property_child_subset(n1, n2));
 }
+
+TEST(GraphProtoTest, NodeMatches) { Node n1; }
 
 TEST(FilterTest, MapUpdate) {
   std::map<std::string, std::string> spans_to_headers;
