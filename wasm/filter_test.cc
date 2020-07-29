@@ -3,8 +3,46 @@
 #include <set>
 #include <string>
 
+#include "graph.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+
+// Returns true if node n1 property set is a subset of n2's property set
+// and n1's children is a subset of n2's children set.
+bool node_matches(const Node &n1, const Node &n2) {
+  if (n1.id() != n2.id()) {
+    return false;
+  }
+
+  for (const auto &pair : n1.properties()) {
+    if (!(n2.properties().contains(pair.first)) ||
+        (n2.properties().at(pair.first) != pair.second)) {
+      return false;
+    }
+  }
+
+  for (const auto &child : n1.children()) {
+    for (const auto &other_child : n1.children()) {
+      if (child.id() == other_child.id()) {
+        if (!node_matches(child, other_child)) {
+          return false;
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
+TEST(GraphProtoTest, Parse) {
+  Node n1;
+  n1.set_id("n1");
+  Node n2;
+  n2.set_id("n2");
+  EXPECT_FALSE(node_matches(n1, n2));
+  n2.set_id("n1");
+  EXPECT_TRUE(node_matches(n1, n2));
+}
 
 TEST(FilterTest, MapUpdate) {
   std::map<std::string, std::string> spans_to_headers;
