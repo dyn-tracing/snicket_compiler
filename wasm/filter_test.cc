@@ -47,7 +47,32 @@ TEST(GraphProtoTest, SingleNode) {
   EXPECT_TRUE(property_child_subset(n1, n2));
 }
 
-TEST(GraphProtoTest, NodeMatches) { Node n1; }
+TEST(GraphProtoTest, NodeMatches) {
+  Node n1;
+  n1.set_id("n1");
+  n1.mutable_properties()->insert({"a", "x"});
+  Node n2;
+  n2.set_id("n2");
+  n2.mutable_properties()->insert({"a", "x"});
+  n2.mutable_properties()->insert({"b", "y"});
+  EXPECT_TRUE(property_child_subset(n1, n2));
+  n2.clear_properties();
+  EXPECT_FALSE(property_child_subset(n1, n2));
+}
+
+TEST(GraphProtoTest, ChildMatch) {
+  Node n1;
+  n1.mutable_properties()->insert({"a", "x"});
+  Node *n1_child = n1.mutable_children()->Add();
+  n1_child->mutable_properties()->insert({"b", "y"});
+  Node n2;
+  n2.mutable_properties()->insert({"a", "x"});
+  Node *n2_child = n2.mutable_children()->Add();
+  n2_child->mutable_properties()->insert({"b", "y"});
+  n2_child = n2.mutable_children()->Add();
+  n2_child->mutable_properties()->insert({"c", "z"});
+  EXPECT_TRUE(property_child_subset(n1, n2));
+}
 
 TEST(FilterTest, MapUpdate) {
   std::map<std::string, std::string> spans_to_headers;
