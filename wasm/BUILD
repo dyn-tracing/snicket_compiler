@@ -13,6 +13,18 @@ cc_proto_library(
     deps = [":filter_proto"],
 )
 
+proto_library(
+    name = "graph_proto",
+    srcs = [
+        "graph.proto",
+    ],
+)
+
+cc_proto_library(
+    name = "graph_cc_proto",
+    deps = [":graph_proto"],
+)
+
 wasm_cc_binary(
     name = "filter.wasm",
     srcs = [
@@ -30,6 +42,7 @@ cc_test(
     ],
     deps = [
         ":filter_cc_proto",
+        ":graph_cc_proto",
         "@com_google_protobuf//:protobuf_lite",
         "@gtest",
         "@gtest//:gtest_main",
