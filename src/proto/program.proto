@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+message Pattern {
+  string src = 1;
+  string dst = 2;
+
+  enum RelationshipType {
+    PATH = 0;
+    EDGE = 1;
+  }
+  RelationshipType rel_typ = 3;
+}
+
+message Filter {
+  string node_id = 1;
+  repeated string properties = 2;
+  oneof value_oneof {
+    uint32 u32 = 3;
+    string str = 4;
+  }
+}
+
+message Action {
+  message Return {
+    string node_id = 1;
+    repeated string properties = 2;
+  }
+
+  oneof action_oneof { Return return = 1; }
+}
+
+message Program {
+  repeated Pattern patterns = 1;
+  repeated Filter filters = 2;
+  repeated Action actions = 3;
+}

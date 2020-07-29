@@ -5,3 +5,5 @@ message Node {
   map<string, string> properties = 2;
   repeated Node children = 3;
 }
+
+message Graph { repeated Node trees = 1; }
