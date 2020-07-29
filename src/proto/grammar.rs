@@ -17,7 +17,7 @@
 #![allow(trivial_casts)]
 #![allow(unused_imports)]
 #![allow(unused_results)]
-//! Generated file from `src/proto/program.proto`
+//! Generated file from `src/proto/grammar.proto`
 
 /// Generated files are compatible only with the same version
 /// of protobuf runtime.
@@ -26,9 +26,10 @@
 #[derive(PartialEq,Clone,Default)]
 pub struct Pattern {
     // message fields
-    pub src: ::std::string::String,
-    pub dst: ::std::string::String,
+    pub src_id: ::std::string::String,
+    pub dst_id: ::std::string::String,
     pub rel_typ: Pattern_RelationshipType,
+    pub rel_id: ::std::string::String,
     // special fields
     pub unknown_fields: ::protobuf::UnknownFields,
     pub cached_size: ::protobuf::CachedSize,
@@ -45,56 +46,56 @@ impl Pattern {
         ::std::default::Default::default()
     }
 
-    // string src = 1;
+    // string src_id = 1;
 
 
-    pub fn get_src(&self) -> &str {
-        &self.src
+    pub fn get_src_id(&self) -> &str {
+        &self.src_id
     }
-    pub fn clear_src(&mut self) {
-        self.src.clear();
+    pub fn clear_src_id(&mut self) {
+        self.src_id.clear();
     }
 
     // Param is passed by value, moved
-    pub fn set_src(&mut self, v: ::std::string::String) {
-        self.src = v;
+    pub fn set_src_id(&mut self, v: ::std::string::String) {
+        self.src_id = v;
     }
 
     // Mutable pointer to the field.
     // If field is not initialized, it is initialized with default value first.
-    pub fn mut_src(&mut self) -> &mut ::std::string::String {
-        &mut self.src
+    pub fn mut_src_id(&mut self) -> &mut ::std::string::String {
+        &mut self.src_id
     }
 
     // Take field
-    pub fn take_src(&mut self) -> ::std::string::String {
-        ::std::mem::replace(&mut self.src, ::std::string::String::new())
+    pub fn take_src_id(&mut self) -> ::std::string::String {
+        ::std::mem::replace(&mut self.src_id, ::std::string::String::new())
     }
 
-    // string dst = 2;
+    // string dst_id = 2;
 
 
-    pub fn get_dst(&self) -> &str {
-        &self.dst
+    pub fn get_dst_id(&self) -> &str {
+        &self.dst_id
     }
-    pub fn clear_dst(&mut self) {
-        self.dst.clear();
+    pub fn clear_dst_id(&mut self) {
+        self.dst_id.clear();
     }
 
     // Param is passed by value, moved
-    pub fn set_dst(&mut self, v: ::std::string::String) {
-        self.dst = v;
+    pub fn set_dst_id(&mut self, v: ::std::string::String) {
+        self.dst_id = v;
     }
 
     // Mutable pointer to the field.
     // If field is not initialized, it is initialized with default value first.
-    pub fn mut_dst(&mut self) -> &mut ::std::string::String {
-        &mut self.dst
+    pub fn mut_dst_id(&mut self) -> &mut ::std::string::String {
+        &mut self.dst_id
     }
 
     // Take field
-    pub fn take_dst(&mut self) -> ::std::string::String {
-        ::std::mem::replace(&mut self.dst, ::std::string::String::new())
+    pub fn take_dst_id(&mut self) -> ::std::string::String {
+        ::std::mem::replace(&mut self.dst_id, ::std::string::String::new())
     }
 
     // .Pattern.RelationshipType rel_typ = 3;
@@ -111,6 +112,32 @@ impl Pattern {
     pub fn set_rel_typ(&mut self, v: Pattern_RelationshipType) {
         self.rel_typ = v;
     }
+
+    // string rel_id = 4;
+
+
+    pub fn get_rel_id(&self) -> &str {
+        &self.rel_id
+    }
+    pub fn clear_rel_id(&mut self) {
+        self.rel_id.clear();
+    }
+
+    // Param is passed by value, moved
+    pub fn set_rel_id(&mut self, v: ::std::string::String) {
+        self.rel_id = v;
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_rel_id(&mut self) -> &mut ::std::string::String {
+        &mut self.rel_id
+    }
+
+    // Take field
+    pub fn take_rel_id(&mut self) -> ::std::string::String {
+        ::std::mem::replace(&mut self.rel_id, ::std::string::String::new())
+    }
 }
 
 impl ::protobuf::Message for Pattern {
@@ -123,13 +150,16 @@ impl ::protobuf::Message for Pattern {
             let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
                 1 => {
-                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.src)?;
+                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.src_id)?;
                 },
                 2 => {
-                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.dst)?;
+                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.dst_id)?;
                 },
                 3 => {
                     ::protobuf::rt::read_proto3_enum_with_unknown_fields_into(wire_type, is, &mut self.rel_typ, 3, &mut self.unknown_fields)?
+                },
+                4 => {
+                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.rel_id)?;
                 },
                 _ => {
                     ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
@@ -143,14 +173,17 @@ impl ::protobuf::Message for Pattern {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if !self.src.is_empty() {
-            my_size += ::protobuf::rt::string_size(1, &self.src);
+        if !self.src_id.is_empty() {
+            my_size += ::protobuf::rt::string_size(1, &self.src_id);
         }
-        if !self.dst.is_empty() {
-            my_size += ::protobuf::rt::string_size(2, &self.dst);
+        if !self.dst_id.is_empty() {
+            my_size += ::protobuf::rt::string_size(2, &self.dst_id);
         }
         if self.rel_typ != Pattern_RelationshipType::PATH {
             my_size += ::protobuf::rt::enum_size(3, self.rel_typ);
+        }
+        if !self.rel_id.is_empty() {
+            my_size += ::protobuf::rt::string_size(4, &self.rel_id);
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
         self.cached_size.set(my_size);
@@ -158,14 +191,17 @@ impl ::protobuf::Message for Pattern {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::ProtobufResult<()> {
-        if !self.src.is_empty() {
-            os.write_string(1, &self.src)?;
+        if !self.src_id.is_empty() {
+            os.write_string(1, &self.src_id)?;
         }
-        if !self.dst.is_empty() {
-            os.write_string(2, &self.dst)?;
+        if !self.dst_id.is_empty() {
+            os.write_string(2, &self.dst_id)?;
         }
         if self.rel_typ != Pattern_RelationshipType::PATH {
             os.write_enum(3, ::protobuf::ProtobufEnum::value(&self.rel_typ))?;
+        }
+        if !self.rel_id.is_empty() {
+            os.write_string(4, &self.rel_id)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -206,19 +242,24 @@ impl ::protobuf::Message for Pattern {
         descriptor.get(|| {
             let mut fields = ::std::vec::Vec::new();
             fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
-                "src",
-                |m: &Pattern| { &m.src },
-                |m: &mut Pattern| { &mut m.src },
+                "src_id",
+                |m: &Pattern| { &m.src_id },
+                |m: &mut Pattern| { &mut m.src_id },
             ));
             fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
-                "dst",
-                |m: &Pattern| { &m.dst },
-                |m: &mut Pattern| { &mut m.dst },
+                "dst_id",
+                |m: &Pattern| { &m.dst_id },
+                |m: &mut Pattern| { &mut m.dst_id },
             ));
             fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeEnum<Pattern_RelationshipType>>(
                 "rel_typ",
                 |m: &Pattern| { &m.rel_typ },
                 |m: &mut Pattern| { &mut m.rel_typ },
+            ));
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
+                "rel_id",
+                |m: &Pattern| { &m.rel_id },
+                |m: &mut Pattern| { &mut m.rel_id },
             ));
             ::protobuf::reflect::MessageDescriptor::new_pb_name::<Pattern>(
                 "Pattern",
@@ -236,9 +277,10 @@ impl ::protobuf::Message for Pattern {
 
 impl ::protobuf::Clear for Pattern {
     fn clear(&mut self) {
-        self.src.clear();
-        self.dst.clear();
+        self.src_id.clear();
+        self.dst_id.clear();
         self.rel_typ = Pattern_RelationshipType::PATH;
+        self.rel_id.clear();
         self.unknown_fields.clear();
     }
 }
@@ -308,7 +350,7 @@ impl ::protobuf::reflect::ProtobufValue for Pattern_RelationshipType {
 #[derive(PartialEq,Clone,Default)]
 pub struct Filter {
     // message fields
-    pub node_id: ::std::string::String,
+    pub id: ::std::string::String,
     pub properties: ::protobuf::RepeatedField<::std::string::String>,
     // message oneof groups
     pub value_oneof: ::std::option::Option<Filter_oneof_value_oneof>,
@@ -334,30 +376,30 @@ impl Filter {
         ::std::default::Default::default()
     }
 
-    // string node_id = 1;
+    // string id = 1;
 
 
-    pub fn get_node_id(&self) -> &str {
-        &self.node_id
+    pub fn get_id(&self) -> &str {
+        &self.id
     }
-    pub fn clear_node_id(&mut self) {
-        self.node_id.clear();
+    pub fn clear_id(&mut self) {
+        self.id.clear();
     }
 
     // Param is passed by value, moved
-    pub fn set_node_id(&mut self, v: ::std::string::String) {
-        self.node_id = v;
+    pub fn set_id(&mut self, v: ::std::string::String) {
+        self.id = v;
     }
 
     // Mutable pointer to the field.
     // If field is not initialized, it is initialized with default value first.
-    pub fn mut_node_id(&mut self) -> &mut ::std::string::String {
-        &mut self.node_id
+    pub fn mut_id(&mut self) -> &mut ::std::string::String {
+        &mut self.id
     }
 
     // Take field
-    pub fn take_node_id(&mut self) -> ::std::string::String {
-        ::std::mem::replace(&mut self.node_id, ::std::string::String::new())
+    pub fn take_id(&mut self) -> ::std::string::String {
+        ::std::mem::replace(&mut self.id, ::std::string::String::new())
     }
 
     // repeated string properties = 2;
@@ -470,7 +512,7 @@ impl ::protobuf::Message for Filter {
             let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
                 1 => {
-                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.node_id)?;
+                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.id)?;
                 },
                 2 => {
                     ::protobuf::rt::read_repeated_string_into(wire_type, is, &mut self.properties)?;
@@ -499,8 +541,8 @@ impl ::protobuf::Message for Filter {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if !self.node_id.is_empty() {
-            my_size += ::protobuf::rt::string_size(1, &self.node_id);
+        if !self.id.is_empty() {
+            my_size += ::protobuf::rt::string_size(1, &self.id);
         }
         for value in &self.properties {
             my_size += ::protobuf::rt::string_size(2, &value);
@@ -521,8 +563,8 @@ impl ::protobuf::Message for Filter {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::ProtobufResult<()> {
-        if !self.node_id.is_empty() {
-            os.write_string(1, &self.node_id)?;
+        if !self.id.is_empty() {
+            os.write_string(1, &self.id)?;
         }
         for v in &self.properties {
             os.write_string(2, &v)?;
@@ -576,9 +618,9 @@ impl ::protobuf::Message for Filter {
         descriptor.get(|| {
             let mut fields = ::std::vec::Vec::new();
             fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
-                "node_id",
-                |m: &Filter| { &m.node_id },
-                |m: &mut Filter| { &mut m.node_id },
+                "id",
+                |m: &Filter| { &m.id },
+                |m: &mut Filter| { &mut m.id },
             ));
             fields.push(::protobuf::reflect::accessor::make_repeated_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
                 "properties",
@@ -611,7 +653,7 @@ impl ::protobuf::Message for Filter {
 
 impl ::protobuf::Clear for Filter {
     fn clear(&mut self) {
-        self.node_id.clear();
+        self.id.clear();
         self.properties.clear();
         self.value_oneof = ::std::option::Option::None;
         self.value_oneof = ::std::option::Option::None;
@@ -633,8 +675,9 @@ impl ::protobuf::reflect::ProtobufValue for Filter {
 
 #[derive(PartialEq,Clone,Default)]
 pub struct Action {
-    // message oneof groups
-    pub action_oneof: ::std::option::Option<Action_oneof_action_oneof>,
+    // message fields
+    pub id: ::std::string::String,
+    pub properties: ::protobuf::RepeatedField<::std::string::String>,
     // special fields
     pub unknown_fields: ::protobuf::UnknownFields,
     pub cached_size: ::protobuf::CachedSize,
@@ -646,73 +689,65 @@ impl<'a> ::std::default::Default for &'a Action {
     }
 }
 
-#[derive(Clone,PartialEq,Debug)]
-pub enum Action_oneof_action_oneof {
-    field_return(Action_Return),
-}
-
 impl Action {
     pub fn new() -> Action {
         ::std::default::Default::default()
     }
 
-    // .Action.Return return = 1;
+    // string id = 1;
 
 
-    pub fn get_field_return(&self) -> &Action_Return {
-        match self.action_oneof {
-            ::std::option::Option::Some(Action_oneof_action_oneof::field_return(ref v)) => v,
-            _ => <Action_Return as ::protobuf::Message>::default_instance(),
-        }
+    pub fn get_id(&self) -> &str {
+        &self.id
     }
-    pub fn clear_field_return(&mut self) {
-        self.action_oneof = ::std::option::Option::None;
-    }
-
-    pub fn has_field_return(&self) -> bool {
-        match self.action_oneof {
-            ::std::option::Option::Some(Action_oneof_action_oneof::field_return(..)) => true,
-            _ => false,
-        }
+    pub fn clear_id(&mut self) {
+        self.id.clear();
     }
 
     // Param is passed by value, moved
-    pub fn set_field_return(&mut self, v: Action_Return) {
-        self.action_oneof = ::std::option::Option::Some(Action_oneof_action_oneof::field_return(v))
+    pub fn set_id(&mut self, v: ::std::string::String) {
+        self.id = v;
     }
 
     // Mutable pointer to the field.
-    pub fn mut_field_return(&mut self) -> &mut Action_Return {
-        if let ::std::option::Option::Some(Action_oneof_action_oneof::field_return(_)) = self.action_oneof {
-        } else {
-            self.action_oneof = ::std::option::Option::Some(Action_oneof_action_oneof::field_return(Action_Return::new()));
-        }
-        match self.action_oneof {
-            ::std::option::Option::Some(Action_oneof_action_oneof::field_return(ref mut v)) => v,
-            _ => panic!(),
-        }
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_id(&mut self) -> &mut ::std::string::String {
+        &mut self.id
     }
 
     // Take field
-    pub fn take_field_return(&mut self) -> Action_Return {
-        if self.has_field_return() {
-            match self.action_oneof.take() {
-                ::std::option::Option::Some(Action_oneof_action_oneof::field_return(v)) => v,
-                _ => panic!(),
-            }
-        } else {
-            Action_Return::new()
-        }
+    pub fn take_id(&mut self) -> ::std::string::String {
+        ::std::mem::replace(&mut self.id, ::std::string::String::new())
+    }
+
+    // repeated string properties = 2;
+
+
+    pub fn get_properties(&self) -> &[::std::string::String] {
+        &self.properties
+    }
+    pub fn clear_properties(&mut self) {
+        self.properties.clear();
+    }
+
+    // Param is passed by value, moved
+    pub fn set_properties(&mut self, v: ::protobuf::RepeatedField<::std::string::String>) {
+        self.properties = v;
+    }
+
+    // Mutable pointer to the field.
+    pub fn mut_properties(&mut self) -> &mut ::protobuf::RepeatedField<::std::string::String> {
+        &mut self.properties
+    }
+
+    // Take field
+    pub fn take_properties(&mut self) -> ::protobuf::RepeatedField<::std::string::String> {
+        ::std::mem::replace(&mut self.properties, ::protobuf::RepeatedField::new())
     }
 }
 
 impl ::protobuf::Message for Action {
     fn is_initialized(&self) -> bool {
-        if let Some(Action_oneof_action_oneof::field_return(ref v)) = self.action_oneof {
-            if !v.is_initialized() {
-                return false;
-            }
-        }
         true
     }
 
@@ -721,10 +756,10 @@ impl ::protobuf::Message for Action {
             let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
                 1 => {
-                    if wire_type != ::protobuf::wire_format::WireTypeLengthDelimited {
-                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
-                    }
-                    self.action_oneof = ::std::option::Option::Some(Action_oneof_action_oneof::field_return(is.read_message()?));
+                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.id)?;
+                },
+                2 => {
+                    ::protobuf::rt::read_repeated_string_into(wire_type, is, &mut self.properties)?;
                 },
                 _ => {
                     ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
@@ -738,29 +773,24 @@ impl ::protobuf::Message for Action {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if let ::std::option::Option::Some(ref v) = self.action_oneof {
-            match v {
-                &Action_oneof_action_oneof::field_return(ref v) => {
-                    let len = v.compute_size();
-                    my_size += 1 + ::protobuf::rt::compute_raw_varint32_size(len) + len;
-                },
-            };
+        if !self.id.is_empty() {
+            my_size += ::protobuf::rt::string_size(1, &self.id);
         }
+        for value in &self.properties {
+            my_size += ::protobuf::rt::string_size(2, &value);
+        };
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
         self.cached_size.set(my_size);
         my_size
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::ProtobufResult<()> {
-        if let ::std::option::Option::Some(ref v) = self.action_oneof {
-            match v {
-                &Action_oneof_action_oneof::field_return(ref v) => {
-                    os.write_tag(1, ::protobuf::wire_format::WireTypeLengthDelimited)?;
-                    os.write_raw_varint32(v.get_cached_size())?;
-                    v.write_to_with_cached_sizes(os)?;
-                },
-            };
+        if !self.id.is_empty() {
+            os.write_string(1, &self.id)?;
         }
+        for v in &self.properties {
+            os.write_string(2, &v)?;
+        };
         os.write_unknown_fields(self.get_unknown_fields())?;
         ::std::result::Result::Ok(())
     }
@@ -799,10 +829,15 @@ impl ::protobuf::Message for Action {
         static descriptor: ::protobuf::rt::LazyV2<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::LazyV2::INIT;
         descriptor.get(|| {
             let mut fields = ::std::vec::Vec::new();
-            fields.push(::protobuf::reflect::accessor::make_singular_message_accessor::<_, Action_Return>(
-                "return",
-                Action::has_field_return,
-                Action::get_field_return,
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
+                "id",
+                |m: &Action| { &m.id },
+                |m: &mut Action| { &mut m.id },
+            ));
+            fields.push(::protobuf::reflect::accessor::make_repeated_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
+                "properties",
+                |m: &Action| { &m.properties },
+                |m: &mut Action| { &mut m.properties },
             ));
             ::protobuf::reflect::MessageDescriptor::new_pb_name::<Action>(
                 "Action",
@@ -820,7 +855,8 @@ impl ::protobuf::Message for Action {
 
 impl ::protobuf::Clear for Action {
     fn clear(&mut self) {
-        self.action_oneof = ::std::option::Option::None;
+        self.id.clear();
+        self.properties.clear();
         self.unknown_fields.clear();
     }
 }
@@ -832,206 +868,6 @@ impl ::std::fmt::Debug for Action {
 }
 
 impl ::protobuf::reflect::ProtobufValue for Action {
-    fn as_ref(&self) -> ::protobuf::reflect::ReflectValueRef {
-        ::protobuf::reflect::ReflectValueRef::Message(self)
-    }
-}
-
-#[derive(PartialEq,Clone,Default)]
-pub struct Action_Return {
-    // message fields
-    pub node_id: ::std::string::String,
-    pub properties: ::protobuf::RepeatedField<::std::string::String>,
-    // special fields
-    pub unknown_fields: ::protobuf::UnknownFields,
-    pub cached_size: ::protobuf::CachedSize,
-}
-
-impl<'a> ::std::default::Default for &'a Action_Return {
-    fn default() -> &'a Action_Return {
-        <Action_Return as ::protobuf::Message>::default_instance()
-    }
-}
-
-impl Action_Return {
-    pub fn new() -> Action_Return {
-        ::std::default::Default::default()
-    }
-
-    // string node_id = 1;
-
-
-    pub fn get_node_id(&self) -> &str {
-        &self.node_id
-    }
-    pub fn clear_node_id(&mut self) {
-        self.node_id.clear();
-    }
-
-    // Param is passed by value, moved
-    pub fn set_node_id(&mut self, v: ::std::string::String) {
-        self.node_id = v;
-    }
-
-    // Mutable pointer to the field.
-    // If field is not initialized, it is initialized with default value first.
-    pub fn mut_node_id(&mut self) -> &mut ::std::string::String {
-        &mut self.node_id
-    }
-
-    // Take field
-    pub fn take_node_id(&mut self) -> ::std::string::String {
-        ::std::mem::replace(&mut self.node_id, ::std::string::String::new())
-    }
-
-    // repeated string properties = 2;
-
-
-    pub fn get_properties(&self) -> &[::std::string::String] {
-        &self.properties
-    }
-    pub fn clear_properties(&mut self) {
-        self.properties.clear();
-    }
-
-    // Param is passed by value, moved
-    pub fn set_properties(&mut self, v: ::protobuf::RepeatedField<::std::string::String>) {
-        self.properties = v;
-    }
-
-    // Mutable pointer to the field.
-    pub fn mut_properties(&mut self) -> &mut ::protobuf::RepeatedField<::std::string::String> {
-        &mut self.properties
-    }
-
-    // Take field
-    pub fn take_properties(&mut self) -> ::protobuf::RepeatedField<::std::string::String> {
-        ::std::mem::replace(&mut self.properties, ::protobuf::RepeatedField::new())
-    }
-}
-
-impl ::protobuf::Message for Action_Return {
-    fn is_initialized(&self) -> bool {
-        true
-    }
-
-    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::ProtobufResult<()> {
-        while !is.eof()? {
-            let (field_number, wire_type) = is.read_tag_unpack()?;
-            match field_number {
-                1 => {
-                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.node_id)?;
-                },
-                2 => {
-                    ::protobuf::rt::read_repeated_string_into(wire_type, is, &mut self.properties)?;
-                },
-                _ => {
-                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
-                },
-            };
-        }
-        ::std::result::Result::Ok(())
-    }
-
-    // Compute sizes of nested messages
-    #[allow(unused_variables)]
-    fn compute_size(&self) -> u32 {
-        let mut my_size = 0;
-        if !self.node_id.is_empty() {
-            my_size += ::protobuf::rt::string_size(1, &self.node_id);
-        }
-        for value in &self.properties {
-            my_size += ::protobuf::rt::string_size(2, &value);
-        };
-        my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
-        self.cached_size.set(my_size);
-        my_size
-    }
-
-    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::ProtobufResult<()> {
-        if !self.node_id.is_empty() {
-            os.write_string(1, &self.node_id)?;
-        }
-        for v in &self.properties {
-            os.write_string(2, &v)?;
-        };
-        os.write_unknown_fields(self.get_unknown_fields())?;
-        ::std::result::Result::Ok(())
-    }
-
-    fn get_cached_size(&self) -> u32 {
-        self.cached_size.get()
-    }
-
-    fn get_unknown_fields(&self) -> &::protobuf::UnknownFields {
-        &self.unknown_fields
-    }
-
-    fn mut_unknown_fields(&mut self) -> &mut ::protobuf::UnknownFields {
-        &mut self.unknown_fields
-    }
-
-    fn as_any(&self) -> &dyn (::std::any::Any) {
-        self as &dyn (::std::any::Any)
-    }
-    fn as_any_mut(&mut self) -> &mut dyn (::std::any::Any) {
-        self as &mut dyn (::std::any::Any)
-    }
-    fn into_any(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<dyn (::std::any::Any)> {
-        self
-    }
-
-    fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
-        Self::descriptor_static()
-    }
-
-    fn new() -> Action_Return {
-        Action_Return::new()
-    }
-
-    fn descriptor_static() -> &'static ::protobuf::reflect::MessageDescriptor {
-        static descriptor: ::protobuf::rt::LazyV2<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::LazyV2::INIT;
-        descriptor.get(|| {
-            let mut fields = ::std::vec::Vec::new();
-            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
-                "node_id",
-                |m: &Action_Return| { &m.node_id },
-                |m: &mut Action_Return| { &mut m.node_id },
-            ));
-            fields.push(::protobuf::reflect::accessor::make_repeated_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
-                "properties",
-                |m: &Action_Return| { &m.properties },
-                |m: &mut Action_Return| { &mut m.properties },
-            ));
-            ::protobuf::reflect::MessageDescriptor::new_pb_name::<Action_Return>(
-                "Action.Return",
-                fields,
-                file_descriptor_proto()
-            )
-        })
-    }
-
-    fn default_instance() -> &'static Action_Return {
-        static instance: ::protobuf::rt::LazyV2<Action_Return> = ::protobuf::rt::LazyV2::INIT;
-        instance.get(Action_Return::new)
-    }
-}
-
-impl ::protobuf::Clear for Action_Return {
-    fn clear(&mut self) {
-        self.node_id.clear();
-        self.properties.clear();
-        self.unknown_fields.clear();
-    }
-}
-
-impl ::std::fmt::Debug for Action_Return {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-        ::protobuf::text_format::fmt(self, f)
-    }
-}
-
-impl ::protobuf::reflect::ProtobufValue for Action_Return {
     fn as_ref(&self) -> ::protobuf::reflect::ReflectValueRef {
         ::protobuf::reflect::ReflectValueRef::Message(self)
     }
@@ -1302,20 +1138,19 @@ impl ::protobuf::reflect::ProtobufValue for Program {
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
-    \n\x17src/proto/program.proto\"\x89\x01\n\x07Pattern\x12\x10\n\x03src\
-    \x18\x01\x20\x01(\tR\x03src\x12\x10\n\x03dst\x18\x02\x20\x01(\tR\x03dst\
-    \x122\n\x07rel_typ\x18\x03\x20\x01(\x0e2\x19.Pattern.RelationshipTypeR\
-    \x06relTyp\"&\n\x10RelationshipType\x12\x08\n\x04PATH\x10\0\x12\x08\n\
-    \x04EDGE\x10\x01\"x\n\x06Filter\x12\x17\n\x07node_id\x18\x01\x20\x01(\tR\
-    \x06nodeId\x12\x1e\n\nproperties\x18\x02\x20\x03(\tR\nproperties\x12\x12\
-    \n\x03u32\x18\x03\x20\x01(\rH\0R\x03u32\x12\x12\n\x03str\x18\x04\x20\x01\
-    (\tH\0R\x03strB\r\n\x0bvalue_oneof\"\x85\x01\n\x06Action\x12(\n\x06retur\
-    n\x18\x01\x20\x01(\x0b2\x0e.Action.ReturnH\0R\x06return\x1aA\n\x06Return\
-    \x12\x17\n\x07node_id\x18\x01\x20\x01(\tR\x06nodeId\x12\x1e\n\npropertie\
-    s\x18\x02\x20\x03(\tR\npropertiesB\x0e\n\x0caction_oneof\"u\n\x07Program\
-    \x12$\n\x08patterns\x18\x01\x20\x03(\x0b2\x08.PatternR\x08patterns\x12!\
-    \n\x07filters\x18\x02\x20\x03(\x0b2\x07.FilterR\x07filters\x12!\n\x07act\
-    ions\x18\x03\x20\x03(\x0b2\x07.ActionR\x07actionsb\x06proto3\
+    \n\x17src/proto/grammar.proto\"\xaa\x01\n\x07Pattern\x12\x15\n\x06src_id\
+    \x18\x01\x20\x01(\tR\x05srcId\x12\x15\n\x06dst_id\x18\x02\x20\x01(\tR\
+    \x05dstId\x122\n\x07rel_typ\x18\x03\x20\x01(\x0e2\x19.Pattern.Relationsh\
+    ipTypeR\x06relTyp\x12\x15\n\x06rel_id\x18\x04\x20\x01(\tR\x05relId\"&\n\
+    \x10RelationshipType\x12\x08\n\x04PATH\x10\0\x12\x08\n\x04EDGE\x10\x01\"\
+    o\n\x06Filter\x12\x0e\n\x02id\x18\x01\x20\x01(\tR\x02id\x12\x1e\n\nprope\
+    rties\x18\x02\x20\x03(\tR\nproperties\x12\x12\n\x03u32\x18\x03\x20\x01(\
+    \rH\0R\x03u32\x12\x12\n\x03str\x18\x04\x20\x01(\tH\0R\x03strB\r\n\x0bval\
+    ue_oneof\"8\n\x06Action\x12\x0e\n\x02id\x18\x01\x20\x01(\tR\x02id\x12\
+    \x1e\n\nproperties\x18\x02\x20\x03(\tR\nproperties\"u\n\x07Program\x12$\
+    \n\x08patterns\x18\x01\x20\x03(\x0b2\x08.PatternR\x08patterns\x12!\n\x07\
+    filters\x18\x02\x20\x03(\x0b2\x07.FilterR\x07filters\x12!\n\x07actions\
+    \x18\x03\x20\x03(\x0b2\x07.ActionR\x07actionsb\x06proto3\
 ";
 
 static file_descriptor_proto_lazy: ::protobuf::rt::LazyV2<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::rt::LazyV2::INIT;

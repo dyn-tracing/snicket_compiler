@@ -1,58 +1,50 @@
-use grammar::*;
+use proto::grammar::*;
 use std::collections::HashSet;
 use tree_fold::TreeFold;
 
 #[derive(Default)]
-pub struct DefUse<'a> {
-    pub known_nodes: HashSet<&'a str>,
-    pub known_edges: HashSet<&'a str>,
+pub struct DefUse {
+    pub known_nodes: HashSet<String>,
+    pub known_edges: HashSet<String>,
 }
 
-impl<'a> DefUse<'a> {
-    pub fn new() -> DefUse<'a> {
+impl DefUse {
+    pub fn new() -> DefUse {
         DefUse::default()
     }
-    fn is_undefined(&self, id: &'a str) -> bool {
+    fn is_undefined(&self, id: &str) -> bool {
         self.known_edges.get(id).is_none() && self.known_nodes.get(id).is_none()
     }
 }
 
-impl<'a> TreeFold<'a> for DefUse<'a> {
-    fn visit_pattern(&mut self, tree: &'a Pattern) {
-        let from_node = &tree.from_node;
-        let to_node = &tree.to_node;
-        self.known_nodes.insert(from_node.id_name);
-        self.known_nodes.insert(to_node.id_name);
-        let edge_name = match &tree.relationship_type {
-            Relationship::Path(id) | Relationship::Edge(id) => id,
-        }
-        .id_name;
+impl TreeFold for DefUse {
+    fn visit_pattern(&mut self, pattern: &Pattern) {
+        let src_id = pattern.get_src_id().to_string();
+        let dst_id = pattern.get_dst_id().to_string();
+        self.known_nodes.insert(src_id);
+        self.known_nodes.insert(dst_id);
+        let rel_id = pattern.get_rel_id();
+
         assert!(
-            self.is_undefined(edge_name),
+            self.is_undefined(rel_id),
             "Edge {:?} already defined.",
-            edge_name
+            rel_id
         );
-        self.known_edges.insert(edge_name);
+        self.known_edges.insert(rel_id.to_string());
     }
 
-    fn visit_filter(&mut self, tree: &'a Filter) {
-        match &tree {
-            Filter::Property(id, _, _) => {
-                if !self.known_nodes.contains(id.id_name) && !self.known_edges.contains(id.id_name)
-                {
-                    panic!("Edge/Node {:?} not defined.", id.id_name);
-                }
-            }
+    fn visit_filter(&mut self, filter: &Filter) {
+        if !self.known_nodes.contains(filter.get_id())
+            && !self.known_edges.contains(filter.get_id())
+        {
+            panic!("Edge/Node {:?} not defined.", filter.get_id());
         }
     }
-    fn visit_action(&mut self, tree: &'a Action) {
-        match &tree {
-            Action::Property(id, _) => {
-                if !self.known_nodes.contains(id.id_name) && !self.known_edges.contains(id.id_name)
-                {
-                    panic!("Edge/Node {:?} not defined.", id.id_name);
-                }
-            }
+    fn visit_action(&mut self, action: &Action) {
+        if !self.known_nodes.contains(action.get_id())
+            && !self.known_edges.contains(action.get_id())
+        {
+            panic!("Edge/Node {:?} not defined.", action.get_id());
         }
     }
 }

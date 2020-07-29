@@ -1,4 +1,5 @@
-use grammar::*;
+use proto::grammar::*;
+use protobuf::RepeatedField;
 use std::iter::Peekable;
 use token::Token;
 
@@ -31,11 +32,12 @@ fn consume_token<'a>(
     }
 }
 
-pub fn parse_prog<'a>(token_iter: &mut TokenIterator<'a>) -> Prog<'a> {
-    Prog {
+pub fn parse_prog<'a>(token_iter: &mut TokenIterator<'a>) -> Program {
+    Program {
         patterns: parse_patterns(token_iter),
         filters: parse_filters(token_iter),
         actions: parse_actions(token_iter),
+        ..Default::default()
     }
 }
 
@@ -45,13 +47,13 @@ fn parse_repeated<'a, T>(
     parse_func: fn(&mut TokenIterator<'a>) -> T,
     expected_token: Token,
     allow_empty: bool,
-) -> Vec<T> {
+) -> RepeatedField<T> {
     match token_iter.peek() {
-        None => Vec::new(),
+        None => RepeatedField::<T>::new(),
         Some(&next_token) => {
             if *next_token != expected_token {
                 if allow_empty {
-                    return Vec::new();
+                    return RepeatedField::<T>::new();
                 } else {
                     panic!(
                         "\nInvalid token: {}, expected {}.\nError message: {} must start with the keyword {}.",
@@ -68,58 +70,52 @@ fn parse_repeated<'a, T>(
                 elem_vec.push(parse_func(token_iter));
                 consume_token(token_iter, &Token::Comma, "Expected a comma (')");
             }
-            elem_vec
+            RepeatedField::<T>::from_vec(elem_vec)
         }
     }
 }
 
-fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> Patterns<'a> {
-    Patterns(parse_repeated::<Pattern>(
-        token_iter,
-        parse_pattern,
-        Token::Match,
-        false,
-    ))
+fn parse_patterns<'a>(token_iter: &mut TokenIterator<'a>) -> RepeatedField<Pattern> {
+    parse_repeated::<Pattern>(token_iter, parse_pattern, Token::Match, false)
 }
 
-fn parse_pattern<'a>(token_iter: &mut TokenIterator<'a>) -> Pattern<'a> {
-    let from_node = parse_identifier(token_iter);
-    let rel_type_token = token_iter.next().unwrap();
-    let to_node = parse_identifier(token_iter);
+fn parse_pattern<'a>(token_iter: &mut TokenIterator<'a>) -> Pattern {
+    let src_id = parse_identifier(token_iter);
+    let rel_typ = match token_iter.next() {
+        Some(Token::Edge) => Pattern_RelationshipType::EDGE,
+        Some(Token::Path) => Pattern_RelationshipType::PATH,
+        Some(token) => panic!("Unsupported relationship type: {:?}", token),
+        None => panic!("Expected relationship type token, found none."),
+    };
+    let dst_id = parse_identifier(token_iter);
     consume_token(
         token_iter,
         &Token::Colon,
         "Pattern must end with relationship name.",
     );
-    let rel_name = parse_identifier(token_iter);
+    let rel_id = parse_identifier(token_iter);
     Pattern {
-        from_node,
-        to_node,
-        relationship_type: match rel_type_token {
-            Token::Edge => Relationship::Edge(rel_name),
-            Token::Path => Relationship::Path(rel_name),
-            _ => panic!("Unsupported relationship type: {:?}", rel_type_token),
-        },
+        src_id,
+        dst_id,
+        rel_typ,
+        rel_id,
+        ..Default::default()
     }
 }
 
-fn parse_filters<'a>(token_iter: &mut TokenIterator<'a>) -> Filters<'a> {
-    Filters(parse_repeated::<Filter>(
-        token_iter,
-        parse_filter,
-        Token::Where,
-        true,
-    ))
+fn parse_filters<'a>(token_iter: &mut TokenIterator<'a>) -> RepeatedField<Filter> {
+    parse_repeated::<Filter>(token_iter, parse_filter, Token::Where, true)
 }
 
-fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
-    let node = parse_identifier(token_iter);
+fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter {
+    let id = parse_identifier(token_iter);
+
     match token_iter.next() {
         None => {
             panic!("Expected period, got none.");
         }
         Some(Token::Period) => {
-            let mut properties = Vec::new();
+            let mut properties = RepeatedField::<String>::new();
             let mut property = parse_identifier(token_iter);
             properties.push(property);
             while let Some(Token::Period) = token_iter.peek() {
@@ -133,29 +129,31 @@ fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
                 &Token::Equals,
                 "Only support equality in properties.",
             );
-            let val = parse_value(token_iter);
+            let value_oneof = parse_value(token_iter);
 
-            Filter::Property(node, properties, val)
+            Filter {
+                id,
+                properties,
+                value_oneof,
+                ..Default::default()
+            }
         }
         Some(token) => panic!("Unrecognized token: {:?}", token),
     }
 }
 
-fn parse_actions<'a>(token_iter: &mut TokenIterator<'a>) -> Actions<'a> {
-    Actions(parse_repeated::<Action>(
-        token_iter,
-        parse_action,
-        Token::Return,
-        true,
-    ))
+fn parse_actions<'a>(token_iter: &mut TokenIterator<'a>) -> RepeatedField<Action> {
+    parse_repeated::<Action>(token_iter, parse_action, Token::Return, true)
 }
 
-fn parse_action<'a>(token_iter: &mut TokenIterator<'a>) -> Action<'a> {
-    let node = parse_identifier(token_iter);
-    let operator_token = token_iter.next().unwrap();
-    match &operator_token {
-        Token::Period => {
-            let mut properties = Vec::new();
+fn parse_action<'a>(token_iter: &mut TokenIterator<'a>) -> Action {
+    let id = parse_identifier(token_iter);
+    match token_iter.next() {
+        None => {
+            panic!("Expected token period, got none.");
+        }
+        Some(Token::Period) => {
+            let mut properties = RepeatedField::<String>::new();
             let mut property = parse_identifier(token_iter);
             properties.push(property);
             while let Some(Token::Period) = token_iter.peek() {
@@ -164,16 +162,20 @@ fn parse_action<'a>(token_iter: &mut TokenIterator<'a>) -> Action<'a> {
                 property = parse_identifier(token_iter);
                 properties.push(property);
             }
-            Action::Property(node, properties)
+            Action {
+                id,
+                properties,
+                ..Default::default()
+            }
         }
-        _ => panic!("Unrecognized token: {:?}", operator_token),
+        Some(token) => panic!("Unrecognized token: {:?}", token),
     }
 }
 
-fn parse_identifier<'a>(token_iter: &mut TokenIterator<'a>) -> Identifier<'a> {
+fn parse_identifier<'a>(token_iter: &mut TokenIterator<'a>) -> String {
     let identifier_token = token_iter.next().unwrap();
     match &identifier_token {
-        Token::Identifier(id_name) => Identifier { id_name },
+        Token::Identifier(id_name) => id_name.to_string(),
         _ => panic!(
             "Invalid token: {:?}, expected Token::Identifier",
             identifier_token
@@ -181,11 +183,11 @@ fn parse_identifier<'a>(token_iter: &mut TokenIterator<'a>) -> Identifier<'a> {
     }
 }
 
-fn parse_value<'a>(token_iter: &mut TokenIterator<'a>) -> Value<'a> {
+fn parse_value<'a>(token_iter: &mut TokenIterator<'a>) -> Option<Filter_oneof_value_oneof> {
     let value_token = token_iter.next().unwrap();
     match &value_token {
-        Token::Value(value) => Value::U32(*value),
-        Token::Identifier(s) => Value::Str(s),
+        Token::Value(value) => Some(Filter_oneof_value_oneof::u32(*value)),
+        Token::Identifier(s) => Some(Filter_oneof_value_oneof::str(s.to_string())),
         _ => panic!(
             "Invalid token: {:?}, expected Token::Value or Token::Identifier",
             value_token

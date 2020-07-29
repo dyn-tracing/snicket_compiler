@@ -1,1 +1,1 @@
-pub mod program;
+pub mod grammar;

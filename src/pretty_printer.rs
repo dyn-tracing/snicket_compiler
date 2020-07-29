@@ -1,4 +1,4 @@
-use grammar::*;
+use proto::grammar::*;
 use tree_fold::TreeFold;
 
 #[derive(Default)]
@@ -12,54 +12,52 @@ impl PrettyPrinter {
     }
 }
 
-impl<'a> TreeFold<'a> for PrettyPrinter {
-    fn visit_patterns(&mut self, patterns: &'a Patterns) {
+impl TreeFold for PrettyPrinter {
+    fn visit_patterns(&mut self, patterns: &[Pattern]) {
         self.pretty_print_str.push_str("MATCH ");
-        for pattern in &patterns.0 {
+        for pattern in patterns {
             self.visit_pattern(pattern);
         }
     }
 
-    fn visit_pattern(&mut self, tree: &'a Pattern) {
-        self.pretty_print_str.push_str(tree.from_node.id_name);
-        match &tree.relationship_type {
-            Relationship::Path(_) => {
+    fn visit_pattern(&mut self, pattern: &Pattern) {
+        self.pretty_print_str.push_str(pattern.get_src_id());
+        match &pattern.get_rel_typ() {
+            Pattern_RelationshipType::PATH => {
                 self.pretty_print_str.push_str("-*>");
             }
-            Relationship::Edge(_) => {
+            Pattern_RelationshipType::EDGE => {
                 self.pretty_print_str.push_str("-->");
             }
         };
-        self.pretty_print_str.push_str(tree.to_node.id_name);
+        self.pretty_print_str.push_str(pattern.get_dst_id());
         self.pretty_print_str.push_str(":");
-        self.pretty_print_str.push_str(
-            match &tree.relationship_type {
-                Relationship::Path(id) | Relationship::Edge(id) => id,
-            }
-            .id_name,
-        );
+        self.pretty_print_str.push_str(pattern.get_rel_id());
         self.pretty_print_str.push_str(", ");
     }
 
-    fn visit_filters(&mut self, filters: &'a Filters) {
+    fn visit_filters(&mut self, filters: &[Filter]) {
         self.pretty_print_str.push_str("WHERE ");
-        for filter in &filters.0 {
+        for filter in filters {
             self.visit_filter(filter);
         }
     }
 
-    fn visit_filter(&mut self, tree: &'a Filter) {
-        match &tree {
-            Filter::Property(node, properties, val) => {
-                self.pretty_print_str.push_str(node.id_name);
-                for property in properties {
-                    self.pretty_print_str.push_str(".");
-                    self.pretty_print_str.push_str(property.id_name);
-                }
-                self.pretty_print_str.push_str(" == ");
-                self.pretty_print_str.push_str(&val.to_string());
+    fn visit_filter(&mut self, filter: &Filter) {
+        self.pretty_print_str.push_str(filter.get_id());
+        for property in filter.get_properties() {
+            self.pretty_print_str.push_str(".");
+            self.pretty_print_str.push_str(property);
+        }
+        self.pretty_print_str.push_str(" == ");
+        match &filter.value_oneof {
+            Some(Filter_oneof_value_oneof::str(s)) => self.pretty_print_str.push_str(s.as_str()),
+            Some(Filter_oneof_value_oneof::u32(v)) => {
+                self.pretty_print_str.push_str(v.to_string().as_str())
             }
-        };
+            None => {}
+        }
+
         self.pretty_print_str.push_str(", ");
     }
 }
