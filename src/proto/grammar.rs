@@ -17,7 +17,7 @@
 #![allow(trivial_casts)]
 #![allow(unused_imports)]
 #![allow(unused_results)]
-//! Generated file from `src/proto/grammar.proto`
+//! Generated file from `wasm/grammar.proto`
 
 /// Generated files are compatible only with the same version
 /// of protobuf runtime.
@@ -1138,19 +1138,19 @@ impl ::protobuf::reflect::ProtobufValue for Program {
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
-    \n\x17src/proto/grammar.proto\"\xaa\x01\n\x07Pattern\x12\x15\n\x06src_id\
-    \x18\x01\x20\x01(\tR\x05srcId\x12\x15\n\x06dst_id\x18\x02\x20\x01(\tR\
-    \x05dstId\x122\n\x07rel_typ\x18\x03\x20\x01(\x0e2\x19.Pattern.Relationsh\
-    ipTypeR\x06relTyp\x12\x15\n\x06rel_id\x18\x04\x20\x01(\tR\x05relId\"&\n\
-    \x10RelationshipType\x12\x08\n\x04PATH\x10\0\x12\x08\n\x04EDGE\x10\x01\"\
-    o\n\x06Filter\x12\x0e\n\x02id\x18\x01\x20\x01(\tR\x02id\x12\x1e\n\nprope\
-    rties\x18\x02\x20\x03(\tR\nproperties\x12\x12\n\x03u32\x18\x03\x20\x01(\
-    \rH\0R\x03u32\x12\x12\n\x03str\x18\x04\x20\x01(\tH\0R\x03strB\r\n\x0bval\
-    ue_oneof\"8\n\x06Action\x12\x0e\n\x02id\x18\x01\x20\x01(\tR\x02id\x12\
-    \x1e\n\nproperties\x18\x02\x20\x03(\tR\nproperties\"u\n\x07Program\x12$\
-    \n\x08patterns\x18\x01\x20\x03(\x0b2\x08.PatternR\x08patterns\x12!\n\x07\
-    filters\x18\x02\x20\x03(\x0b2\x07.FilterR\x07filters\x12!\n\x07actions\
-    \x18\x03\x20\x03(\x0b2\x07.ActionR\x07actionsb\x06proto3\
+    \n\x12wasm/grammar.proto\"\xaa\x01\n\x07Pattern\x12\x15\n\x06src_id\x18\
+    \x01\x20\x01(\tR\x05srcId\x12\x15\n\x06dst_id\x18\x02\x20\x01(\tR\x05dst\
+    Id\x122\n\x07rel_typ\x18\x03\x20\x01(\x0e2\x19.Pattern.RelationshipTypeR\
+    \x06relTyp\x12\x15\n\x06rel_id\x18\x04\x20\x01(\tR\x05relId\"&\n\x10Rela\
+    tionshipType\x12\x08\n\x04PATH\x10\0\x12\x08\n\x04EDGE\x10\x01\"o\n\x06F\
+    ilter\x12\x0e\n\x02id\x18\x01\x20\x01(\tR\x02id\x12\x1e\n\nproperties\
+    \x18\x02\x20\x03(\tR\nproperties\x12\x12\n\x03u32\x18\x03\x20\x01(\rH\0R\
+    \x03u32\x12\x12\n\x03str\x18\x04\x20\x01(\tH\0R\x03strB\r\n\x0bvalue_one\
+    of\"8\n\x06Action\x12\x0e\n\x02id\x18\x01\x20\x01(\tR\x02id\x12\x1e\n\np\
+    roperties\x18\x02\x20\x03(\tR\nproperties\"u\n\x07Program\x12$\n\x08patt\
+    erns\x18\x01\x20\x03(\x0b2\x08.PatternR\x08patterns\x12!\n\x07filters\
+    \x18\x02\x20\x03(\x0b2\x07.FilterR\x07filters\x12!\n\x07actions\x18\x03\
+    \x20\x03(\x0b2\x07.ActionR\x07actionsb\x06proto3\
 ";
 
 static file_descriptor_proto_lazy: ::protobuf::rt::LazyV2<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::rt::LazyV2::INIT;

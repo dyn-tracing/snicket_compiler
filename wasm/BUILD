@@ -1,6 +1,21 @@
 load("@rules_proto//proto:defs.bzl", "proto_library")
 load("//bazel/wasm:wasm.bzl", "wasm_cc_binary")
 
+proto_library(
+    name = "grammar_proto",
+    srcs = [
+        "grammar.proto",
+    ],
+)
+
+cc_proto_library(
+    name = "grammar_cc_proto",
+    deps = [
+        "grammar_proto",
+    ]
+)
+
+
 wasm_cc_binary(
     name = "filter.wasm",
     srcs = [
