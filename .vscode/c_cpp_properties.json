@@ -2,7 +2,7 @@
   "configurations": [
     {
       "name": "Mac",
-      "includePath": ["${workspaceFolder}/**"],
+      "includePath": ["${workspaceFolder}/**", "${workspaceFolder}/wasm/**"],
       "defines": [],
       "macFrameworkPath": [],
       "compilerPath": "/usr/local/bin/gcc-9",

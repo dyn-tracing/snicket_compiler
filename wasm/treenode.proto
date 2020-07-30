@@ -1,7 +1,7 @@
 syntax = "proto3";
 
-message Node {
+message TreeNode {
   string id = 1;
   map<string, string> properties = 2;
-  repeated Node children = 3;
+  repeated TreeNode children = 3;
 }

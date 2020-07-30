@@ -14,15 +14,15 @@ cc_proto_library(
 )
 
 proto_library(
-    name = "graph_proto",
+    name = "treenode_proto",
     srcs = [
-        "graph.proto",
+        "treenode.proto",
     ],
 )
 
 cc_proto_library(
-    name = "graph_cc_proto",
-    deps = [":graph_proto"],
+    name = "treenode_cc_proto",
+    deps = [":treenode_proto"],
 )
 
 wasm_cc_binary(
@@ -42,7 +42,7 @@ cc_test(
     ],
     deps = [
         ":filter_cc_proto",
-        ":graph_cc_proto",
+        ":treenode_cc_proto",
         "@com_google_protobuf//:protobuf_lite",
         "@gtest",
         "@gtest//:gtest_main",

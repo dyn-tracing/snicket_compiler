@@ -3,14 +3,14 @@
 #include <set>
 #include <string>
 
-#include "graph.pb.h"
+#include "treenode.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-// Returns true if node n1 property set is a subset of n2's property set
+// Returns true if TreeNode n1 property set is a subset of n2's property set
 // and n1's children is a subset of n2's children set. Their ids can be
 // different.
-bool property_child_subset(const Node &n1, const Node &n2) {
+bool property_child_subset(const TreeNode &n1, const TreeNode &n2) {
   for (const auto &pair : n1.properties()) {
     if (!(n2.properties().contains(pair.first)) ||
         (n2.properties().at(pair.first) != pair.second)) {
@@ -37,21 +37,21 @@ bool property_child_subset(const Node &n1, const Node &n2) {
   return true;
 }
 
-TEST(GraphProtoTest, SingleNode) {
-  Node n1;
+TEST(GraphProtoTest, SingleTreeNode) {
+  TreeNode n1;
   n1.set_id("n1");
-  Node n2;
+  TreeNode n2;
   n2.set_id("n2");
   EXPECT_TRUE(property_child_subset(n1, n2));
   n2.set_id("n1");
   EXPECT_TRUE(property_child_subset(n1, n2));
 }
 
-TEST(GraphProtoTest, NodeMatches) {
-  Node n1;
+TEST(GraphProtoTest, TreeNodeMatches) {
+  TreeNode n1;
   n1.set_id("n1");
   n1.mutable_properties()->insert({"a", "x"});
-  Node n2;
+  TreeNode n2;
   n2.set_id("n2");
   n2.mutable_properties()->insert({"a", "x"});
   n2.mutable_properties()->insert({"b", "y"});
@@ -61,13 +61,13 @@ TEST(GraphProtoTest, NodeMatches) {
 }
 
 TEST(GraphProtoTest, ChildMatch) {
-  Node n1;
+  TreeNode n1;
   n1.mutable_properties()->insert({"a", "x"});
-  Node *n1_child = n1.mutable_children()->Add();
+  TreeNode *n1_child = n1.mutable_children()->Add();
   n1_child->mutable_properties()->insert({"b", "y"});
-  Node n2;
+  TreeNode n2;
   n2.mutable_properties()->insert({"a", "x"});
-  Node *n2_child = n2.mutable_children()->Add();
+  TreeNode *n2_child = n2.mutable_children()->Add();
   n2_child->mutable_properties()->insert({"b", "y"});
   n2_child = n2.mutable_children()->Add();
   n2_child->mutable_properties()->insert({"c", "z"});
@@ -117,7 +117,7 @@ TEST(FilterTest, SplitStr) {
   EXPECT_EQ(result, "x-a-b,x-a-c,x-a-d");
 }
 
-TEST(FilterTest, SplitStrNoDelim) {
+TEST(FilterTest, SplitStrTreeNodelim) {
   std::string s{"a-b"};
   std::regex delimiter(",");
   std::sregex_token_iterator it{s.begin(), s.end(), delimiter, -1};

@@ -11,5 +11,6 @@ pub mod lexer;
 pub mod parser;
 pub mod pretty_printer;
 pub mod property;
+pub mod proto;
 mod token;
 pub mod tree_fold;
