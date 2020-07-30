@@ -1,4 +1,6 @@
+#include <map>
 #include <numeric>
+#include <queue>
 #include <regex>
 #include <set>
 #include <string>
@@ -7,12 +9,11 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-// Returns true if TreeNode n1 property set is a subset of n2's property set
-// and n1's children is a subset of n2's children set. Their ids can be
-// different.
-bool property_child_subset(const TreeNode &n1, const TreeNode &n2) {
+// Returns true if TreeNode n2 has a subtree rooted at n2 which is ismorphic
+// to n1.
+bool isIsomorphic(const TreeNode &n1, const TreeNode &n2) {
   for (const auto &pair : n1.properties()) {
-    if (!(n2.properties().contains(pair.first)) ||
+    if ((!n2.properties().contains(pair.first)) ||
         (n2.properties().at(pair.first) != pair.second)) {
       return false;
     }
@@ -22,18 +23,27 @@ bool property_child_subset(const TreeNode &n1, const TreeNode &n2) {
     return false;
   }
 
-  for (const auto &child : n1.children()) {
-    bool check = false;
-    for (const auto &other_child : n2.children()) {
-      if (property_child_subset(child, other_child)) {
-        check = true;
+  // NOTE: Doesn't handle the case where other_child is isomorphic to multiple
+  // child
+  for (int i = 0; i < n1.children().size(); ++i) {
+    const auto &child = n1.children()[i];
+    bool has_isomorphic_node = false;
+    for (int j = 0; j < n2.children().size(); ++j) {
+      const auto &other_child = n2.children()[j];
+      if (isIsomorphic(child, other_child)) {
+        has_isomorphic_node = true;
       }
     }
-    if (!check) {
+    if (!has_isomorphic_node) {
       return false;
     }
   }
 
+  return true;
+}
+
+// Returns true if TreeNode n2 has a subtree which is isomorphic to n1.
+bool isSubgraphIsomorphic(const TreeNode &n1, const TreeNode &n2) {
   return true;
 }
 
@@ -42,9 +52,9 @@ TEST(GraphProtoTest, SingleTreeNode) {
   n1.set_id("n1");
   TreeNode n2;
   n2.set_id("n2");
-  EXPECT_TRUE(property_child_subset(n1, n2));
+  EXPECT_TRUE(isIsomorphic(n1, n2));
   n2.set_id("n1");
-  EXPECT_TRUE(property_child_subset(n1, n2));
+  EXPECT_TRUE(isIsomorphic(n1, n2));
 }
 
 TEST(GraphProtoTest, TreeNodeMatches) {
@@ -55,9 +65,9 @@ TEST(GraphProtoTest, TreeNodeMatches) {
   n2.set_id("n2");
   n2.mutable_properties()->insert({"a", "x"});
   n2.mutable_properties()->insert({"b", "y"});
-  EXPECT_TRUE(property_child_subset(n1, n2));
+  EXPECT_TRUE(isIsomorphic(n1, n2));
   n2.clear_properties();
-  EXPECT_FALSE(property_child_subset(n1, n2));
+  EXPECT_FALSE(isIsomorphic(n1, n2));
 }
 
 TEST(GraphProtoTest, ChildMatch) {
@@ -71,7 +81,7 @@ TEST(GraphProtoTest, ChildMatch) {
   n2_child->mutable_properties()->insert({"b", "y"});
   n2_child = n2.mutable_children()->Add();
   n2_child->mutable_properties()->insert({"c", "z"});
-  EXPECT_TRUE(property_child_subset(n1, n2));
+  EXPECT_TRUE(isIsomorphic(n1, n2));
 }
 
 TEST(FilterTest, MapUpdate) {
