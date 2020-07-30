@@ -17,7 +17,7 @@
 #![allow(trivial_casts)]
 #![allow(unused_imports)]
 #![allow(unused_results)]
-//! Generated file from `wasm/treenode.proto`
+//! Generated file from `treenode.proto`
 
 /// Generated files are compatible only with the same version
 /// of protobuf runtime.
@@ -71,7 +71,7 @@ impl TreeNode {
         ::std::mem::replace(&mut self.id, ::std::string::String::new())
     }
 
-    // repeated .TreeNode.PropertiesEntry properties = 2;
+    // repeated .TreeNode.properties_MapEntry properties = 2;
 
 
     pub fn get_properties(&self) -> &::std::collections::HashMap<::std::string::String, ::std::string::String> {
@@ -269,12 +269,11 @@ impl ::protobuf::reflect::ProtobufValue for TreeNode {
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
-    \n\x13wasm/treenode.proto\"\xbb\x01\n\x08TreeNode\x12\x0e\n\x02id\x18\
-    \x01\x20\x01(\tR\x02id\x129\n\nproperties\x18\x02\x20\x03(\x0b2\x19.Tree\
-    Node.PropertiesEntryR\nproperties\x12%\n\x08children\x18\x03\x20\x03(\
-    \x0b2\t.TreeNodeR\x08children\x1a=\n\x0fPropertiesEntry\x12\x10\n\x03key\
-    \x18\x01\x20\x01(\tR\x03key\x12\x14\n\x05value\x18\x02\x20\x01(\tR\x05va\
-    lue:\x028\x01b\x06proto3\
+    \n\x0etreenode.proto\x12\0\"\xa1\x01\n\x08TreeNode\x12\x0c\n\x02id\x18\
+    \x01\x20\x01(\tB\0\x123\n\nproperties\x18\x02\x20\x03(\x0b2\x1d.TreeNode\
+    .properties_MapEntryB\0\x12\x1d\n\x08children\x18\x03\x20\x03(\x0b2\t.Tr\
+    eeNodeB\0\x1a1\n\x13properties_MapEntry\x12\t\n\x03key\x18\x01(\t\x12\
+    \x0b\n\x05value\x18\x02(\t:\x028\x01:\0B\0b\x06proto3\
 ";
 
 static file_descriptor_proto_lazy: ::protobuf::rt::LazyV2<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::rt::LazyV2::INIT;
