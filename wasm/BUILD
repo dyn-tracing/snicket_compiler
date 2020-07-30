@@ -2,19 +2,28 @@ load("@rules_proto//proto:defs.bzl", "proto_library")
 load("//bazel/wasm:wasm.bzl", "wasm_cc_binary")
 
 proto_library(
-    name = "grammar_proto",
+    name = "filter_proto",
     srcs = [
-        "grammar.proto",
+        "filter.proto",
     ],
 )
 
 cc_proto_library(
-    name = "grammar_cc_proto",
-    deps = [
-        "grammar_proto",
-    ]
+    name = "filter_cc_proto",
+    deps = [":filter_proto"],
 )
 
+proto_library(
+    name = "graph_proto",
+    srcs = [
+        "graph.proto",
+    ],
+)
+
+cc_proto_library(
+    name = "graph_cc_proto",
+    deps = [":graph_proto"],
+)
 
 wasm_cc_binary(
     name = "filter.wasm",
@@ -32,6 +41,8 @@ cc_test(
         "filter_test.cc",
     ],
     deps = [
+        ":filter_cc_proto",
+        ":graph_cc_proto",
         "@com_google_protobuf//:protobuf_lite",
         "@gtest",
         "@gtest//:gtest_main",

@@ -3,8 +3,76 @@
 #include <set>
 #include <string>
 
+#include "graph.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+
+// Returns true if node n1 property set is a subset of n2's property set
+// and n1's children is a subset of n2's children set. Their ids can be
+// different.
+bool property_child_subset(const Node &n1, const Node &n2) {
+  for (const auto &pair : n1.properties()) {
+    if (!(n2.properties().contains(pair.first)) ||
+        (n2.properties().at(pair.first) != pair.second)) {
+      return false;
+    }
+  }
+
+  if (n1.children().size() > n2.children().size()) {
+    return false;
+  }
+
+  for (const auto &child : n1.children()) {
+    bool check = false;
+    for (const auto &other_child : n2.children()) {
+      if (property_child_subset(child, other_child)) {
+        check = true;
+      }
+    }
+    if (!check) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+TEST(GraphProtoTest, SingleNode) {
+  Node n1;
+  n1.set_id("n1");
+  Node n2;
+  n2.set_id("n2");
+  EXPECT_TRUE(property_child_subset(n1, n2));
+  n2.set_id("n1");
+  EXPECT_TRUE(property_child_subset(n1, n2));
+}
+
+TEST(GraphProtoTest, NodeMatches) {
+  Node n1;
+  n1.set_id("n1");
+  n1.mutable_properties()->insert({"a", "x"});
+  Node n2;
+  n2.set_id("n2");
+  n2.mutable_properties()->insert({"a", "x"});
+  n2.mutable_properties()->insert({"b", "y"});
+  EXPECT_TRUE(property_child_subset(n1, n2));
+  n2.clear_properties();
+  EXPECT_FALSE(property_child_subset(n1, n2));
+}
+
+TEST(GraphProtoTest, ChildMatch) {
+  Node n1;
+  n1.mutable_properties()->insert({"a", "x"});
+  Node *n1_child = n1.mutable_children()->Add();
+  n1_child->mutable_properties()->insert({"b", "y"});
+  Node n2;
+  n2.mutable_properties()->insert({"a", "x"});
+  Node *n2_child = n2.mutable_children()->Add();
+  n2_child->mutable_properties()->insert({"b", "y"});
+  n2_child = n2.mutable_children()->Add();
+  n2_child->mutable_properties()->insert({"c", "z"});
+  EXPECT_TRUE(property_child_subset(n1, n2));
+}
 
 TEST(FilterTest, MapUpdate) {
   std::map<std::string, std::string> spans_to_headers;

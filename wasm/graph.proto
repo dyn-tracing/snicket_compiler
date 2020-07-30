@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+message Node {
+  string id = 1;
+  map<string, string> properties = 2;
+  repeated Node children = 3;
+}
