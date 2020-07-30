@@ -44,7 +44,22 @@ bool isIsomorphic(const TreeNode &n1, const TreeNode &n2) {
 
 // Returns true if TreeNode n2 has a subtree which is isomorphic to n1.
 bool isSubgraphIsomorphic(const TreeNode &n1, const TreeNode &n2) {
-  return true;
+  std::queue<const TreeNode *> candidates;
+  candidates.push(&n2);
+
+  while (candidates.size() > 0) {
+    const TreeNode *node = candidates.front();
+    if (isIsomorphic(n1, *node)) {
+      return true;
+    }
+
+    for (const auto &child : node->children()) {
+      candidates.push(&child);
+    }
+    candidates.pop();
+  }
+
+  return false;
 }
 
 TEST(GraphProtoTest, SingleTreeNode) {
