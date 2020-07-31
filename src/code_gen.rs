@@ -57,10 +57,9 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
     }
 
     fn visit_pattern(&mut self, pattern: &'a Pattern) {
-        // TODO: support PATH
         let rel_type = &pattern.relationship_type;
         if let Relationship::Path(_) = rel_type {
-            panic!("Path relationship type is not yet supported.");
+            panic!("TODO: Support Path relationship type");
         }
 
         let to_id = pattern.to_node.id_name;
