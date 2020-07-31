@@ -21,7 +21,10 @@ pub trait TreeFold<'a> {
     fn visit_pattern(&mut self, tree: &'a Pattern) {
         self.visit_identifier(&tree.from_node);
         self.visit_identifier(&tree.to_node);
+        self.visit_relationship(&tree.relationship_type);
     }
+
+    fn visit_relationship(&mut self, _rel_type: &'a Relationship) {}
 
     fn visit_filters(&mut self, filters: &'a Filters) {
         for filter in &filters.0 {

@@ -1,18 +1,26 @@
 extern crate dyntracing;
 extern crate handlebars;
+extern crate protobuf;
 extern crate serde;
 
 use dyntracing::{code_gen, lexer, parser, tree_fold::TreeFold};
 use handlebars::Handlebars;
+use protobuf::Message;
 use serde::Serialize;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
+// Data passed to handlebars template to generate CC file
 #[derive(Serialize)]
-struct Data {
+struct HandlebarsData {
+    // The name of root service node in the service mesh.
     root: String,
-    paths: Vec<String>,
+    // Length of the following proto_bytes vector.
+    proto_len: usize,
+    // The byte representation of TreeNode proto specified by the user query.
+    proto_bytes: Vec<u8>,
+    // The property to return matching the user query represented by above TreeNode proto.
     return_action: Vec<String>,
 }
 
@@ -30,7 +38,12 @@ fn main() {
         Ok(_) => println!("Successfully read {}", display),
     }
 
-    let query = r"MATCH productpagev1-->reviewsv2 : x, reviewsv2-->ratingsv1 : y, productpagev1-->detailsv1: z, RETURN node.metadata.WORKLOAD_NAME,";
+    let query = "MATCH a-->b : x, b-->c : y, a-->d: z, \
+                    WHERE a.service_name == productpagev1, \
+                            b.service_name == reviewsv2, \
+                            c.service_name == ratingsv1, \
+                            d.service_name == detailsv1, \
+                    RETURN a.service_name,";
     let tokens = lexer::get_tokens(query);
     let mut token_iter = tokens.iter().peekable();
     let parse_tree = parser::parse_prog(&mut token_iter);
@@ -38,38 +51,21 @@ fn main() {
     let mut code_gen = code_gen::CodeGen::new();
     code_gen.visit_prog(&parse_tree);
 
-    assert_eq!(code_gen.paths.len(), 2);
-    assert_eq!(
-        code_gen.paths,
-        vec![
-            vec!["productpagev1", "reviewsv2", "ratingsv1"],
-            vec!["productpagev1", "detailsv1"],
-        ]
-    );
+    assert!(code_gen.nodes.len() == 1, "only support tree pattern.");
+    let mut root_id = "";
+    for (k, _v) in code_gen.nodes.iter() {
+        root_id = k;
+    }
+    let root = code_gen.nodes.get(root_id).unwrap();
 
-    let paths: Vec<String> = code_gen
-        .paths
-        .iter_mut()
-        .map(|path| path.join("-"))
-        .collect();
+    let proto_bytes = root.write_to_bytes().unwrap();
+    let proto_len = proto_bytes.len();
 
-    assert_eq!(paths.len(), 2);
-    assert_eq!(
-        paths,
-        vec![
-            "productpagev1-reviewsv2-ratingsv1",
-            "productpagev1-detailsv1"
-        ]
-    );
-
-    assert_eq!(
-        code_gen.return_action,
-        vec!["node", "metadata", "WORKLOAD_NAME"]
-    );
-
-    let data = Data {
-        root: "productpagev1".to_string(),
-        paths,
+    let data = HandlebarsData {
+        // NOTE: we assume that user knows the app/service which is the root of their service graph.
+        root: String::from("productpagev1"),
+        proto_len,
+        proto_bytes,
         return_action: code_gen
             .return_action
             .into_iter()

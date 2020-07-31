@@ -2,15 +2,15 @@ load("@rules_proto//proto:defs.bzl", "proto_library")
 load("//bazel/wasm:wasm.bzl", "wasm_cc_binary")
 
 proto_library(
-    name = "filter_proto",
+    name = "treenode_proto",
     srcs = [
-        "filter.proto",
+        "treenode.proto",
     ],
 )
 
 cc_proto_library(
-    name = "filter_cc_proto",
-    deps = [":filter_proto"],
+    name = "treenode_cc_proto",
+    deps = [":treenode_proto"],
 )
 
 wasm_cc_binary(
@@ -19,6 +19,7 @@ wasm_cc_binary(
         "filter.cc",
     ],
     deps = [
+        ":treenode_cc_proto",
         "@envoy_wasm_api//:proxy_wasm_intrinsics",
     ],
 )
@@ -29,7 +30,6 @@ cc_test(
         "filter_test.cc",
     ],
     deps = [
-        ":filter_cc_proto",
         "@com_google_protobuf//:protobuf_lite",
         "@gtest",
         "@gtest//:gtest_main",

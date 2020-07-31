@@ -66,7 +66,7 @@ fn parse_repeated<'a, T>(
             let mut elem_vec = Vec::new();
             while let Some(Token::Identifier(_)) = token_iter.peek() {
                 elem_vec.push(parse_func(token_iter));
-                consume_token(token_iter, &Token::Comma, "Expected a comma (\')");
+                consume_token(token_iter, &Token::Comma, "Expected a comma (')");
             }
             elem_vec
         }
