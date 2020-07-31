@@ -56,6 +56,8 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
         );
     }
 
+    // visit_pattern and visit_filter here are used to generate TreeNode representing user query
+    // intent.
     fn visit_pattern(&mut self, pattern: &'a Pattern) {
         let rel_type = &pattern.relationship_type;
         if let Relationship::Path(_) = rel_type {
@@ -83,6 +85,8 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
         from_node.mut_children().push(to_node);
     }
 
+    // visit_pattern and visit_filter here are used to generate TreeNode representing user query
+    // intent.
     fn visit_filter(&mut self, filter: &'a Filter) {
         let Filter::Property(id, properties, v) = filter;
 
