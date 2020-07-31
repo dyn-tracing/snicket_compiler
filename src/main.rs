@@ -11,11 +11,16 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
+// Data passed to handlebars template to generate CC file
 #[derive(Serialize)]
-struct Data {
+struct HandlebarsData {
+    // The name of root service node in the service mesh.
     root: String,
+    // Length of the following proto_bytes vector.
     proto_len: usize,
+    // The byte representation of TreeNode proto specified by the user query.
     proto_bytes: Vec<u8>,
+    // The property to return matching the user query represented by above TreeNode proto.
     return_action: Vec<String>,
 }
 
@@ -56,7 +61,7 @@ fn main() {
     let proto_bytes = root.write_to_bytes().unwrap();
     let proto_len = proto_bytes.len();
 
-    let data = Data {
+    let data = HandlebarsData {
         // NOTE: we assume that user knows the app/service which is the root of their service graph.
         root: String::from("productpagev1"),
         proto_len,
