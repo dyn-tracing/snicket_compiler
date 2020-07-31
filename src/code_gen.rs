@@ -16,12 +16,12 @@ impl<'a> CodeGen<'a> {
     }
 }
 
-fn find_node_with_id<'a>(node: &'a mut TreeNode, id: &'a str) -> Option<&'a mut TreeNode> {
+fn find_node_helper<'a>(node: &'a mut TreeNode, id: &'a str) -> Option<&'a mut TreeNode> {
     if node.get_id() == id {
         return Some(node);
     }
     for child in node.mut_children().iter_mut() {
-        if let Some(node) = find_node_with_id(child, id) {
+        if let Some(node) = find_node_helper(child, id) {
             return Some(node);
         }
     }
@@ -29,11 +29,15 @@ fn find_node_with_id<'a>(node: &'a mut TreeNode, id: &'a str) -> Option<&'a mut 
     None
 }
 
-fn find_node<'a>(nodes: &'a mut HashMap<&str, TreeNode>, id: &'a str) -> Option<&'a mut TreeNode> {
-    let mut node_opt = None;
+fn find_node_with_id<'a>(
+    nodes: &'a mut HashMap<&str, TreeNode>,
+    id: &'a str,
+) -> Option<&'a mut TreeNode> {
+    let node_opt = None;
     for (_, v) in nodes.iter_mut() {
-        if let Some(node) = find_node_with_id(v, id) {
-            node_opt = Some(node);
+        let res = find_node_helper(v, id);
+        if res.is_some() {
+            return res;
         }
     }
 
@@ -45,7 +49,11 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
         for pattern in &patterns.0 {
             self.visit_pattern(pattern);
         }
-        assert!(self.nodes.len() == 1, "Only supports tree pattern, got a forrest with {} roots", self.nodes.len());
+        assert!(
+            self.nodes.len() == 1,
+            "Only supports tree pattern, got a forrest with {} roots",
+            self.nodes.len()
+        );
     }
 
     fn visit_pattern(&mut self, pattern: &'a Pattern) {
@@ -65,7 +73,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
         };
 
         let from_id = pattern.from_node.id_name;
-        let from_node = match find_node(&mut self.nodes, from_id) {
+        let from_node = match find_node_with_id(&mut self.nodes, from_id) {
             Some(n) => n,
             None => self.nodes.entry(from_id).or_insert_with(|| TreeNode {
                 id: from_id.to_string(),
@@ -81,7 +89,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
 
         let mut node_opt = None;
         for (_, v) in self.nodes.iter_mut() {
-            if let Some(node) = find_node_with_id(v, id.id_name) {
+            if let Some(node) = find_node_helper(v, id.id_name) {
                 node_opt = Some(node);
             }
         }
