@@ -11,7 +11,7 @@ env:
 
 jobs:
   check:
-    name: Check and Format
+    name: Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -19,15 +19,11 @@ jobs:
         with:
           profile: minimal
           toolchain: nightly
-          components: rustfmt
           override: true
-      - run: rustup component add rustfmt
       - uses: actions-rs/cargo@v1
         with:
           command: check
           args: --verbose
-          command: fmt
-          args: --all -- --check
 
   test:
     name: Test
@@ -43,6 +39,24 @@ jobs:
         with:
           command: test
           args: --verbose
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          components: rustfmt
+          override: true
+      - run: rustup component add rustfmt
+      - run: cargo build
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
 
   clippy:
     name: Clippy
