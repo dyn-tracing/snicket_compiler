@@ -41,6 +41,13 @@ fn find_node<'a>(nodes: &'a mut HashMap<&str, TreeNode>, id: &'a str) -> Option<
 }
 
 impl<'a> TreeFold<'a> for CodeGen<'a> {
+    fn visit_patterns(&mut self, patterns: &'a Patterns) {
+        for pattern in &patterns.0 {
+            self.visit_pattern(pattern);
+        }
+        assert!(self.nodes.len() == 1, "Only supports tree pattern, got a forrest with {} roots", self.nodes.len());
+    }
+
     fn visit_pattern(&mut self, pattern: &'a Pattern) {
         // TODO: support PATH
         let rel_type = &pattern.relationship_type;
