@@ -57,6 +57,7 @@ fn main() {
     let proto_len = proto_bytes.len();
 
     let data = Data {
+        // NOTE: we assume that user knows the app/service which is the root of their service graph.
         root: String::from("productpagev1"),
         proto_len,
         proto_bytes,
