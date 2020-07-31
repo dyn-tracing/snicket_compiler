@@ -1,35 +1,13 @@
 use grammar::*;
+use proto::treenode::TreeNode;
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
+
 use tree_fold::TreeFold;
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct Node<'a> {
-    pub id: &'a str,
-    pub property_filters: HashMap<&'a str, String>,
-    pub children: Vec<&'a str>,
-}
-
-impl<'a> Node<'a> {
-    fn new(id: &'a str) -> Self {
-        Self {
-            id,
-            property_filters: HashMap::new(),
-            children: Vec::new(),
-        }
-    }
-}
-
-impl<'a> Hash for Node<'a> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
-    }
-}
 
 #[derive(Default)]
 pub struct CodeGen<'a> {
     pub return_action: Vec<&'a str>,
-    pub nodes: HashMap<&'a str, Node<'a>>,
+    pub nodes: HashMap<&'a str, TreeNode>,
 }
 
 impl<'a> CodeGen<'a> {
@@ -38,36 +16,78 @@ impl<'a> CodeGen<'a> {
     }
 }
 
+fn find_node_with_id<'a>(node: &'a mut TreeNode, id: &'a str) -> Option<&'a mut TreeNode> {
+    if node.get_id() == id {
+        return Some(node);
+    }
+    for child in node.mut_children().iter_mut() {
+        if let Some(node) = find_node_with_id(child, id) {
+            return Some(node);
+        }
+    }
+
+    None
+}
+
+fn find_node<'a>(nodes: &'a mut HashMap<&str, TreeNode>, id: &'a str) -> Option<&'a mut TreeNode> {
+    let mut node_opt = None;
+    for (_, v) in nodes.iter_mut() {
+        if let Some(node) = find_node_with_id(v, id) {
+            node_opt = Some(node);
+        }
+    }
+
+    node_opt
+}
+
 impl<'a> TreeFold<'a> for CodeGen<'a> {
     fn visit_pattern(&mut self, pattern: &'a Pattern) {
-        let from_id = pattern.from_node.id_name;
+        // TODO: support PATH
+        let rel_type = &pattern.relationship_type;
+        if let Relationship::Path(_) = rel_type {
+            panic!("Path relationship type is not yet supported.");
+        }
+
         let to_id = pattern.to_node.id_name;
+        let to_node = match self.nodes.remove(to_id) {
+            None => TreeNode {
+                id: to_id.to_string(),
+                ..Default::default()
+            },
+            Some(n) => n,
+        };
 
-        let from_node = self
-            .nodes
-            .entry(from_id)
-            .or_insert_with(|| Node::new(from_id));
-        from_node.children.push(to_id);
+        let from_id = pattern.from_node.id_name;
+        let from_node = match find_node(&mut self.nodes, from_id) {
+            Some(n) => n,
+            None => self.nodes.entry(from_id).or_insert_with(|| TreeNode {
+                id: from_id.to_string(),
+                ..Default::default()
+            }),
+        };
 
-        let _to_node = self.nodes.entry(to_id).or_insert_with(|| Node::new(to_id));
-
-        // TODO: Handle relationship type.
-        let _rel_type = &pattern.relationship_type;
+        from_node.mut_children().push(to_node);
     }
 
     fn visit_filter(&mut self, filter: &'a Filter) {
         let Filter::Property(id, properties, v) = filter;
-        match self.nodes.get_mut(id.id_name) {
-            None => {
-                panic!("Can't find node with name {}", id.id_name);
+
+        let mut node_opt = None;
+        for (_, v) in self.nodes.iter_mut() {
+            if let Some(node) = find_node_with_id(v, id.id_name) {
+                node_opt = Some(node);
             }
+        }
+
+        match node_opt {
+            None => panic!("Couldn't find a node with id {}", id.id_name),
             Some(node) => {
                 assert!(
                     properties.len() == 1,
-                    "only support top level property in filter."
+                    "only support top level property in filter"
                 );
-                node.property_filters
-                    .insert(properties[0].id_name, v.to_string());
+                node.mut_properties()
+                    .insert(properties[0].id_name.to_string(), v.to_string());
             }
         }
     }
@@ -86,6 +106,7 @@ mod tests {
     use super::*;
     use lexer;
     use parser;
+    use protobuf::RepeatedField;
     use std::iter::Peekable;
     use token::Token;
 
@@ -97,24 +118,22 @@ mod tests {
 
         let mut code_gen = CodeGen::new();
         code_gen.visit_prog(&parse_tree);
-        assert_eq!(code_gen.nodes.len(), 3);
+        assert_eq!(code_gen.nodes.len(), 1);
         assert_eq!(
             code_gen.nodes.get("a"),
-            Some(&Node {
-                id: "a",
-                property_filters: HashMap::new(),
-                children: vec!["b"],
+            Some(&TreeNode {
+                id: "a".to_string(),
+                children: RepeatedField::from_vec(vec![TreeNode {
+                    id: "b".to_string(),
+                    children: RepeatedField::from(vec![TreeNode {
+                        id: "c".to_string(),
+                        ..Default::default()
+                    }]),
+                    ..Default::default()
+                }]),
+                ..Default::default()
             })
         );
-        assert_eq!(
-            code_gen.nodes.get("b"),
-            Some(&Node {
-                id: "b",
-                property_filters: HashMap::new(),
-                children: vec!["c"],
-            })
-        );
-        assert_eq!(code_gen.nodes.get("c"), Some(&Node::new("c")))
     }
 
     #[test]
@@ -125,6 +144,22 @@ mod tests {
 
         let mut code_gen = CodeGen::new();
         code_gen.visit_prog(&parse_tree);
+        assert_eq!(code_gen.nodes.len(), 1);
+        assert_eq!(
+            code_gen.nodes.get("a"),
+            Some(&TreeNode {
+                id: "a".to_string(),
+                children: RepeatedField::from_vec(vec![TreeNode {
+                    id: "b".to_string(),
+                    children: RepeatedField::from(vec![TreeNode {
+                        id: "c".to_string(),
+                        ..Default::default()
+                    }]),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            })
+        );
     }
 
     #[test]
@@ -135,6 +170,28 @@ mod tests {
 
         let mut code_gen = CodeGen::new();
         code_gen.visit_prog(&parse_tree);
+        assert_eq!(code_gen.nodes.len(), 1);
+        assert_eq!(
+            code_gen.nodes.get("a"),
+            Some(&TreeNode {
+                id: "a".to_string(),
+                children: RepeatedField::from_vec(vec![
+                    TreeNode {
+                        id: "b".to_string(),
+                        children: RepeatedField::from(vec![TreeNode {
+                            id: "c".to_string(),
+                            ..Default::default()
+                        }]),
+                        ..Default::default()
+                    },
+                    TreeNode {
+                        id: "d".to_string(),
+                        ..Default::default()
+                    }
+                ]),
+                ..Default::default()
+            })
+        );
     }
 
     #[test]
@@ -144,6 +201,24 @@ mod tests {
         let parse_tree = parser::parse_prog(&mut token_iter);
         let mut code_gen = CodeGen::new();
         code_gen.visit_prog(&parse_tree);
+
+        assert_eq!(
+            code_gen.nodes.get("n"),
+            Some(&TreeNode {
+                id: "n".to_string(),
+                properties: {
+                    let mut map = HashMap::new();
+                    map.insert("x".to_string(), "k".to_string());
+                    map
+                },
+                children: RepeatedField::from_vec(vec![TreeNode {
+                    id: "m".to_string(),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            })
+        );
+
         assert_eq!(code_gen.return_action, vec!["n", "x"]);
     }
 
@@ -154,6 +229,18 @@ mod tests {
         let parse_tree = parser::parse_prog(&mut token_iter);
         let mut code_gen = CodeGen::new();
         code_gen.visit_prog(&parse_tree);
+
+        assert_eq!(
+            code_gen.nodes.get("n"),
+            Some(&TreeNode {
+                id: "n".to_string(),
+                children: RepeatedField::from_vec(vec![TreeNode {
+                    id: "m".to_string(),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            })
+        );
         assert_eq!(code_gen.return_action, vec!["n", "x"]);
     }
 }
