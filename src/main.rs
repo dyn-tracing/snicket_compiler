@@ -1,8 +1,11 @@
 extern crate dyntracing;
 extern crate handlebars;
+extern crate protobuf;
 extern crate serde;
 
 use dyntracing::{code_gen, lexer, parser, tree_fold::TreeFold};
+use handlebars::Handlebars;
+use protobuf::Message;
 use serde::Serialize;
 use std::fs::File;
 use std::io::prelude::*;
@@ -11,7 +14,8 @@ use std::path::Path;
 #[derive(Serialize)]
 struct Data {
     root: String,
-    paths: Vec<String>,
+    proto_len: usize,
+    proto_bytes: Vec<u8>,
     return_action: Vec<String>,
 }
 
@@ -42,36 +46,33 @@ fn main() {
     let mut code_gen = code_gen::CodeGen::new();
     code_gen.visit_prog(&parse_tree);
 
-    // assert_eq!(code_gen.paths.len(), 2);
-    // assert_eq!(code_gen.paths, vec![vec!["a", "b", "c"], vec!["a", "d"],]);
+    assert!(code_gen.nodes.len() == 1, "only support tree pattern.");
+    let mut root_id = "";
+    for (k, _v) in code_gen.nodes.iter() {
+        root_id = k;
+    }
+    let root = code_gen.nodes.get(root_id).unwrap();
 
-    // let paths: Vec<String> = code_gen
-    //     .paths
-    //     .iter_mut()
-    //     .map(|path| path.join("-"))
-    //     .collect();
+    let proto_bytes = root.write_to_bytes().unwrap();
+    let proto_len = proto_bytes.len();
 
-    // assert_eq!(paths.len(), 2);
-    // assert_eq!(paths, vec!["a-b-c", "a-d"]);
+    let data = Data {
+        root: String::from("productpagev1"),
+        proto_len,
+        proto_bytes,
+        return_action: code_gen
+            .return_action
+            .into_iter()
+            .map(|x| x.to_string())
+            .collect(),
+    };
 
-    // assert_eq!(code_gen.return_action, vec!["a", "service_name"]);
+    let handlebars = Handlebars::new();
 
-    // let data = Data {
-    //     root: "productpagev1".to_string(),
-    //     paths,
-    //     return_action: code_gen
-    //         .return_action
-    //         .into_iter()
-    //         .map(|x| x.to_string())
-    //         .collect(),
-    // };
+    let output = handlebars
+        .render_template(&template_str, &data)
+        .expect("handlebar render failed");
 
-    // let handlebars = Handlebars::new();
-
-    // let output = handlebars
-    //     .render_template(&template_str, &data)
-    //     .expect("handlebar render failed");
-
-    // let mut file = File::create("./wasm/filter.cc").expect("file create failed.");
-    // file.write_all(output.as_bytes()).expect("write failed");
+    let mut file = File::create("./wasm/filter.cc").expect("file create failed.");
+    file.write_all(output.as_bytes()).expect("write failed");
 }

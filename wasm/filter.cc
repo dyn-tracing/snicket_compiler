@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include "proxy_wasm_intrinsics.h"
+#include "treenode.pb.h"
 
 // TrafficDirection is a mirror of envoy xDS traffic direction.
 // As defined in istio/proxy/extensions/common/context.h
@@ -35,6 +36,10 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
+static unsigned char PROTO_BYTES [ 130 ] = {
+    10,1,97,18,29,10,12,115,101,114,118,105,99,101,95,110,97,109,101,18,13,112,114,111,100,117,99,116,112,97,103,101,118,49,26,62,10,1,98,18,25,10,12,115,101,114,118,105,99,101,95,110,97,109,101,18,9,114,101,118,105,101,119,115,118,50,26,30,10,1,99,18,25,10,12,115,101,114,118,105,99,101,95,110,97,109,101,18,9,114,97,116,105,110,103,115,118,49,26,30,10,1,100,18,25,10,12,115,101,114,118,105,99,101,95,110,97,109,101,18,9,100,101,116,97,105,108,115,118,49,
+};
+
 class BidiRootContext : public RootContext {
 public:
   explicit BidiRootContext(uint32_t id, StringView root_id)
@@ -45,9 +50,8 @@ public:
       LOG_WARN("Intialized workload_name: " + workload_name_);
 
       if (workload_name_ == "productpagev1") {
-        paths = {
-            "a-b-c","a-d",
-        };
+        query_ = std::make_unique<TreeNode>();
+        query_->ParseFromArray(&PROTO_BYTES, 130);
       }
     } else {
       LOG_WARN("Failed to set workload name");
@@ -57,11 +61,10 @@ public:
 
   StringView getWorkloadName() { return workload_name_; }
 
-  const std::vector<std::string> &getPathsVector() { return paths; }
 
 private:
   std::string workload_name_;
-  std::vector<std::string> paths;
+  std::unique_ptr<TreeNode> query_;
 };
 
 class BidiContext : public Context {
@@ -179,41 +182,9 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t) {
       std::set<std::string> words_set{words.begin(), words.end()};
 
       if (workload_name == "productpagev1") {
-        bool matches = true;
-        for (const auto &path : root_->getPathsVector()) {
-          if (words_set.find(path) == words_set.end()) {
-            matches = false;
-            break;
-          }
-        }
-        if (matches) {
-          auto context_id = id();
-          auto callback = [context_id](uint32_t, size_t body_size, uint32_t) {
-            getContext(context_id)->setEffectiveContext();
-            auto body =
-                getBufferBytes(BufferType::HttpCallResponseBody, 0, body_size);
-            LOG_WARN(std::string(body->view()));
-          };
-
-          std::string value;
-          if (!getValue({
-              "a","service_name",
-              }, &value)) {
-            LOG_WARN("Failed to retrieve value to store.");
-          } else {
-            auto result = root()->httpCall("storage-upstream",
-                                           { {":method", "GET"},
-                                            {":path", "/store"},
-                                            {":authority", "storage-upstream"},
-                                            {"key", b3_trace_id_},
-                                            {"value", "1"} },
-                                           "", {}, 1000, callback);
-            if (result != WasmResult::Ok) {
-              LOG_WARN("Failed to make a call to storage-upstream: " +
-                       toString(result));
-            }
-          }
-        }
+          // TODO: Construct TreeNode graph using paths and properties returned
+          // and check whether the query is subgraph isomorphic to the graph
+          //generated from request trace.
       }
 
       // Now join them.
