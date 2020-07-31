@@ -36,6 +36,8 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
+// Serialized TreeNode proto generated from given user query. It expresses the
+// pattern we want to find in the TreeNode represented as trace.
 static unsigned char PROTO_BYTES [ {{ proto_len }} ] = {
     {{#each proto_bytes}}{{this}},{{/each}}
 };
