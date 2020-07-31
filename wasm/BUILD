@@ -13,19 +13,6 @@ cc_proto_library(
     deps = [":treenode_proto"],
 )
 
-cc_library(
-    name = "treenode_util",
-    srcs = [
-        "treenode_util.cc",
-    ],
-    hdrs = [
-        "treenode_util.h",
-    ],
-    deps = [
-        ":treenode_cc_proto",
-    ],
-)
-
 wasm_cc_binary(
     name = "filter.wasm",
     srcs = [
