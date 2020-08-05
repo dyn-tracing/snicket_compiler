@@ -19,7 +19,6 @@ wasm_cc_binary(
         "filter.cc",
     ],
     deps = [
-        ":treenode_cc_proto",
         "@envoy_wasm_api//:proxy_wasm_intrinsics",
     ],
 )
