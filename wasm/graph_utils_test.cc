@@ -173,7 +173,13 @@ TEST(GenerateTraceGraphFromHeadersTest, EmptyInputs) {
 }
 
 TEST(GenerateTraceGraphTest, EmptyInputs) {
-  trace_graph_t graph = generate_trace_graph({}, {});
+  trace_graph_t graph = generate_trace_graph({}, {}, {});
   EXPECT_EQ(graph.num_vertices(), 0);
+  EXPECT_EQ(graph.num_edges(), 0);
+}
+
+TEST(GenerateTraceGraphFromHeadersTest, SingleNode) {
+  trace_graph_t graph = generate_trace_graph_from_headers("a", "");
+  EXPECT_EQ(graph.num_vertices(), 1);
   EXPECT_EQ(graph.num_edges(), 0);
 }
