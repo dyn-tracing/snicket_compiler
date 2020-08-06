@@ -195,3 +195,24 @@ TEST(GetSubGraphMappingTest, Simple) {
   EXPECT_THAT(mapping,
               testing::Pointee(testing::Contains(testing::Pair("a", "b"))));
 }
+
+TEST(GetSubGraphMappintTest, NoMapping) {
+  trace_graph_t graph_small = generate_trace_graph_from_headers("a", "a.x==y");
+  trace_graph_t graph_large = generate_trace_graph_from_headers("b", "b.x==z");
+
+  auto mapping = get_sub_graph_mapping(graph_small, graph_large);
+
+  ASSERT_EQ(mapping, nullptr);
+}
+
+TEST(GetSubGraphMappingTest, MultipleMapping) {
+  // a could be mapped to either b or c.
+  trace_graph_t graph_small = generate_trace_graph_from_headers("a", "");
+  trace_graph_t graph_large = generate_trace_graph_from_headers("b-c", "");
+
+  auto mapping = get_sub_graph_mapping(graph_small, graph_large);
+
+  ASSERT_NE(mapping, nullptr);
+  EXPECT_EQ(mapping->size(), 1);
+  EXPECT_TRUE(mapping->at("a") == "b" || mapping->at("a") == "c");
+}
