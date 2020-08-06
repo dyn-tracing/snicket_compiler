@@ -12,3 +12,5 @@ std::string str_join(std::initializer_list<std::string_view> strs,
 
 std::string str_join(std::vector<std::string_view> strs,
                      std::string_view delim);
+
+std::string str_join(std::vector<std::string> strs, std::string_view delim);
