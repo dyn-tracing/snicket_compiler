@@ -191,7 +191,7 @@ void BidiContext::onResponseHeadersInbound() {
 
   if (properties_joined.length() > 0) {
     addResponseHeader("x-wasm-property", properties_joined);
-    LOG_WARN("x-wasm -> " + properties_joined);
+    LOG_WARN("x-wasm-property: " + properties_joined);
   }
 
   if (root_->getWorkloadName() == "productpagev1") {
@@ -210,12 +210,11 @@ void BidiContext::onResponseHeadersOutbound() {
     WasmResult result =
         getSharedData(b3_parent_span_id_ + "path", &shared_data);
     if (result == WasmResult::Ok && shared_data->data() != nullptr) {
-      LOG_WARN("x-wasm -> " + shared_data->toString() + "," +
-               header->toString());
+      LOG_WARN("x-wasm: " + shared_data->toString() + "," + header->toString());
       setSharedData(b3_parent_span_id_ + "path",
                     shared_data->toString() + "," + header->toString());
     } else {
-      LOG_WARN("x-wasm -> " + header->toString());
+      LOG_WARN("x-wasm: " + header->toString());
       setSharedData(b3_parent_span_id_ + "path", header->toString());
     }
   } else {
@@ -228,13 +227,13 @@ void BidiContext::onResponseHeadersOutbound() {
     WasmResult result =
         getSharedData(b3_parent_span_id_ + "property", &shared_data);
     if (result == WasmResult::Ok && shared_data->data() != nullptr) {
-      LOG_WARN("x-wasm -> " + shared_data->toString() + "," +
+      LOG_WARN("x-wasm-property: " + shared_data->toString() + "," +
                property_header->toString());
       setSharedData(b3_parent_span_id_ + "property",
                     shared_data->toString() + "," +
                         property_header->toString());
     } else {
-      LOG_WARN("x-wasm -> " + header->toString());
+      LOG_WARN("x-wasm-property: " + header->toString());
       setSharedData(b3_parent_span_id_ + "property",
                     property_header->toString());
     }
