@@ -67,6 +67,9 @@ public:
   FilterHeadersStatus onRequestHeaders(uint32_t headers) override;
   FilterHeadersStatus onResponseHeaders(uint32_t headers) override;
 
+  void onResponseHeadersInbound();
+  void onResponseHeadersOutbound();
+
 private:
   BidiRootContext *root_;
   std::string b3_trace_id_;
@@ -114,6 +117,133 @@ FilterHeadersStatus BidiContext::onRequestHeaders(uint32_t) {
   return FilterHeadersStatus::Continue;
 }
 
+void BidiContext::onResponseHeadersInbound() {
+  // inbound response processing
+  WasmDataPtr shared_data;
+  WasmResult result = getSharedData(b3_span_id_ + "path", &shared_data);
+  if (result == WasmResult::Ok && shared_data->data() != nullptr) {
+    auto header_value = shared_data->toString();
+
+    // Multiple paths could exist separated by commas.
+    // split string using ','
+    std::regex delimiter(",");
+    std::sregex_token_iterator it{header_value.begin(), header_value.end(),
+                                  delimiter, -1};
+    std::vector<std::string> words{it, {}};
+    for (auto &w : words) {
+      w = std::string(root_->getWorkloadName()) + "-" + w;
+    }
+    std::set<std::string> words_set{words.begin(), words.end()};
+
+    // Now join them.
+    std::string joined = std::accumulate(
+        words.begin(), words.end(), std::string(),
+        [](const std::string &a, const std::string &b) -> std::string {
+          return a + (a.length() > 0 ? "," : "") + b;
+        });
+    addResponseHeader("x-wasm", joined);
+    LOG_WARN("inbound: x-wasm -> " + joined);
+
+    if (root_->getWorkloadName() == "productpagev1") {
+      // TODO: Construct TreeNode graph using paths and properties returned
+      // and check whether the query is subgraph isomorphic to the graph
+      // generated from request trace.
+    }
+
+  } else {
+    addResponseHeader("x-wasm", std::string(root_->getWorkloadName()));
+    LOG_WARN("inbound: x-wasm -> " + std::string(root_->getWorkloadName()));
+  }
+
+  LOG_WARN("inbound: proceed to collect properties.");
+  // Collect properties
+  std::vector<std::string> properties;
+  std::string value;
+  if (getValue({"node", "metadata", "WORKLOAD_NAME"}, &value)) {
+    std::string result = std::string(root_->getWorkloadName());
+    for (auto p : {"node", "metadata", "WORKLOAD_NAME"}) {
+      result += "." + std::string(p);
+    }
+    result += "==";
+    result += value;
+
+    properties.push_back(result);
+  } else {
+    LOG_WARN("failed to get property");
+  }
+
+  LOG_WARN("inbound: number of properties collected " +
+           std::to_string(properties.size()));
+
+  std::string properties_joined = std::accumulate(
+      properties.begin(), properties.end(), std::string(),
+      [](const std::string &a, const std::string &b) -> std::string {
+        return a + (a.length() > 0 ? "," : "") + b;
+      });
+
+  LOG_WARN("inbound: properties_joined:" + properties_joined);
+
+  WasmDataPtr property_shared_data;
+  result = getSharedData(b3_span_id_ + "property", &property_shared_data);
+  if (result == WasmResult::Ok && property_shared_data->data() != nullptr) {
+    auto received = property_shared_data->toString();
+
+    if (properties_joined.length() > 0) {
+      properties_joined += ",";
+    }
+    properties_joined += received;
+  }
+
+  if (properties_joined.length() > 0) {
+    addResponseHeader("x-wasm-property", properties_joined);
+    LOG_WARN("inbound: x-wasm -> " + properties_joined);
+  }
+
+  if (root_->getWorkloadName() == "productpagev1") {
+    LOG_WARN("Collected properties: " + properties_joined);
+  }
+}
+
+void BidiContext::onResponseHeadersOutbound() {
+  // Received response from another service we called.
+  // Collect x-wasm header value.
+  auto header = getResponseHeader("x-wasm");
+  if (header->data() != nullptr) {
+    WasmDataPtr shared_data;
+    WasmResult result =
+        getSharedData(b3_parent_span_id_ + "path", &shared_data);
+    if (result == WasmResult::Ok && shared_data->data() != nullptr) {
+      LOG_WARN("outbound: x-wasm -> " + shared_data->toString() + "," +
+               header->toString());
+      setSharedData(b3_parent_span_id_ + "path",
+                    shared_data->toString() + "," + header->toString());
+    } else {
+      LOG_WARN("outbound: x-wasm -> " + header->toString());
+      setSharedData(b3_parent_span_id_ + "path", header->toString());
+    }
+  } else {
+    LOG_WARN("outbound: x-wasm not found");
+  }
+
+  auto property_header = getResponseHeader("x-wasm-property");
+  if (property_header->data() != nullptr) {
+    WasmDataPtr shared_data;
+    WasmResult result =
+        getSharedData(b3_parent_span_id_ + "property", &shared_data);
+    if (result == WasmResult::Ok && shared_data->data() != nullptr) {
+      LOG_WARN("outbound: x-wasm -> " + shared_data->toString() + "," +
+               property_header->toString());
+      setSharedData(b3_parent_span_id_ + "property",
+                    shared_data->toString() + "," +
+                        property_header->toString());
+    } else {
+      LOG_WARN("outbound: x-wasm -> " + header->toString());
+      setSharedData(b3_parent_span_id_ + "property",
+                    property_header->toString());
+    }
+  }
+}
+
 FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t) {
   if (b3_trace_id_ == "") {
     LOG_WARN(trafficDirectionToString(direction_) + " " +
@@ -140,128 +270,9 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t) {
 
   StringView workload_name = root_->getWorkloadName();
   if (direction_ == TrafficDirection::Inbound) {
-    // inbound response processing
-    WasmDataPtr shared_data;
-    WasmResult result = getSharedData(b3_span_id_ + "path", &shared_data);
-    if (result == WasmResult::Ok && shared_data->data() != nullptr) {
-      auto header_value = shared_data->toString();
-
-      // Multiple paths could exist separated by commas.
-      // split string using ','
-      std::regex delimiter(",");
-      std::sregex_token_iterator it{header_value.begin(), header_value.end(),
-                                    delimiter, -1};
-      std::vector<std::string> words{it, {}};
-      for (auto &w : words) {
-        w = std::string(workload_name) + "-" + w;
-      }
-      std::set<std::string> words_set{words.begin(), words.end()};
-
-      // Now join them.
-      std::string joined = std::accumulate(
-          words.begin(), words.end(), std::string(),
-          [](const std::string &a, const std::string &b) -> std::string {
-            return a + (a.length() > 0 ? "," : "") + b;
-          });
-      addResponseHeader("x-wasm", joined);
-      LOG_WARN("inbound: x-wasm -> " + joined);
-
-      if (workload_name == "productpagev1") {
-        // TODO: Construct TreeNode graph using paths and properties returned
-        // and check whether the query is subgraph isomorphic to the graph
-        // generated from request trace.
-      }
-
-    } else {
-      addResponseHeader("x-wasm", std::string(workload_name));
-      LOG_WARN("inbound: x-wasm -> " + std::string(workload_name));
-    }
-
-    LOG_WARN("inbound: proceed to collect properties.");
-    // Collect properties
-    std::vector<std::string> properties;
-    std::string value;
-    if (getValue({"node", "metadata", "WORKLOAD_NAME"}, &value)) {
-      std::string result = std::string(root_->getWorkloadName());
-      for (auto p : {"node", "metadata", "WORKLOAD_NAME"}) {
-        result += "." + std::string(p);
-      }
-      result += "==";
-      result += value;
-
-      properties.push_back(result);
-    } else {
-      LOG_WARN("failed to get property");
-    }
-
-    LOG_WARN("inbound: number of properties collected " +
-            std::to_string(properties.size()));
-
-    std::string properties_joined = std::accumulate(
-        properties.begin(), properties.end(), std::string(),
-        [](const std::string &a, const std::string &b) -> std::string {
-          return a + (a.length() > 0 ? "," : "") + b;
-        });
-
-    LOG_WARN("inbound: properties_joined:" + properties_joined);
-
-    WasmDataPtr property_shared_data;
-    result = getSharedData(b3_span_id_ + "property", &property_shared_data);
-    if (result == WasmResult::Ok && property_shared_data->data() != nullptr) {
-      auto received = property_shared_data->toString();
-
-      if (properties_joined.length() > 0) {
-        properties_joined += ",";
-      }
-      properties_joined += received;
-    }
-
-    if (properties_joined.length() > 0) {
-      addResponseHeader("x-wasm-property", properties_joined);
-      LOG_WARN("inbound: x-wasm -> " + properties_joined);
-    }
-
-    if (workload_name == "productpagev1") {
-      LOG_WARN("Collected properties: " + properties_joined);
-    }
+    onResponseHeadersInbound();
   } else if (direction_ == TrafficDirection::Outbound) {
-    // Received response from another service we called.
-    // Collect x-wasm header value.
-    auto header = getResponseHeader("x-wasm");
-    if (header->data() != nullptr) {
-      WasmDataPtr shared_data;
-      WasmResult result =
-          getSharedData(b3_parent_span_id_ + "path", &shared_data);
-      if (result == WasmResult::Ok && shared_data->data() != nullptr) {
-        LOG_WARN("outbound: x-wasm -> " + shared_data->toString() + "," +
-                 header->toString());
-        setSharedData(b3_parent_span_id_ + "path",
-                      shared_data->toString() + "," + header->toString());
-      } else {
-        LOG_WARN("outbound: x-wasm -> " + header->toString());
-        setSharedData(b3_parent_span_id_ + "path", header->toString());
-      }
-    } else {
-      LOG_WARN("outbound: x-wasm not found");
-    }
-
-    auto property_header = getResponseHeader("x-wasm-property");
-    if (property_header->data() != nullptr) {
-      WasmDataPtr shared_data;
-      WasmResult result =
-          getSharedData(b3_parent_span_id_ + "property", &shared_data);
-      if (result == WasmResult::Ok && shared_data->data() != nullptr) {
-        LOG_WARN("outbound: x-wasm -> " + shared_data->toString() + "," +
-                 property_header->toString());
-        setSharedData(b3_parent_span_id_ + "property",
-                      shared_data->toString() + "," +
-                          property_header->toString());
-      } else {
-        LOG_WARN("outbound: x-wasm -> " + header->toString());
-        setSharedData(b3_parent_span_id_ + "property",
-                      property_header->toString());
-      }
-    }
+    onResponseHeadersOutbound();
   }
 
   return FilterHeadersStatus::Continue;
