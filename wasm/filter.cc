@@ -158,6 +158,9 @@ void BidiContext::onResponseHeadersInbound() {
   LOG_WARN("inbound: proceed to collect properties.");
   // Collect properties
   std::vector<std::string> properties;
+
+  // From rust code, we'll pass down, a vector of vector of strings.
+  // and generate following snippet for each of the inner vector.
   std::string value;
   if (getValue({"node", "metadata", "WORKLOAD_NAME"}, &value)) {
     std::string result = std::string(root_->getWorkloadName());
