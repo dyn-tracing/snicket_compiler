@@ -177,7 +177,7 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t) {
       LOG_WARN("inbound: x-wasm -> " + std::string(workload_name));
     }
 
-    logWarn("inbound: proceed to collect properties.");
+    LOG_WARN("inbound: proceed to collect properties.");
     // Collect properties
     std::vector<std::string> properties;
     std::string value;
@@ -191,10 +191,10 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t) {
 
       properties.push_back(result);
     } else {
-      logWarn("failed to get property");
+      LOG_WARN("failed to get property");
     }
 
-    logWarn("inbound: number of properties collected " +
+    LOG_WARN("inbound: number of properties collected " +
             std::to_string(properties.size()));
 
     std::string properties_joined = std::accumulate(
@@ -203,7 +203,7 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t) {
           return a + (a.length() > 0 ? "," : "") + b;
         });
 
-    logWarn("inbound: properties_joined:" + properties_joined);
+    LOG_WARN("inbound: properties_joined:" + properties_joined);
 
     WasmDataPtr property_shared_data;
     result = getSharedData(b3_span_id_ + "property", &property_shared_data);
@@ -218,11 +218,11 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t) {
 
     if (properties_joined.length() > 0) {
       addResponseHeader("x-wasm-property", properties_joined);
-      logWarn("inbound: x-wasm -> " + properties_joined);
+      LOG_WARN("inbound: x-wasm -> " + properties_joined);
     }
 
     if (workload_name == "productpagev1") {
-      logWarn("Collected properties: " + properties_joined);
+      LOG_WARN("Collected properties: " + properties_joined);
     }
   } else if (direction_ == TrafficDirection::Outbound) {
     // Received response from another service we called.
