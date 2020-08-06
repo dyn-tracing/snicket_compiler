@@ -77,3 +77,10 @@ trace_graph_t generate_trace_graph(
 // a.x.y.z==123,b.y.z==456
 trace_graph_t generate_trace_graph_from_headers(std::string paths_header,
                                                 std::string properties_header);
+
+// If graph_small is sub graph isomorphic, using above property_map_subset,
+// returns the sub graph mapping from graph small's node ids to graph large's
+// node ids. If not returns nullptr
+std::unique_ptr<std::map<std::string, std::string>>
+get_sub_graph_mapping(const trace_graph_t &graph_small,
+                      const trace_graph_t &graph_large);

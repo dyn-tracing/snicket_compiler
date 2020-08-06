@@ -19,7 +19,7 @@ trace_graph_t generate_trace_graph(
     if (ids_to_properties.find(vertex) != ids_to_properties.end()) {
       v = graph.add_vertex(Node{vertex, ids_to_properties[vertex]});
     } else {
-      v = graph.add_vertex();
+      v = graph.add_vertex(Node{vertex, {}});
     }
     ids_to_vertex_descriptors.insert({vertex, v});
   }
@@ -71,4 +71,60 @@ trace_graph_t generate_trace_graph_from_headers(std::string paths_header,
   }
 
   return generate_trace_graph(vertices, edges, vertices_to_properties);
+}
+
+// Default print_callback
+struct vf2_get_first_mapping_callback {
+
+  vf2_get_first_mapping_callback(const trace_graph_t &graph1,
+                                 const trace_graph_t &graph2,
+                                 std::map<std::string, std::string> *mapping)
+      : graph1_(graph1), graph2_(graph2), mapping_(mapping) {}
+
+  template <typename CorrespondenceMap1To2, typename CorrespondenceMap2To1>
+  bool operator()(CorrespondenceMap1To2 f, CorrespondenceMap2To1) {
+
+    // Print (sub)graph isomorphism map
+    BGL_FORALL_VERTICES_T(v, graph1_, trace_graph_t) {
+      std::string src_id = boost::get(&Node::id, graph1_, v);
+      std::string dst_id = boost::get(&Node::id, graph2_, boost::get(f, v));
+
+      std::cout << src_id << " " << dst_id << std::endl;
+
+      mapping_->insert({src_id, dst_id});
+    }
+
+    // Return false to get first mapping, and stop.
+    return false;
+  }
+
+private:
+  const trace_graph_t &graph1_;
+  const trace_graph_t &graph2_;
+  std::map<std::string, std::string> *mapping_;
+};
+
+std::unique_ptr<std::map<std::string, std::string>>
+get_sub_graph_mapping(const trace_graph_t &graph_small,
+                      const trace_graph_t &graph_large) {
+
+  auto mapping = std::make_unique<std::map<std::string, std::string>>();
+  vf2_get_first_mapping_callback callback(graph_small, graph_large,
+                                          mapping.get());
+
+  auto vertex_comp =
+      make_property_map_subset(boost::get(&Node::properties, graph_small),
+                               boost::get(&Node::properties, graph_large));
+
+  bool found =
+      boost::vf2_subgraph_iso(graph_small, graph_large, callback,
+                              boost::vertex_order_by_mult(graph_small),
+                              edges_equivalent(boost::always_equivalent())
+                                  .vertices_equivalent(vertex_comp));
+
+  if (found) {
+    return mapping;
+  }
+
+  return nullptr;
 }

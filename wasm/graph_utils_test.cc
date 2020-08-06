@@ -183,3 +183,15 @@ TEST(GenerateTraceGraphFromHeadersTest, SingleNode) {
   EXPECT_EQ(graph.num_vertices(), 1);
   EXPECT_EQ(graph.num_edges(), 0);
 }
+
+TEST(GetSubGraphMappingTest, Simple) {
+  trace_graph_t graph_small = generate_trace_graph_from_headers("a", "");
+  trace_graph_t graph_large = generate_trace_graph_from_headers("b", "");
+
+  auto mapping = get_sub_graph_mapping(graph_small, graph_large);
+
+  ASSERT_NE(mapping, nullptr);
+  EXPECT_EQ(mapping->size(), 1);
+  EXPECT_THAT(mapping,
+              testing::Pointee(testing::Contains(testing::Pair("a", "b"))));
+}
