@@ -1,5 +1,6 @@
 load("@rules_proto//proto:defs.bzl", "proto_library")
 load("//bazel/wasm:wasm.bzl", "wasm_cc_binary")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_proto_library", "cc_test")
 
 proto_library(
     name = "treenode_proto",
@@ -52,6 +53,32 @@ cc_test(
     ],
     deps = [
         ":str_utils",
+        "@gtest",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "graph_utils",
+    srcs = [
+        "graph_utils.cc",
+    ],
+    hdrs = [
+        "graph_utils.h",
+    ],
+    deps = [
+        ":str_utils",
+        "@boost//:graph",
+    ],
+)
+
+cc_test(
+    name = "graph_utils_test",
+    srcs = [
+        "graph_utils_test.cc",
+    ],
+    deps = [
+        ":graph_utils",
         "@gtest",
         "@gtest//:gtest_main",
     ],

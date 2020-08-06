@@ -77,3 +77,11 @@ load("@rules_proto//proto:repositories.bzl", "rules_proto_dependencies", "rules_
 rules_proto_dependencies()
 
 rules_proto_toolchains()
+
+http_archive(
+    name = "boost",
+    build_file = "//bazel/external:boost.BUILD",
+    urls = [
+        "https://github.com/emscripten-ports/boost/releases/download/boost-1.70.0/boost-headers-1.70.0.zip",
+    ],
+)
