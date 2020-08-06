@@ -129,15 +129,15 @@ void BidiContext::onResponseHeadersInbound() {
     std::regex delimiter(",");
     std::sregex_token_iterator it{header_value.begin(), header_value.end(),
                                   delimiter, -1};
-    std::vector<std::string> words{it, {}};
-    for (auto &w : words) {
+    std::vector<std::string> paths{it, {}};
+    for (auto &w : paths) {
       w = std::string(root_->getWorkloadName()) + "-" + w;
     }
-    std::set<std::string> words_set{words.begin(), words.end()};
+    std::set<std::string> paths_set{paths.begin(), paths.end()};
 
     // Now join them.
     std::string joined = std::accumulate(
-        words.begin(), words.end(), std::string(),
+        paths.begin(), paths.end(), std::string(),
         [](const std::string &a, const std::string &b) -> std::string {
           return a + (a.length() > 0 ? "," : "") + b;
         });
