@@ -25,7 +25,7 @@ struct HandlebarsData {
 }
 
 fn main() {
-    let template_path = Path::new("filter.cc.hbars");
+    let template_path = Path::new("filter.cc.handlebars");
     let display = template_path.display();
     let mut template_file = match File::open(&template_path) {
         Err(msg) => panic!("Failed to open {}: {}", display, msg),
