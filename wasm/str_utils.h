@@ -1,3 +1,6 @@
+#ifndef STR_UTILS_H
+#define STR_UTILS_H
+
 #include <initializer_list>
 #include <string>
 #include <string_view>
@@ -14,3 +17,5 @@ std::string str_join(std::vector<std::string_view> strs,
                      std::string_view delim);
 
 std::string str_join(std::vector<std::string> strs, std::string_view delim);
+
+#endif // STR_UTILS_H

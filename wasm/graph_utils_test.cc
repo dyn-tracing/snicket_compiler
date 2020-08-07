@@ -216,3 +216,21 @@ TEST(GetSubGraphMappingTest, MultipleMapping) {
   EXPECT_EQ(mapping->size(), 1);
   EXPECT_TRUE(mapping->at("a") == "b" || mapping->at("a") == "c");
 }
+
+TEST(GetSubGraphMappingTest, GetMappingAndProperty) {
+  // a could be mapped to either b or c.
+  trace_graph_t graph_small = generate_trace_graph_from_headers("a", "a.x==y");
+  trace_graph_t graph_large =
+      generate_trace_graph_from_headers("b-c", "c.x==y");
+
+  auto mapping = get_sub_graph_mapping(graph_small, graph_large);
+
+  ASSERT_NE(mapping, nullptr);
+  EXPECT_EQ(mapping->size(), 1);
+  EXPECT_THAT(mapping,
+              testing::Pointee(testing::Contains(testing::Pair("a", "c"))));
+
+  const auto *node = get_node_with_id(graph_large, "c");
+  ASSERT_NE(node, nullptr);
+  ASSERT_EQ(node->properties.at({"x"}), "y");
+}

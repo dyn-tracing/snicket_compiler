@@ -8,6 +8,7 @@
 
 #include "proxy_wasm_intrinsics.h"
 
+#include "graph_utils.h"
 #include "str_utils.h"
 
 // TrafficDirection is a mirror of envoy xDS traffic direction.
@@ -158,9 +159,14 @@ void BidiContext::onResponseHeadersInbound() {
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
   std::string value;
-  if (getValue({"node", "metadata", "WORKLOAD_NAME"}, &value)) {
+
+  if (getValue({
+      "node","metadata","WORKLOAD_NAME",
+  }, &value)) {
     std::string result = std::string(root_->getWorkloadName());
-    for (auto p : {"node", "metadata", "WORKLOAD_NAME"}) {
+    for (auto p : {
+        "node","metadata","WORKLOAD_NAME",
+    }) {
       result += "." + std::string(p);
     }
     result += "==";
@@ -198,6 +204,42 @@ void BidiContext::onResponseHeadersInbound() {
     // TODO: Construct TreeNode graph using paths and properties returned
     // and check whether the query is subgraph isomorphic to the graph
     // generated from request trace.
+
+    std::set<std::string> vertices = {
+      "c", "d", "b", "a",
+    };
+
+    std::vector<std::pair<std::string, std::string>> edges = {
+         { "a", "b",  },  { "b", "c",  },  { "a", "d",  },
+    };
+
+    std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
+    ids_to_properties["a"][{ "node","metadata","WORKLOAD_NAME", }] = "productpagev1";
+    ids_to_properties["b"][{ "node","metadata","WORKLOAD_NAME", }] = "reviewsv2";
+    ids_to_properties["c"][{ "node","metadata","WORKLOAD_NAME", }] = "ratingsv1";
+    ids_to_properties["d"][{ "node","metadata","WORKLOAD_NAME", }] = "detailsv1";
+
+
+    trace_graph_t pattern = generate_trace_graph(vertices, edges, ids_to_properties);
+    trace_graph_t target = generate_trace_graph_from_headers(paths_joined, properties_joined);
+
+    auto mapping = get_sub_graph_mapping(pattern, target);
+    if (mapping == nullptr || mapping->find("a") == mapping->end()) {
+        LOG_WARN("No mapping found");
+        return;
+    }
+
+    const Node* node_ptr = get_node_with_id(target, mapping->at("a"));
+    if (node_ptr == nullptr || node_ptr->properties.find({
+        "node", "metadata", "WORKLOAD_NAME",
+    }) == node_ptr->properties.end()) {
+        LOG_WARN("no node found");
+        return;
+    }
+
+    LOG_WARN(node_ptr->properties.at({
+        "node", "metadata", "WORKLOAD_NAME",
+    }));
   }
 }
 
