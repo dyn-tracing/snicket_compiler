@@ -159,13 +159,13 @@ void BidiContext::onResponseHeadersInbound() {
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
   std::string value;
-  
+
   if (getValue({
-      "service_name",
+      "node","metadata","WORKLOAD_NAME",
   }, &value)) {
     std::string result = std::string(root_->getWorkloadName());
     for (auto p : {
-        "service_name",
+        "node","metadata","WORKLOAD_NAME",
     }) {
       result += "." + std::string(p);
     }
@@ -206,19 +206,19 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-      "c", "a", "d", "b", 
+      "c", "d", "b", "a",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
-         { "a", "b",  },  { "b", "c",  },  { "a", "d",  }, 
+         { "a", "b",  },  { "b", "c",  },  { "a", "d",  },
     };
 
     std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
-    ids_to_properties["a"][{ "service_name", }] = "productpagev1";
-    ids_to_properties["b"][{ "service_name", }] = "reviewsv2";
-    ids_to_properties["c"][{ "service_name", }] = "ratingsv1";
-    ids_to_properties["d"][{ "service_name", }] = "detailsv1";
-    
+    ids_to_properties["a"][{ "node","metadata","WORKLOAD_NAME", }] = "productpagev1";
+    ids_to_properties["b"][{ "node","metadata","WORKLOAD_NAME", }] = "reviewsv2";
+    ids_to_properties["c"][{ "node","metadata","WORKLOAD_NAME", }] = "ratingsv1";
+    ids_to_properties["d"][{ "node","metadata","WORKLOAD_NAME", }] = "detailsv1";
+
 
     trace_graph_t pattern = generate_trace_graph(vertices, edges, ids_to_properties);
     trace_graph_t target = generate_trace_graph_from_headers(paths_joined, properties_joined);
@@ -231,14 +231,14 @@ void BidiContext::onResponseHeadersInbound() {
 
     const Node* node_ptr = get_node_with_id(target, mapping->at("a"));
     if (node_ptr == nullptr || node_ptr->properties.find({
-        "service_name", 
+        "node", "metadata", "WORKLOAD_NAME",
     }) == node_ptr->properties.end()) {
         LOG_WARN("no node found");
         return;
     }
 
     LOG_WARN(node_ptr->properties.at({
-        "service_name", 
+        "node", "metadata", "WORKLOAD_NAME",
     }));
   }
 }

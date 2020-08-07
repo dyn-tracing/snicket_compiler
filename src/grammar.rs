@@ -34,7 +34,7 @@ impl<'a> Filters<'a> {
 
 #[derive(Debug, PartialEq)]
 pub enum Filter<'a> {
-    Property(Identifier<'a>, Vec<Identifier<'a>>, Value<'a>), // xyz.abc == 5, xyz.a.b.c == 5, x.a == k
+    Property(Identifier<'a>, Identifier<'a>, Value<'a>), // xyz.abc == 5, xyz.b == 5, x.a == k
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -48,18 +48,16 @@ impl<'a> Actions<'a> {
 
 #[derive(Debug, PartialEq)]
 pub enum Action<'a> {
-    Property(Identifier<'a>, Vec<Identifier<'a>>), // xyz.abc, xyz.a.b.c
+    Property(Identifier<'a>, Identifier<'a>), // xyz.a, xyz.b
 }
 
 impl<'a> fmt::Display for Action<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let Action::Property(id, id_vec) = self;
+        let Action::Property(id, p) = self;
         let mut result = String::new();
         result.push_str(&id.to_string());
-        for i in id_vec {
-            result.push_str(".");
-            result.push_str(&i.to_string());
-        }
+        result.push_str(".");
+        result.push_str(&p.to_string());
         write!(f, "{}", result)
     }
 }

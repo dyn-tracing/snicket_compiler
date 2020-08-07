@@ -1,6 +1,6 @@
 use grammar::*;
 use serde::Serialize;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use tree_fold::TreeFold;
 
 #[derive(Default, Serialize, PartialEq, Eq, Debug)]
@@ -23,11 +23,26 @@ pub struct CodeGen<'a> {
     pub ids_to_properties: Vec<Property<'a>>,
     pub properties_to_collect: HashSet<Vec<&'a str>>,
     pub return_action: Return<'a>,
+    property_map: HashMap<&'static str, Vec<&'static str>>,
 }
 
 impl<'a> CodeGen<'a> {
     pub fn new() -> CodeGen<'a> {
-        CodeGen::default()
+        let mut property_map = HashMap::new();
+        property_map.insert("service_name", vec!["node", "metadata", "WORKLOAD_NAME"]);
+
+        CodeGen {
+            property_map,
+            ..Default::default()
+        }
+    }
+
+    #[cfg(test)]
+    pub fn new_with_property_map(property_map: HashMap<&'static str, Vec<&'static str>>) -> Self {
+        CodeGen {
+            property_map,
+            ..Default::default()
+        }
     }
 }
 
@@ -48,10 +63,10 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
     }
 
     fn visit_filter(&mut self, filter: &'a Filter) {
-        let Filter::Property(id, paths, value) = filter;
+        let Filter::Property(id, p, value) = filter;
 
         let vertex_id = id.id_name;
-        let property_paths: Vec<&'a str> = paths.iter().map(|id| id.id_name).collect();
+        let property_paths: Vec<&'a str> = self.property_map[p.id_name].clone();
         let value_str = value.to_string();
 
         self.properties_to_collect.insert(property_paths.clone());
@@ -67,11 +82,11 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
         let Action::Property(id, p) = action;
 
         self.properties_to_collect
-            .insert(p.iter().map(|id| id.id_name).collect());
+            .insert(self.property_map[p.id_name].clone());
 
         self.return_action = Return {
             id: id.id_name,
-            paths: p.iter().map(|id| id.id_name).collect(),
+            paths: self.property_map[p.id_name].clone(),
         };
     }
 }
@@ -134,7 +149,8 @@ mod tests {
         let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, WHERE n.x ==k, RETURN n.x,");
         let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
         let parse_tree = parser::parse_prog(&mut token_iter);
-        let mut code_gen = CodeGen::new();
+        let mut code_gen =
+            CodeGen::new_with_property_map([("x", vec!["x"])].iter().cloned().collect());
         code_gen.visit_prog(&parse_tree);
 
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
@@ -161,7 +177,9 @@ mod tests {
         let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, RETURN n.x,");
         let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
         let parse_tree = parser::parse_prog(&mut token_iter);
-        let mut code_gen = CodeGen::new();
+        let mut code_gen =
+            CodeGen::new_with_property_map([("x", vec!["x"])].iter().cloned().collect());
+
         code_gen.visit_prog(&parse_tree);
 
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
@@ -180,7 +198,13 @@ mod tests {
         let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, WHERE n.x ==k, RETURN n.y,");
         let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
         let parse_tree = parser::parse_prog(&mut token_iter);
-        let mut code_gen = CodeGen::new();
+        let mut code_gen = CodeGen::new_with_property_map(
+            [("x", vec!["x"]), ("y", vec!["y"])]
+                .iter()
+                .cloned()
+                .collect(),
+        );
+
         code_gen.visit_prog(&parse_tree);
 
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());

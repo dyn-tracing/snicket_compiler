@@ -50,12 +50,10 @@ impl<'a> TreeFold<'a> for PrettyPrinter {
 
     fn visit_filter(&mut self, tree: &'a Filter) {
         match &tree {
-            Filter::Property(node, properties, val) => {
+            Filter::Property(node, p, val) => {
                 self.pretty_print_str.push_str(node.id_name);
-                for property in properties {
-                    self.pretty_print_str.push_str(".");
-                    self.pretty_print_str.push_str(property.id_name);
-                }
+                self.pretty_print_str.push_str(".");
+                self.pretty_print_str.push_str(p.id_name);
                 self.pretty_print_str.push_str(" == ");
                 self.pretty_print_str.push_str(&val.to_string());
             }

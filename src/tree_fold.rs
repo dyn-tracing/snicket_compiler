@@ -34,11 +34,9 @@ pub trait TreeFold<'a> {
 
     fn visit_filter(&mut self, tree: &'a Filter) {
         match &tree {
-            Filter::Property(ref id, ref properties, ref value) => {
+            Filter::Property(ref id, ref p, ref value) => {
                 self.visit_identifier(id);
-                for property in properties {
-                    self.visit_identifier(property);
-                }
+                self.visit_identifier(p);
                 self.visit_value(value);
             }
         }
@@ -52,11 +50,9 @@ pub trait TreeFold<'a> {
 
     fn visit_action(&mut self, tree: &'a Action) {
         match &tree {
-            Action::Property(ref id, ref properties) => {
+            Action::Property(ref id, ref p) => {
                 self.visit_identifier(id);
-                for property in properties {
-                    self.visit_identifier(property);
-                }
+                self.visit_identifier(p);
             }
         }
     }

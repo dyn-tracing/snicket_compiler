@@ -66,7 +66,7 @@ fn parse_repeated<'a, T>(
             let mut elem_vec = Vec::new();
             while let Some(Token::Identifier(_)) = token_iter.peek() {
                 elem_vec.push(parse_func(token_iter));
-                consume_token(token_iter, &Token::Comma, "Expected a comma (')");
+                consume_token(token_iter, &Token::Comma, "Expected a comma (,)");
             }
             elem_vec
         }
@@ -119,15 +119,7 @@ fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
             panic!("Expected period, got none.");
         }
         Some(Token::Period) => {
-            let mut properties = Vec::new();
-            let mut property = parse_identifier(token_iter);
-            properties.push(property);
-            while let Some(Token::Period) = token_iter.peek() {
-                // Consume token period
-                token_iter.next();
-                property = parse_identifier(token_iter);
-                properties.push(property);
-            }
+            let property = parse_identifier(token_iter);
             consume_token(
                 token_iter,
                 &Token::Equals,
@@ -135,7 +127,7 @@ fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
             );
             let val = parse_value(token_iter);
 
-            Filter::Property(node, properties, val)
+            Filter::Property(node, property, val)
         }
         Some(token) => panic!("Unrecognized token: {:?}", token),
     }
@@ -155,16 +147,8 @@ fn parse_action<'a>(token_iter: &mut TokenIterator<'a>) -> Action<'a> {
     let operator_token = token_iter.next().unwrap();
     match &operator_token {
         Token::Period => {
-            let mut properties = Vec::new();
-            let mut property = parse_identifier(token_iter);
-            properties.push(property);
-            while let Some(Token::Period) = token_iter.peek() {
-                // Consume token period
-                token_iter.next();
-                property = parse_identifier(token_iter);
-                properties.push(property);
-            }
-            Action::Property(node, properties)
+            let property = parse_identifier(token_iter);
+            Action::Property(node, property)
         }
         _ => panic!("Unrecognized token: {:?}", operator_token),
     }
@@ -268,10 +252,11 @@ mod tests {
         test_parse_prog_fail,
         "Pattern must start with the keyword MATCH."
     );
-    test_parser_success!(
+    test_parser_fail!(
         r"MATCH n-->m :a, WHERE n.x.y.z == 5,",
         parse_prog,
-        test_parse_nested_properties
+        test_parse_nested_properties,
+        "Invalid token: Period, expected Equals"
     );
     test_parser_success!(
         r"MATCH n-->m: a, WHERE n.x == k,",
@@ -295,7 +280,7 @@ mod tests {
                 }]),
                 filters: Filters(vec![Filter::Property(
                     Identifier { id_name: "n" },
-                    vec![Identifier { id_name: "x" }],
+                    Identifier { id_name: "x" },
                     Value::Str("k")
                 )]),
                 actions: Actions(Vec::new()),
@@ -314,7 +299,7 @@ mod tests {
             actions,
             Actions(vec![Action::Property(
                 Identifier { id_name: "n" },
-                vec![Identifier { id_name: "x" }]
+                Identifier { id_name: "x" },
             )])
         )
     }
@@ -341,7 +326,7 @@ mod tests {
                 filters: Filters::new(),
                 actions: Actions(vec![Action::Property(
                     Identifier { id_name: "n" },
-                    vec![Identifier { id_name: "x" }]
+                    Identifier { id_name: "x" },
                 )])
             }
         )
