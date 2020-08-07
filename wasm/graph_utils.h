@@ -88,4 +88,7 @@ std::unique_ptr<std::map<std::string, std::string>>
 get_sub_graph_mapping(const trace_graph_t &graph_small,
                       const trace_graph_t &graph_large);
 
+// Returns vertex_iterator which has id
+const Node *get_node_with_id(const trace_graph_t &g, std::string_view id);
+
 #endif // GRAPH_UTILS_H
