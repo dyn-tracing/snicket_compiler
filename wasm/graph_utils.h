@@ -1,3 +1,6 @@
+#ifndef GRAPH_UTILS_H
+#define GRAPH_UTILS_H
+
 #include <algorithm>
 #include <map>
 #include <memory>
@@ -84,3 +87,5 @@ trace_graph_t generate_trace_graph_from_headers(std::string paths_header,
 std::unique_ptr<std::map<std::string, std::string>>
 get_sub_graph_mapping(const trace_graph_t &graph_small,
                       const trace_graph_t &graph_large);
+
+#endif // GRAPH_UTILS_H

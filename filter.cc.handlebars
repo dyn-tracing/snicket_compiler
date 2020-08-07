@@ -8,6 +8,7 @@
 
 #include "proxy_wasm_intrinsics.h"
 
+#include "graph_utils.h"
 #include "str_utils.h"
 
 // TrafficDirection is a mirror of envoy xDS traffic direction.
@@ -210,6 +211,11 @@ void BidiContext::onResponseHeadersInbound() {
     std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
     {{#each properties}}ids_to_properties["{{this.id}}"][{ {{#each this.paths}}"{{this}}",{{/each}} }] = "{{this.value}}";
     {{/each}}
+
+    trace_graph_t pattern = generate_trace_graph(vertices, edges, ids_to_properties);
+    trace_graph_t target = generate_trace_graph_from_headers(paths_joined, properties_joined);
+
+    auto mapping = get_sub_graph_mapping(pattern, target);
   }
 }
 
