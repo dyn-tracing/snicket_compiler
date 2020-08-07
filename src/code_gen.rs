@@ -23,6 +23,7 @@ pub struct CodeGen<'a> {
     pub ids_to_properties: Vec<Property<'a>>,
     pub properties_to_collect: HashSet<Vec<&'a str>>,
     pub return_action: Return<'a>,
+    #[serde(skip_serializing)]
     property_map: HashMap<&'static str, Vec<&'static str>>,
 }
 
