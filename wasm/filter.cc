@@ -159,9 +159,14 @@ void BidiContext::onResponseHeadersInbound() {
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
   std::string value;
-  if (getValue({"node", "metadata", "WORKLOAD_NAME"}, &value)) {
+  
+  if (getValue({
+      "service_name",
+  }, &value)) {
     std::string result = std::string(root_->getWorkloadName());
-    for (auto p : {"node", "metadata", "WORKLOAD_NAME"}) {
+    for (auto p : {
+        "service_name",
+    }) {
       result += "." + std::string(p);
     }
     result += "==";
@@ -201,7 +206,7 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-      "c", "b", "a", "d", 
+      "c", "a", "d", "b", 
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -219,6 +224,22 @@ void BidiContext::onResponseHeadersInbound() {
     trace_graph_t target = generate_trace_graph_from_headers(paths_joined, properties_joined);
 
     auto mapping = get_sub_graph_mapping(pattern, target);
+    if (mapping == nullptr || mapping->find("a") == mapping->end()) {
+        LOG_WARN("No mapping found");
+        return;
+    }
+
+    const Node* node_ptr = get_node_with_id(target, mapping->at("a"));
+    if (node_ptr == nullptr || node_ptr->properties.find({
+        "service_name", 
+    }) == node_ptr->properties.end()) {
+        LOG_WARN("no node found");
+        return;
+    }
+
+    LOG_WARN(node_ptr->properties.at({
+        "service_name", 
+    }));
   }
 }
 

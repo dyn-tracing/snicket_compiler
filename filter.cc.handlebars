@@ -159,9 +159,14 @@ void BidiContext::onResponseHeadersInbound() {
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
   std::string value;
-  if (getValue({"node", "metadata", "WORKLOAD_NAME"}, &value)) {
+  {{#each properties_to_collect}}
+  if (getValue({
+      {{#each this}}"{{this}}",{{/each}}
+  }, &value)) {
     std::string result = std::string(root_->getWorkloadName());
-    for (auto p : {"node", "metadata", "WORKLOAD_NAME"}) {
+    for (auto p : {
+        {{#each this}}"{{this}}",{{/each}}
+    }) {
       result += "." + std::string(p);
     }
     result += "==";
@@ -170,7 +175,7 @@ void BidiContext::onResponseHeadersInbound() {
     properties.push_back(result);
   } else {
     LOG_WARN("failed to get property");
-  }
+  }{{/each}}
 
   LOG_WARN("number of properties collected " +
            std::to_string(properties.size()));
@@ -209,13 +214,29 @@ void BidiContext::onResponseHeadersInbound() {
     };
 
     std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
-    {{#each properties}}ids_to_properties["{{this.id}}"][{ {{#each this.paths}}"{{this}}",{{/each}} }] = "{{this.value}}";
+    {{#each ids_to_properties}}ids_to_properties["{{this.id}}"][{ {{#each this.paths}}"{{this}}",{{/each}} }] = "{{this.value}}";
     {{/each}}
 
     trace_graph_t pattern = generate_trace_graph(vertices, edges, ids_to_properties);
     trace_graph_t target = generate_trace_graph_from_headers(paths_joined, properties_joined);
 
     auto mapping = get_sub_graph_mapping(pattern, target);
+    if (mapping == nullptr || mapping->find("{{return_action.id}}") == mapping->end()) {
+        LOG_WARN("No mapping found");
+        return;
+    }
+
+    const Node* node_ptr = get_node_with_id(target, mapping->at("{{return_action.id}}"));
+    if (node_ptr == nullptr || node_ptr->properties.find({
+        {{#each return_action.paths}}"{{this}}", {{/each}}
+    }) == node_ptr->properties.end()) {
+        LOG_WARN("no node found");
+        return;
+    }
+
+    LOG_WARN(node_ptr->properties.at({
+        {{#each return_action.paths}}"{{this}}", {{/each}}
+    }));
   }
 }
 

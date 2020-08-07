@@ -10,12 +10,19 @@ pub struct Property<'a> {
     pub value: String,
 }
 
+#[derive(Default, Serialize, PartialEq, Eq, Debug)]
+pub struct Return<'a> {
+    pub id: &'a str,
+    pub paths: Vec<&'a str>,
+}
+
 #[derive(Default, Serialize)]
 pub struct CodeGen<'a> {
     pub vertices: HashSet<&'a str>,
     pub edges: Vec<(&'a str, &'a str)>,
-    pub properties: Vec<Property<'a>>,
-    pub return_action: Vec<&'a str>,
+    pub ids_to_properties: Vec<Property<'a>>,
+    pub properties_to_collect: HashSet<Vec<&'a str>>,
+    pub return_action: Return<'a>,
 }
 
 impl<'a> CodeGen<'a> {
@@ -47,7 +54,9 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
         let property_paths: Vec<&'a str> = paths.iter().map(|id| id.id_name).collect();
         let value_str = value.to_string();
 
-        self.properties.push(Property {
+        self.properties_to_collect.insert(property_paths.clone());
+
+        self.ids_to_properties.push(Property {
             id: vertex_id,
             paths: property_paths,
             value: value_str,
@@ -56,10 +65,14 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
 
     fn visit_action(&mut self, action: &'a Action) {
         let Action::Property(id, p) = action;
-        self.return_action.push(id.id_name);
-        for i in p {
-            self.return_action.push(i.id_name);
-        }
+
+        self.properties_to_collect
+            .insert(p.iter().map(|id| id.id_name).collect());
+
+        self.return_action = Return {
+            id: id.id_name,
+            paths: p.iter().map(|id| id.id_name).collect(),
+        };
     }
 }
 
@@ -82,7 +95,7 @@ mod tests {
 
         assert_eq!(code_gen.vertices, ["a", "b", "c"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("a", "b"), ("b", "c")]);
-        assert!(code_gen.properties.is_empty());
+        assert!(code_gen.ids_to_properties.is_empty());
     }
 
     #[test]
@@ -96,7 +109,7 @@ mod tests {
 
         assert_eq!(code_gen.vertices, ["a", "b", "c"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("b", "c"), ("a", "b")]);
-        assert!(code_gen.properties.is_empty());
+        assert!(code_gen.ids_to_properties.is_empty());
     }
 
     #[test]
@@ -113,7 +126,7 @@ mod tests {
             ["a", "b", "c", "d"].iter().cloned().collect()
         );
         assert_eq!(code_gen.edges, vec![("b", "c"), ("a", "b"), ("a", "d")]);
-        assert!(code_gen.properties.is_empty());
+        assert!(code_gen.ids_to_properties.is_empty());
     }
 
     #[test]
@@ -127,14 +140,20 @@ mod tests {
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
-            code_gen.properties,
+            code_gen.ids_to_properties,
             vec![Property {
                 id: "n",
                 paths: vec!["x"],
                 value: String::from("k"),
             }]
         );
-        assert_eq!(code_gen.return_action, vec!["n", "x"]);
+        assert_eq!(
+            code_gen.return_action,
+            Return {
+                id: "n",
+                paths: vec!["x"]
+            }
+        );
     }
 
     #[test]
@@ -147,6 +166,43 @@ mod tests {
 
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
-        assert_eq!(code_gen.return_action, vec!["n", "x"]);
+        assert_eq!(
+            code_gen.return_action,
+            Return {
+                id: "n",
+                paths: vec!["x"]
+            }
+        );
+    }
+
+    #[test]
+    fn test_codegen_multiple_properties_to_collect() {
+        let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, WHERE n.x ==k, RETURN n.y,");
+        let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
+        let parse_tree = parser::parse_prog(&mut token_iter);
+        let mut code_gen = CodeGen::new();
+        code_gen.visit_prog(&parse_tree);
+
+        assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
+        assert_eq!(code_gen.edges, vec![("n", "m")]);
+        assert_eq!(
+            code_gen.ids_to_properties,
+            vec![Property {
+                id: "n",
+                paths: vec!["x"],
+                value: String::from("k"),
+            }]
+        );
+        assert_eq!(
+            code_gen.properties_to_collect,
+            [vec!["x",], vec!["y",],].iter().cloned().collect()
+        );
+        assert_eq!(
+            code_gen.return_action,
+            Return {
+                id: "n",
+                paths: vec!["y"]
+            }
+        );
     }
 }
