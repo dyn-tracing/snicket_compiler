@@ -1,11 +1,8 @@
 extern crate dyntracing;
 extern crate handlebars;
-extern crate protobuf;
 extern crate serde;
 
-use dyntracing::{code_gen, lexer, parser, tree_fold::TreeFold};
-use handlebars::Handlebars;
-use protobuf::Message;
+use dyntracing::{code_gen, lexer, parser};
 use serde::Serialize;
 use std::fs::File;
 use std::io::prelude::*;
@@ -46,39 +43,39 @@ fn main() {
                     RETURN a.service_name,";
     let tokens = lexer::get_tokens(query);
     let mut token_iter = tokens.iter().peekable();
-    let parse_tree = parser::parse_prog(&mut token_iter);
+    let _parse_tree = parser::parse_prog(&mut token_iter);
 
-    let mut code_gen = code_gen::CodeGen::new();
-    code_gen.visit_prog(&parse_tree);
+    let _code_gen = code_gen::CodeGen::new();
+    // code_gen.visit_prog(&parse_tree);
 
-    assert!(code_gen.nodes.len() == 1, "only support tree pattern.");
-    let mut root_id = "";
-    for (k, _v) in code_gen.nodes.iter() {
-        root_id = k;
-    }
-    let root = code_gen.nodes.get(root_id).unwrap();
+    // assert!(code_gen.nodes.len() == 1, "only support tree pattern.");
+    // let mut root_id = "";
+    // for (k, _v) in code_gen.nodes.iter() {
+    //     root_id = k;
+    // }
+    // let root = code_gen.nodes.get(root_id).unwrap();
 
-    let proto_bytes = root.write_to_bytes().unwrap();
-    let proto_len = proto_bytes.len();
+    // let proto_bytes = root.write_to_bytes().unwrap();
+    // let proto_len = proto_bytes.len();
 
-    let data = HandlebarsData {
-        // NOTE: we assume that user knows the app/service which is the root of their service graph.
-        root: String::from("productpagev1"),
-        proto_len,
-        proto_bytes,
-        return_action: code_gen
-            .return_action
-            .into_iter()
-            .map(|x| x.to_string())
-            .collect(),
-    };
+    // let data = HandlebarsData {
+    //     // NOTE: we assume that user knows the app/service which is the root of their service graph.
+    //     root: String::from("productpagev1"),
+    //     proto_len,
+    //     proto_bytes,
+    //     return_action: code_gen
+    //         .return_action
+    //         .into_iter()
+    //         .map(|x| x.to_string())
+    //         .collect(),
+    // };
 
-    let handlebars = Handlebars::new();
+    // let handlebars = Handlebars::new();
 
-    let output = handlebars
-        .render_template(&template_str, &data)
-        .expect("handlebar render failed");
+    // let output = handlebars
+    //     .render_template(&template_str, &data)
+    //     .expect("handlebar render failed");
 
-    let mut file = File::create("./wasm/filter.cc").expect("file create failed.");
-    file.write_all(output.as_bytes()).expect("write failed");
+    // let mut file = File::create("./wasm/filter.cc").expect("file create failed.");
+    // file.write_all(output.as_bytes()).expect("write failed");
 }

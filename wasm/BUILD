@@ -1,18 +1,5 @@
-load("@rules_proto//proto:defs.bzl", "proto_library")
 load("//bazel/wasm:wasm.bzl", "wasm_cc_binary")
-load("@rules_cc//cc:defs.bzl", "cc_library", "cc_proto_library", "cc_test")
-
-proto_library(
-    name = "treenode_proto",
-    srcs = [
-        "treenode.proto",
-    ],
-)
-
-cc_proto_library(
-    name = "treenode_cc_proto",
-    deps = [":treenode_proto"],
-)
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 wasm_cc_binary(
     name = "filter.wasm",
