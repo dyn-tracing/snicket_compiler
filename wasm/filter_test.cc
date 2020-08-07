@@ -76,3 +76,12 @@ TEST(FilterTest, SplitToSet) {
   std::set<std::string> words{it, {}};
   EXPECT_THAT(words, testing::UnorderedElementsAre("a-b", "a-c", "a-d"));
 }
+
+TEST(FilterTest, InitializerList) {
+  std::set<std::string> vertices = {"a", "b", "c"};
+  std::vector<std::pair<std::string, std::string>> edges = {{"a", "b"},
+                                                            {"b", "c"}};
+
+  std::map<std::string, std::map<std::vector<std::string>, std::string>>
+      ids_to_properties = {{"a", {{{"x"}, "y"}}}, {"b", {{{"z", "w"}, "123"}}}};
+}

@@ -3,13 +3,9 @@ name = "dyntracing"
 version = "0.1.0"
 authors = ["Anirudh Sivaraman <sk.anirudh@gmail.com>"]
 
-[build-dependencies]
-protobuf-codegen-pure = "2.*.*"
-
 [dependencies]
 handlebars = "3.1.0"
 lazy_static = "1.4.0"
-protobuf = "2.*.*"
 regex = "0.2.2"
 serde = { version = "1.0", features = ["derive"] }
 
