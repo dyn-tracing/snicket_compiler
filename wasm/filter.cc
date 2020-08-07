@@ -198,6 +198,21 @@ void BidiContext::onResponseHeadersInbound() {
     // TODO: Construct TreeNode graph using paths and properties returned
     // and check whether the query is subgraph isomorphic to the graph
     // generated from request trace.
+
+    std::set<std::string> vertices = {
+      "c", "a", "d", "b",
+    };
+
+    std::vector<std::pair<std::string, std::string>> edges = {
+         { "a", "b",  },  { "b", "c",  },  { "a", "d",  },
+    };
+
+    std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
+    ids_to_properties["a"][{ "service_name", }] = "productpagev1";
+    ids_to_properties["b"][{ "service_name", }] = "reviewsv2";
+    ids_to_properties["c"][{ "service_name", }] = "ratingsv1";
+    ids_to_properties["d"][{ "service_name", }] = "detailsv1";
+
   }
 }
 

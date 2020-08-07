@@ -83,5 +83,7 @@ TEST(FilterTest, InitializerList) {
                                                             {"b", "c"}};
 
   std::map<std::string, std::map<std::vector<std::string>, std::string>>
-      ids_to_properties = {{"a", {{{"x"}, "y"}}}, {"b", {{{"z", "w"}, "123"}}}};
+      ids_to_properties;
+  ids_to_properties["a"][{"x"}] = "y";
+  ids_to_properties["b"][{"z", "w"}] = "123";
 }

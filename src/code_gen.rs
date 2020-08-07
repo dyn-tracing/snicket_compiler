@@ -1,12 +1,20 @@
 use grammar::*;
-use std::collections::{HashMap, HashSet};
+use serde::Serialize;
+use std::collections::HashSet;
 use tree_fold::TreeFold;
 
-#[derive(Default)]
+#[derive(Default, Serialize, PartialEq, Eq, Debug)]
+pub struct Property<'a> {
+    pub id: &'a str,
+    pub paths: Vec<&'a str>,
+    pub value: String,
+}
+
+#[derive(Default, Serialize)]
 pub struct CodeGen<'a> {
     pub vertices: HashSet<&'a str>,
     pub edges: Vec<(&'a str, &'a str)>,
-    pub properties: HashMap<&'a str, HashMap<Vec<&'a str>, String>>,
+    pub properties: Vec<Property<'a>>,
     pub return_action: Vec<&'a str>,
 }
 
@@ -27,7 +35,6 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
             Relationship::Path(_) => panic!("TODO: support EDGE relatipnship type"),
         };
 
-        println!("hello");
         self.vertices.insert(src_id);
         self.vertices.insert(dst_id);
         self.edges.push((src_id, dst_id));
@@ -40,10 +47,11 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
         let property_paths: Vec<&'a str> = paths.iter().map(|id| id.id_name).collect();
         let value_str = value.to_string();
 
-        self.properties
-            .entry(vertex_id)
-            .or_default()
-            .insert(property_paths, value_str);
+        self.properties.push(Property {
+            id: vertex_id,
+            paths: property_paths,
+            value: value_str,
+        });
     }
 
     fn visit_action(&mut self, action: &'a Action) {
@@ -120,13 +128,11 @@ mod tests {
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.properties,
-            [(
-                "n",
-                [(vec!["x"], String::from("k"))].iter().cloned().collect()
-            )]
-            .iter()
-            .cloned()
-            .collect()
+            vec![Property {
+                id: "n",
+                paths: vec!["x"],
+                value: String::from("k"),
+            }]
         );
         assert_eq!(code_gen.return_action, vec!["n", "x"]);
     }
