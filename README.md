@@ -87,9 +87,21 @@ export GATEWAY_URL=$INGRESS_HOST:$INGRESS_PORT
 curl -s http://${GATEWAY_URL}/productpage | grep -o "<title>.*</title>"
 ```
 
-6. Generate `wasm/filter.cc` file by running `cargo run`
+6. Deploy storage-suptream
 
-7. Build WASME
+```
+kubectl apply -f wasm/storage_upstream.yaml
+```
+
+7. Configure storage upstream cluster in productpage service
+
+```
+kubectl apply -f wasm/productpage-cluster.yaml
+```
+
+8. Generate `wasm/filter.cc` file by running `cargo run`
+
+9. Build WASME
    We use [wasme](https://github.com/solo-io/wasme) to build, push and deploy
    our WASM filter.
 
@@ -104,8 +116,8 @@ cd _output
 export PATH=$PWD:$PATH
 ```
 
-7. Build and deploy Filter
-   Install bazel https://docs.bazel.build/versions/master/install.html#installing-bazel
+10. Build and deploy Filter
+    Install bazel https://docs.bazel.build/versions/master/install.html#installing-bazel
 
 ```
 cd wasm
@@ -132,4 +144,10 @@ Deploy the filter
 
 ```
 wasme deploy istio webassemblyhub.io/<your_username>/<filter_name>:<tag> --id=<set an appropriate id> --namespace=default
+```
+
+11. Make few requests and check contents in storage-upstream
+
+```
+kubectl exec -it $(kubectl get pod -l app=ratings -o jsonpath='{.items[0].metadata.name}') -c ratings -- curl -v storage-upstream:8080/list
 ```
