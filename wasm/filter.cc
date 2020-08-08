@@ -206,7 +206,7 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-      "c", "d", "b", "a",
+      "c", "a", "b", "d",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -237,9 +237,31 @@ void BidiContext::onResponseHeadersInbound() {
         return;
     }
 
-    LOG_WARN(node_ptr->properties.at({
+    auto to_store = node_ptr->properties.at({
         "node", "metadata", "WORKLOAD_NAME",
-    }));
+    });
+
+    LOG_WARN("Value to store: " + to_store);
+
+    auto context_id = id();
+    auto callback = [context_id](uint32_t, size_t body_size, uint32_t) {
+      getContext(context_id)->setEffectiveContext();
+      auto body =
+          getBufferBytes(BufferType::HttpCallResponseBody, 0, body_size);
+      LOG_WARN(std::string(body->view()));
+    };
+
+    auto result = root()->httpCall("storage-upstream",
+                                   { {":method", "GET"},
+                                    {":path", "/store"},
+                                    {":authority", "storage-upstream"},
+                                    {"key", b3_trace_id_},
+                                    {"value", to_store} },
+                                   "", {}, 1000, callback);
+    if (result != WasmResult::Ok) {
+      LOG_WARN("Failed to make a call to storage-upstream: " +
+               toString(result));
+    }
   }
 }
 
