@@ -89,8 +89,6 @@ struct vf2_get_first_mapping_callback {
       std::string src_id = boost::get(&Node::id, graph1_, v);
       std::string dst_id = boost::get(&Node::id, graph2_, boost::get(f, v));
 
-      std::cout << src_id << " " << dst_id << std::endl;
-
       mapping_->insert({src_id, dst_id});
     }
 
