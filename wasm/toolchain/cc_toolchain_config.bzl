@@ -1,3 +1,18 @@
+# Copyright 2019 Solo.io, Inc.
+# Copyright 2020 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 load(
     "@bazel_tools//tools/cpp:cc_toolchain_config_lib.bzl",
     "feature",
@@ -74,6 +89,63 @@ def _impl(ctx):
         ],
     )
 
+    cxx17_feature = feature(
+        name = "c++17",
+        enabled = True,
+        flag_sets = [
+            flag_set(
+                actions = [ACTION_NAMES.cpp_compile],
+                flag_groups = [flag_group(flags = ["-std=c++17"])],
+            ),
+        ],
+    )
+
+    no_canonical_prefixes_feature = feature(
+        name = "no-canonical-prefixes",
+        enabled = True,
+        flag_sets = [
+            flag_set(
+                actions = [
+                    ACTION_NAMES.c_compile,
+                    ACTION_NAMES.cpp_compile,
+                    ACTION_NAMES.cpp_link_executable,
+                    ACTION_NAMES.cpp_link_dynamic_library,
+                    ACTION_NAMES.cpp_link_nodeps_dynamic_library,
+                ],
+                flag_groups = [
+                    flag_group(
+                        flags = [
+                            "-no-canonical-prefixes",
+                        ],
+                    ),
+                ],
+            ),
+        ],
+    )
+
+    opt_feature = feature(
+        name = "opt",
+        enabled = True,
+        flag_sets = [
+            flag_set(
+                actions = [ACTION_NAMES.c_compile, ACTION_NAMES.cpp_compile],
+                flag_groups = [
+                    flag_group(
+                        flags = ["-O3", "-ffunction-sections", "-fdata-sections", "--llvm-lto", "1", "-flto"],
+                    ),
+                ],
+            ),
+            flag_set(
+                actions = [
+                    ACTION_NAMES.cpp_link_dynamic_library,
+                    ACTION_NAMES.cpp_link_nodeps_dynamic_library,
+                    ACTION_NAMES.cpp_link_executable,
+                ],
+                flag_groups = [flag_group(flags = ["-O3", "-Wl,--gc-sections", "--llvm-lto", "1", "-flto"])],
+            ),
+        ],
+    )
+
     return cc_common.create_cc_toolchain_config_info(
         ctx = ctx,
         toolchain_identifier = "wasm-toolchain",
@@ -92,7 +164,7 @@ def _impl(ctx):
             "external/emscripten_toolchain/upstream/emscripten/system/include/libcxx",
             "external/emscripten_toolchain/upstream/emscripten/system/include/libc",
         ],
-        # features = [toolchain_include_directories_feature],
+        features = [cxx17_feature, no_canonical_prefixes_feature, opt_feature],
     )
 
 cc_toolchain_config = rule(
