@@ -8,7 +8,7 @@ wasm_cc_binary(
     ],
     deps = [
         ":graph_utils",
-        ":str_utils",
+        "@com_google_absl//absl/strings",
         "@envoy_wasm_api//:proxy_wasm_intrinsics",
     ],
 )
@@ -25,23 +25,13 @@ cc_test(
     ],
 )
 
-cc_library(
-    name = "str_utils",
-    srcs = [
-        "str_utils.cc",
-    ],
-    hdrs = [
-        "str_utils.h",
-    ],
-)
-
 cc_test(
     name = "str_utils_test",
     srcs = [
         "str_utils_test.cc",
     ],
     deps = [
-        ":str_utils",
+        "@com_google_absl//absl/strings",
         "@gtest",
         "@gtest//:gtest_main",
     ],
@@ -56,8 +46,8 @@ cc_library(
         "graph_utils.h",
     ],
     deps = [
-        ":str_utils",
         "@boost//:graph",
+        "@com_google_absl//absl/strings",
     ],
 )
 

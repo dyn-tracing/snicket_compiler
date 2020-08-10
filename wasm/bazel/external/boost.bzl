@@ -69,4 +69,3 @@ def boost_library(
         visibility = visibility,
         deps = deps,
     )
-
