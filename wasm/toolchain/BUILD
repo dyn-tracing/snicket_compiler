@@ -5,12 +5,12 @@ load(":cc_toolchain_config.bzl", "cc_toolchain_config")
 cc_toolchain_suite(
     name = "emscripten",
     toolchains = {
-        "wasm": ":wasm_toolchain",
+        "wasm32": ":wasm_toolchain",
     },
 )
 
 filegroup(name = "empty")
- 
+
 filegroup(
   name = "emscripten_cache_content",
   srcs = glob(["tmp/emscripten_cache/**/*"]),

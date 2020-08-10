@@ -78,14 +78,14 @@ def _impl(ctx):
         toolchain_identifier = "wasm-toolchain",
         host_system_name = "i686-unknown-linux-gnu",
         target_system_name = "wasm32-unknown-emscripten",
-        target_cpu = "wasm",
+        target_cpu = "wasm32",
         target_libc = "unknown",
         compiler = "emscripten",
         abi_version = "unknown",
         abi_libc_version = "unknown",
         tool_paths = tool_paths,
         # we don't need to use features, as emcc already adds the directories.
-        # we just need to include them here so that bazel doesn't complain on 
+        # we just need to include them here so that bazel doesn't complain on
         # "this rule is missing dependency declarations for the following files included".
         cxx_builtin_include_directories = ["external/emscripten_toolchain/upstream/emscripten/system/include/libcxx",
         "external/emscripten_toolchain/upstream/emscripten/system/include/libc",
