@@ -33,6 +33,7 @@ fn main() {
     let parse_tree = parser::parse_prog(&mut token_iter);
 
     let mut code_gen = code_gen::CodeGen::new();
+    code_gen.root_id = "productpagev1";
     code_gen.visit_prog(&parse_tree);
 
     let handlebars = Handlebars::new();

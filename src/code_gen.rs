@@ -18,6 +18,7 @@ pub struct Return<'a> {
 
 #[derive(Default, Serialize)]
 pub struct CodeGen<'a> {
+    pub root_id: &'a str,
     pub vertices: HashSet<&'a str>,
     pub edges: Vec<(&'a str, &'a str)>,
     pub ids_to_properties: Vec<Property<'a>>,
