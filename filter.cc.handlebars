@@ -6,10 +6,11 @@
 #include <string>
 #include <unordered_map>
 
+#include "absl/strings/str_join.h"
+#include "absl/strings/str_split.h"
 #include "proxy_wasm_intrinsics.h"
 
 #include "graph_utils.h"
-#include "str_utils.h"
 
 // TrafficDirection is a mirror of envoy xDS traffic direction.
 // As defined in istio/proxy/extensions/common/context.h
@@ -133,7 +134,8 @@ void BidiContext::onResponseHeadersInbound() {
 
     // Multiple paths could exist separated by commas.
     // split string using ','
-    std::vector<std::string> paths = str_split(header_value, ",");
+    std::vector<std::string> paths =
+        absl::StrSplit(header_value, ",", absl::SkipEmpty());
 
     // Prepend current workload name to paths.
     for (auto &w : paths) {
@@ -141,7 +143,7 @@ void BidiContext::onResponseHeadersInbound() {
     }
 
     // Join them all to a single string.
-    paths_joined = str_join(paths, ",");
+    paths_joined = absl::StrJoin(paths, ",");
   }
 
   // When this service is a leaf node
@@ -180,7 +182,7 @@ void BidiContext::onResponseHeadersInbound() {
   LOG_WARN("number of properties collected " +
            std::to_string(properties.size()));
 
-  properties_joined = str_join(properties, ",");
+  properties_joined = absl::StrJoin(properties, ",");
 
   LOG_WARN("properties_joined:" + properties_joined);
 
@@ -217,21 +219,23 @@ void BidiContext::onResponseHeadersInbound() {
     {{#each ids_to_properties}}ids_to_properties["{{this.id}}"][{ {{#each this.paths}}"{{this}}",{{/each}} }] = "{{this.value}}";
     {{/each}}
 
-    trace_graph_t pattern = generate_trace_graph(vertices, edges, ids_to_properties);
-    trace_graph_t target = generate_trace_graph_from_headers(paths_joined, properties_joined);
+    trace_graph_t pattern =
+        generate_trace_graph(vertices, edges, ids_to_properties);
+    trace_graph_t target =
+        generate_trace_graph_from_headers(paths_joined, properties_joined);
 
     auto mapping = get_sub_graph_mapping(pattern, target);
     if (mapping == nullptr || mapping->find("{{return_action.id}}") == mapping->end()) {
-        LOG_WARN("No mapping found");
-        return;
+      LOG_WARN("No mapping found");
+      return;
     }
 
     const Node* node_ptr = get_node_with_id(target, mapping->at("{{return_action.id}}"));
     if (node_ptr == nullptr || node_ptr->properties.find({
         {{#each return_action.paths}}"{{this}}", {{/each}}
     }) == node_ptr->properties.end()) {
-        LOG_WARN("no node found");
-        return;
+      LOG_WARN("no node found");
+      return;
     }
 
     auto to_store = node_ptr->properties.at({
