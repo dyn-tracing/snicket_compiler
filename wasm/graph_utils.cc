@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/strings/str_split.h"
 #include "graph_utils.h"
 
 trace_graph_t generate_trace_graph(
@@ -39,13 +40,15 @@ trace_graph_t generate_trace_graph(
 
 trace_graph_t generate_trace_graph_from_headers(std::string paths_header,
                                                 std::string properties_header) {
-  std::vector<std::string> paths = str_split(paths_header, ",", true);
+  std::vector<std::string> paths =
+      absl::StrSplit(paths_header, ",", absl::SkipEmpty());
 
   std::set<std::string> vertices;
 
   std::vector<std::pair<std::string, std::string>> edges;
   for (const std::string &path : paths) {
-    std::vector<std::string> vertices_vec = str_split(path, "-");
+    std::vector<std::string> vertices_vec =
+        absl::StrSplit(path, "-", absl::SkipEmpty());
     for (int i = 0; i < vertices_vec.size(); ++i) {
       vertices.insert(vertices_vec[i]);
       if (i + 1 < vertices_vec.size()) {
@@ -56,11 +59,12 @@ trace_graph_t generate_trace_graph_from_headers(std::string paths_header,
 
   std::map<std::string, std::map<std::vector<std::string>, std::string>>
       vertices_to_properties;
-  std::vector<std::string> properties = str_split(properties_header, ",", true);
+  std::vector<std::string> properties =
+      absl::StrSplit(properties_header, ",", absl::SkipEmpty());
   for (const auto &property : properties) {
     // Given a.x.y.z == 123, the vector will have a, x, y, z, 123
     std::vector<std::string> property_split =
-        str_split(property, R"([.]|(==)|(\s+))", /*filter_empty=*/true);
+        absl::StrSplit(property, absl::ByAnyChar(".="), absl::SkipEmpty());
     const auto &vertex_id = property_split.front();
     const auto &value = property_split.back();
 

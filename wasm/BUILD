@@ -9,6 +9,7 @@ wasm_cc_binary(
     deps = [
         ":graph_utils",
         ":str_utils",
+        "@com_google_absl//absl/strings",
         "@envoy_wasm_api//:proxy_wasm_intrinsics",
     ],
 )
@@ -42,6 +43,7 @@ cc_test(
     ],
     deps = [
         ":str_utils",
+        "@com_google_absl//absl/strings",
         "@gtest",
         "@gtest//:gtest_main",
     ],
@@ -58,6 +60,7 @@ cc_library(
     deps = [
         ":str_utils",
         "@boost//:graph",
+        "@com_google_absl//absl/strings",
     ],
 )
 
