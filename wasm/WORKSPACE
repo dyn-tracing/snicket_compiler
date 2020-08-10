@@ -85,3 +85,11 @@ http_archive(
         "https://github.com/emscripten-ports/boost/releases/download/boost-1.70.0/boost-headers-1.70.0.zip",
     ],
 )
+
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+http_archive(
+    name = "com_google_absl",
+    strip_prefix = "abseil-cpp-ce4bc927755fdf0ed03d679d9c7fa041175bb3cb",
+    urls = ["https://github.com/abseil/abseil-cpp/archive/ce4bc927755fdf0ed03d679d9c7fa041175bb3cb.zip"],
+)
