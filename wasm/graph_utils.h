@@ -10,9 +10,6 @@
 
 #include "boost/graph/directed_graph.hpp"
 #include "boost/graph/vf2_sub_graph_iso.hpp"
-
-#include "str_utils.h"
-
 struct Node {
   // ID of the node, either specified by user query, or service_name from trace.
   std::string id;

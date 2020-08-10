@@ -6,11 +6,11 @@
 #include <string>
 #include <unordered_map>
 
+#include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 #include "proxy_wasm_intrinsics.h"
 
 #include "graph_utils.h"
-#include "str_utils.h"
 
 // TrafficDirection is a mirror of envoy xDS traffic direction.
 // As defined in istio/proxy/extensions/common/context.h
@@ -143,7 +143,7 @@ void BidiContext::onResponseHeadersInbound() {
     }
 
     // Join them all to a single string.
-    paths_joined = str_join(paths, ",");
+    paths_joined = absl::StrJoin(paths, ",");
   }
 
   // When this service is a leaf node
@@ -188,7 +188,7 @@ void BidiContext::onResponseHeadersInbound() {
   LOG_WARN("number of properties collected " +
            std::to_string(properties.size()));
 
-  properties_joined = str_join(properties, ",");
+  properties_joined = absl::StrJoin(properties, ",");
 
   LOG_WARN("properties_joined:" + properties_joined);
 

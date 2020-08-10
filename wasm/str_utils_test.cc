@@ -1,11 +1,10 @@
 #include <string_view>
 #include <vector>
 
+#include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-
-#include "str_utils.h"
 
 TEST(StrSplitTest, Simple) {
   EXPECT_THAT(absl::StrSplit("a-b-c,a-d,d-e", ","),
@@ -31,7 +30,7 @@ TEST(StrSplitTest, Empty) {
 }
 
 TEST(StrJoinTest, Inputs) {
-  EXPECT_EQ(str_join({"1", "2", "3"}, ","), "1,2,3");
-  EXPECT_EQ(str_join(std::vector<std::string_view>{"1", "2", "3"}, ","),
+  EXPECT_EQ(absl::StrJoin({"1", "2", "3"}, ","), "1,2,3");
+  EXPECT_EQ(absl::StrJoin(std::vector<std::string_view>{"1", "2", "3"}, ","),
             "1,2,3");
 }
