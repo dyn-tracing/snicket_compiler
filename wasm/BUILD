@@ -1,5 +1,5 @@
 load("//bazel/wasm:wasm.bzl", "wasm_cc_binary")
-load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 wasm_cc_binary(
     name = "filter.wasm",
@@ -60,5 +60,15 @@ cc_test(
         ":graph_utils",
         "@gtest",
         "@gtest//:gtest_main",
+    ],
+)
+
+cc_binary(
+    name = "dfs_example",
+    srcs = [
+        "dfs_example.cc",
+    ],
+    deps = [
+        "@boost//:graph",
     ],
 )
