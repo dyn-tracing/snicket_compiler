@@ -255,6 +255,9 @@ public:
   }
 
   std::vector<std::string> key_;
+  // Pointer needs to be passed in. When constructing a visitor using
+  // boost::visitor, the function takes a const reference. Any computation
+  // result must be stored at a memory location that outlives this object.
   int *max_;
 };
 
