@@ -234,3 +234,44 @@ TEST(GetSubGraphMappingTest, GetMappingAndProperty) {
   ASSERT_NE(node, nullptr);
   ASSERT_EQ(node->properties.at({"x"}), "y");
 }
+
+class dfs_max_value_visitor : public boost::default_dfs_visitor {
+public:
+  dfs_max_value_visitor(std::initializer_list<std::string_view> keys,
+                        int *max) {
+    key_ = {keys.begin(), keys.end()};
+    max_ = max;
+  }
+
+  template <typename Vertex, typename Graph>
+  void discover_vertex(Vertex u, const Graph &g) {
+    auto map = g[u].properties;
+
+    int value = std::atoi(map.at(key_).c_str());
+
+    if (value > *max_) {
+      *max_ = value;
+    }
+  }
+
+  std::vector<std::string> key_;
+  int *max_;
+};
+
+TEST(VisitorTest, FindNodeWithMaxValue) {
+  int max = INT_MIN;
+  dfs_max_value_visitor vis({"start_time"}, &max);
+  EXPECT_THAT(vis.key_, testing::ElementsAre("start_time"));
+
+  auto graph = generate_trace_graph_from_headers(
+      "a-b-c", "a.start_time==1,b.start_time==2,c.start_time==3");
+  EXPECT_EQ(graph.num_vertices(), 3);
+  EXPECT_EQ(graph.num_edges(), 2);
+
+  auto a = get_node_with_id(graph, "a");
+  EXPECT_EQ(a->properties.at(std::vector<std::string>{"start_time"}), "1");
+
+  boost::depth_first_search(graph, boost::visitor(vis));
+
+  EXPECT_EQ(*vis.max_, 3);
+}
