@@ -27,7 +27,7 @@ fn main() {
                             b.service_name == reviewsv2, \
                             c.service_name == ratingsv1, \
                             d.service_name == detailsv1, \
-                    RETURN a.service_name,";
+                    RETURN a.request_dur,";
     let tokens = lexer::get_tokens(query);
     let mut token_iter = tokens.iter().peekable();
     let parse_tree = parser::parse_prog(&mut token_iter);
