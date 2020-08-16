@@ -31,8 +31,9 @@ pub struct CodeGen<'a> {
 impl<'a> CodeGen<'a> {
     pub fn new() -> CodeGen<'a> {
         let mut property_map = HashMap::new();
+        // TODO: need to specify the type of value returned.
         property_map.insert("service_name", vec!["node", "metadata", "WORKLOAD_NAME"]);
-        property_map.insert("response_size", vec!["response", "size"]);
+        property_map.insert("response_size", vec!["response", "total_size"]);
 
         CodeGen {
             property_map,

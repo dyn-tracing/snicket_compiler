@@ -181,11 +181,11 @@ void BidiContext::onResponseHeadersInbound() {
 
   int64_t size;
   if (getValue({
-      "response","size",
+      "response","total_size",
   }, &size)) {
     std::string result = std::string(root_->getWorkloadName());
     for (auto p : {
-        "response","size",
+        "response","total_size",
     }) {
       result += "." + std::string(p);
     }
@@ -253,14 +253,14 @@ void BidiContext::onResponseHeadersInbound() {
 
     const Node* node_ptr = get_node_with_id(target, mapping->at("a"));
     if (node_ptr == nullptr || node_ptr->properties.find({
-        "response", "size",
+        "response", "total_size",
     }) == node_ptr->properties.end()) {
       LOG_WARN("no node found");
       return;
     }
 
     auto to_store = node_ptr->properties.at({
-        "response", "size",
+        "response", "total_size",
     });
 
     LOG_WARN("Value to store: " + to_store);
