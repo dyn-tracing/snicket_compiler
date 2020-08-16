@@ -32,7 +32,7 @@ impl<'a> CodeGen<'a> {
     pub fn new() -> CodeGen<'a> {
         let mut property_map = HashMap::new();
         property_map.insert("service_name", vec!["node", "metadata", "WORKLOAD_NAME"]);
-        property_map.insert("request_dur", vec!["request", "duration"]);
+        property_map.insert("request_size", vec!["request", "size"]);
 
         CodeGen {
             property_map,

@@ -163,11 +163,11 @@ void BidiContext::onResponseHeadersInbound() {
   std::string value;
   
   if (getValue({
-      "request","duration",
+      "node","metadata","WORKLOAD_NAME",
   }, &value)) {
     std::string result = std::string(root_->getWorkloadName());
     for (auto p : {
-        "request","duration",
+        "node","metadata","WORKLOAD_NAME",
     }) {
       result += "." + std::string(p);
     }
@@ -179,11 +179,11 @@ void BidiContext::onResponseHeadersInbound() {
     LOG_WARN("failed to get property");
   }
   if (getValue({
-      "node","metadata","WORKLOAD_NAME",
+      "request","size",
   }, &value)) {
     std::string result = std::string(root_->getWorkloadName());
     for (auto p : {
-        "node","metadata","WORKLOAD_NAME",
+        "request","size",
     }) {
       result += "." + std::string(p);
     }
@@ -224,7 +224,7 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-      "d", "b", "a", "c", 
+      "a", "c", "b", "d", 
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -251,14 +251,14 @@ void BidiContext::onResponseHeadersInbound() {
 
     const Node* node_ptr = get_node_with_id(target, mapping->at("a"));
     if (node_ptr == nullptr || node_ptr->properties.find({
-        "request", "duration", 
+        "request", "size", 
     }) == node_ptr->properties.end()) {
       LOG_WARN("no node found");
       return;
     }
 
     auto to_store = node_ptr->properties.at({
-        "request", "duration", 
+        "request", "size", 
     });
 
     LOG_WARN("Value to store: " + to_store);
