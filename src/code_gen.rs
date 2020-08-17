@@ -10,6 +10,12 @@ pub struct Property<'a> {
     pub value: String,
 }
 
+#[derive(Default, Serialize, PartialEq, Eq, Debug, Hash, Clone)]
+pub struct ToCollect<'a> {
+    pub typ: &'a str,
+    pub paths: Vec<&'a str>,
+}
+
 #[derive(Default, Serialize, PartialEq, Eq, Debug)]
 pub struct Return<'a> {
     pub id: &'a str,
@@ -22,18 +28,30 @@ pub struct CodeGen<'a> {
     pub vertices: HashSet<&'a str>,
     pub edges: Vec<(&'a str, &'a str)>,
     pub ids_to_properties: Vec<Property<'a>>,
-    pub properties_to_collect: HashSet<Vec<&'a str>>,
+    pub properties_to_collect: HashSet<ToCollect<'a>>,
     pub return_action: Return<'a>,
     #[serde(skip_serializing)]
-    property_map: HashMap<&'static str, Vec<&'static str>>,
+    property_map: HashMap<&'static str, ToCollect<'a>>,
 }
 
 impl<'a> CodeGen<'a> {
     pub fn new() -> CodeGen<'a> {
         let mut property_map = HashMap::new();
         // TODO: need to specify the type of value returned.
-        property_map.insert("service_name", vec!["node", "metadata", "WORKLOAD_NAME"]);
-        property_map.insert("response_size", vec!["response", "total_size"]);
+        property_map.insert(
+            "service_name",
+            ToCollect {
+                typ: "string",
+                paths: vec!["node", "metadata", "WORKLOAD_NAME"],
+            },
+        );
+        property_map.insert(
+            "response_size",
+            ToCollect {
+                typ: "int64_t",
+                paths: vec!["response", "total_size"],
+            },
+        );
 
         CodeGen {
             property_map,
@@ -42,7 +60,7 @@ impl<'a> CodeGen<'a> {
     }
 
     #[cfg(test)]
-    pub fn new_with_property_map(property_map: HashMap<&'static str, Vec<&'static str>>) -> Self {
+    pub fn new_with_property_map(property_map: HashMap<&'static str, ToCollect<'a>>) -> Self {
         CodeGen {
             property_map,
             ..Default::default()
@@ -70,14 +88,14 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
         let Filter::Property(id, p, value) = filter;
 
         let vertex_id = id.id_name;
-        let property_paths: Vec<&'a str> = self.property_map[p.id_name].clone();
+        let to_collect = &self.property_map[p.id_name];
         let value_str = value.to_string();
 
-        self.properties_to_collect.insert(property_paths.clone());
+        self.properties_to_collect.insert(to_collect.clone());
 
         self.ids_to_properties.push(Property {
             id: vertex_id,
-            paths: property_paths,
+            paths: to_collect.paths.clone(),
             value: value_str,
         });
     }
@@ -90,7 +108,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
 
         self.return_action = Return {
             id: id.id_name,
-            paths: self.property_map[p.id_name].clone(),
+            paths: self.property_map[p.id_name].paths.clone(),
         };
     }
 }
@@ -153,8 +171,18 @@ mod tests {
         let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, WHERE n.x ==k, RETURN n.x,");
         let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
         let parse_tree = parser::parse_prog(&mut token_iter);
-        let mut code_gen =
-            CodeGen::new_with_property_map([("x", vec!["x"])].iter().cloned().collect());
+        let mut code_gen = CodeGen::new_with_property_map(
+            [(
+                "x",
+                ToCollect {
+                    typ: "string",
+                    paths: vec!["x"],
+                },
+            )]
+            .iter()
+            .cloned()
+            .collect(),
+        );
         code_gen.visit_prog(&parse_tree);
 
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
@@ -181,8 +209,18 @@ mod tests {
         let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, RETURN n.x,");
         let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
         let parse_tree = parser::parse_prog(&mut token_iter);
-        let mut code_gen =
-            CodeGen::new_with_property_map([("x", vec!["x"])].iter().cloned().collect());
+        let mut code_gen = CodeGen::new_with_property_map(
+            [(
+                "x",
+                ToCollect {
+                    typ: "string",
+                    paths: vec!["x"],
+                },
+            )]
+            .iter()
+            .cloned()
+            .collect(),
+        );
 
         code_gen.visit_prog(&parse_tree);
 
@@ -203,10 +241,25 @@ mod tests {
         let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
         let parse_tree = parser::parse_prog(&mut token_iter);
         let mut code_gen = CodeGen::new_with_property_map(
-            [("x", vec!["x"]), ("y", vec!["y"])]
-                .iter()
-                .cloned()
-                .collect(),
+            [
+                (
+                    "x",
+                    ToCollect {
+                        typ: "string",
+                        paths: vec!["x"],
+                    },
+                ),
+                (
+                    "y",
+                    ToCollect {
+                        typ: "int64_t",
+                        paths: vec!["y"],
+                    },
+                ),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
         );
 
         code_gen.visit_prog(&parse_tree);
@@ -223,7 +276,19 @@ mod tests {
         );
         assert_eq!(
             code_gen.properties_to_collect,
-            [vec!["x",], vec!["y",],].iter().cloned().collect()
+            [
+                ToCollect {
+                    typ: "string",
+                    paths: vec!["x"],
+                },
+                ToCollect {
+                    typ: "int64_t",
+                    paths: vec!["y"],
+                },
+            ]
+            .iter()
+            .cloned()
+            .collect()
         );
         assert_eq!(
             code_gen.return_action,
