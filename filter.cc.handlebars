@@ -160,23 +160,24 @@ void BidiContext::onResponseHeadersInbound() {
 
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
-  std::string value;
-  {{#each properties_to_collect}}
+  {{#each properties_to_collect}}{
+  {{this.typ}} value;
   if (getValue({
-      {{#each this}}"{{this}}",{{/each}}
+      {{#each this.paths}}"{{this}}",{{/each}}
   }, &value)) {
     std::string result = std::string(root_->getWorkloadName());
     for (auto p : {
-        {{#each this}}"{{this}}",{{/each}}
+        {{#each this.paths}}"{{this}}",{{/each}}
     }) {
       result += "." + std::string(p);
     }
     result += "==";
-    result += value;
+    {{#if (eq this.typ "int64_t")}}result += std::to_string(value);{{else}}result += value;{{/if}}
 
     properties.push_back(result);
   } else {
     LOG_WARN("failed to get property");
+  }
   }{{/each}}
 
   LOG_WARN("number of properties collected " +

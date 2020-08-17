@@ -39,33 +39,6 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
-class dfs_max_value_visitor : public boost::default_dfs_visitor {
-public:
-  dfs_max_value_visitor(std::initializer_list<std::string_view> keys,
-                        int *max) {
-    key_ = {keys.begin(), keys.end()};
-    max_ = max;
-  }
-
-  template <typename Vertex, typename Graph>
-  void discover_vertex(Vertex u, const Graph &g) {
-    auto map = g[u].properties;
-
-    int value = std::atoi(map.at(key_).c_str());
-    LOG_WARN(g[u].id + " " + std::to_string(value));
-
-    if (value > *max_) {
-      *max_ = value;
-    }
-  }
-
-  std::vector<std::string> key_;
-  // Pointer needs to be passed in. When constructing a visitor using
-  // boost::visitor, the function takes a const reference. Any computation
-  // result must be stored at a memory location that outlives this object.
-  int *max_;
-};
-
 class BidiRootContext : public RootContext {
 public:
   explicit BidiRootContext(uint32_t id, StringView root_id)
@@ -81,8 +54,6 @@ public:
   bool onConfigure(size_t /* configuration_size */) override;
 
   StringView getWorkloadName() { return workload_name_; }
-
-  std::vector<int64_t> data_;
 
 private:
   std::string workload_name_;
@@ -189,51 +160,53 @@ void BidiContext::onResponseHeadersInbound() {
 
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
-  std::string value;
+  {
+    std::string value;
+    if (getValue(
+            {
+                "node",
+                "metadata",
+                "WORKLOAD_NAME",
+            },
+            &value)) {
+      std::string result = std::string(root_->getWorkloadName());
+      for (auto p : {
+               "node",
+               "metadata",
+               "WORKLOAD_NAME",
+           }) {
+        result += "." + std::string(p);
+      }
+      result += "==";
+      result += value;
 
-  if (getValue(
-          {
-              "node",
-              "metadata",
-              "WORKLOAD_NAME",
-          },
-          &value)) {
-    std::string result = std::string(root_->getWorkloadName());
-    for (auto p : {
-             "node",
-             "metadata",
-             "WORKLOAD_NAME",
-         }) {
-      result += "." + std::string(p);
+      properties.push_back(result);
+    } else {
+      LOG_WARN("failed to get property");
     }
-    result += "==";
-    result += value;
-
-    properties.push_back(result);
-  } else {
-    LOG_WARN("failed to get property");
   }
+  {
+    int64_t value;
+    if (getValue(
+            {
+                "response",
+                "total_size",
+            },
+            &value)) {
+      std::string result = std::string(root_->getWorkloadName());
+      for (auto p : {
+               "response",
+               "total_size",
+           }) {
+        result += "." + std::string(p);
+      }
+      result += "==";
+      result += std::to_string(value);
 
-  int64_t size;
-  if (getValue(
-          {
-              "response",
-              "total_size",
-          },
-          &size)) {
-    std::string result = std::string(root_->getWorkloadName());
-    for (auto p : {
-             "response",
-             "total_size",
-         }) {
-      result += "." + std::string(p);
+      properties.push_back(result);
+    } else {
+      LOG_WARN("failed to get property");
     }
-    result += "==";
-    result += std::to_string(size);
-
-    properties.push_back(result);
-  } else {
-    LOG_WARN("failed to get property");
   }
 
   LOG_WARN("number of properties collected " +
@@ -265,10 +238,10 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-        "a",
         "c",
-        "b",
         "d",
+        "b",
+        "a",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -320,13 +293,19 @@ void BidiContext::onResponseHeadersInbound() {
       return;
     }
 
-    int max = INT_MIN;
-    dfs_max_value_visitor vis({"response", "total_size"}, &max);
-    boost::depth_first_search(target, boost::visitor(vis));
+    const Node *node_ptr = get_node_with_id(target, mapping->at("a"));
+    if (node_ptr == nullptr || node_ptr->properties.find({
+                                   "response",
+                                   "total_size",
+                               }) == node_ptr->properties.end()) {
+      LOG_WARN("no node found");
+      return;
+    }
 
-    root_->data_.push_back(max);
-    std::string to_store = std::to_string(
-        std::accumulate(root_->data_.begin(), root_->data_.end(), 0));
+    auto to_store = node_ptr->properties.at({
+        "response",
+        "total_size",
+    });
 
     LOG_WARN("Value to store: " + to_store);
 

@@ -41,7 +41,7 @@ impl<'a> CodeGen<'a> {
         property_map.insert(
             "service_name",
             ToCollect {
-                typ: "string",
+                typ: "std::string",
                 paths: vec!["node", "metadata", "WORKLOAD_NAME"],
             },
         );
