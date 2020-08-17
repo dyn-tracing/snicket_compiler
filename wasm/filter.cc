@@ -39,6 +39,33 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
+class dfs_max_value_visitor : public boost::default_dfs_visitor {
+public:
+  dfs_max_value_visitor(std::initializer_list<std::string_view> keys,
+                        int *max) {
+    key_ = {keys.begin(), keys.end()};
+    max_ = max;
+  }
+
+  template <typename Vertex, typename Graph>
+  void discover_vertex(Vertex u, const Graph &g) {
+    auto map = g[u].properties;
+
+    int value = std::atoi(map.at(key_).c_str());
+    LOG_WARN(g[u].id + " " + std::to_string(value));
+
+    if (value > *max_) {
+      *max_ = value;
+    }
+  }
+
+  std::vector<std::string> key_;
+  // Pointer needs to be passed in. When constructing a visitor using
+  // boost::visitor, the function takes a const reference. Any computation
+  // result must be stored at a memory location that outlives this object.
+  int *max_;
+};
+
 class BidiRootContext : public RootContext {
 public:
   explicit BidiRootContext(uint32_t id, StringView root_id)
@@ -251,17 +278,10 @@ void BidiContext::onResponseHeadersInbound() {
       return;
     }
 
-    const Node* node_ptr = get_node_with_id(target, mapping->at("a"));
-    if (node_ptr == nullptr || node_ptr->properties.find({
-        "response", "total_size",
-    }) == node_ptr->properties.end()) {
-      LOG_WARN("no node found");
-      return;
-    }
-
-    auto to_store = node_ptr->properties.at({
-        "response", "total_size",
-    });
+    int max = INT_MIN;
+    dfs_max_value_visitor vis({"response", "total_size"}, &max);
+    boost::depth_first_search(target, boost::visitor(vis));
+    std::string to_store = std::to_string(max);
 
     LOG_WARN("Value to store: " + to_store);
 
