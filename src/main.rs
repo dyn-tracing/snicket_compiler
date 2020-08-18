@@ -33,6 +33,41 @@ fn main() {
     let parse_tree = parser::parse_prog(&mut token_iter);
 
     let mut code_gen = code_gen::CodeGen::new();
+
+    code_gen.udf_table.insert(
+        "dfs_max_value_visitor",
+        code_gen::Udf {
+            udf_type: code_gen::UdfType::Scalar,
+            id: "dfs_max_value_visitor",
+            func_impl: r#"
+            class dfs_max_value_visitor : public boost::default_dfs_visitor {
+                public:
+                  dfs_max_value_visitor(std::initializer_list<std::string_view> keys,
+                                        int *max) {
+                    key_ = {keys.begin(), keys.end()};
+                    max_ = max;
+                  }
+
+                  template <typename Vertex, typename Graph>
+                  void discover_vertex(Vertex u, const Graph &g) {
+                    auto map = g[u].properties;
+
+                    int value = std::atoi(map.at(key_).c_str());
+                    LOG_WARN(g[u].id + " " + std::to_string(value));
+
+                    if (value > *max_) {
+                      *max_ = value;
+                    }
+                  }
+
+                  std::vector<std::string> key_;
+                  int *max_;
+                };
+            "#,
+            return_type: "int",
+            arg_properties: vec!["response_size"],
+        },
+    );
     code_gen.root_id = "productpagev1";
     code_gen.visit_prog(&parse_tree);
 

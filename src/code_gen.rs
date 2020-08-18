@@ -17,9 +17,43 @@ pub struct ToCollect<'a> {
 }
 
 #[derive(Default, Serialize, PartialEq, Eq, Debug)]
-pub struct Return<'a> {
+pub struct ReturnProperty<'a> {
     pub id: &'a str,
     pub paths: Vec<&'a str>,
+}
+
+#[derive(Serialize, PartialEq, Eq, Debug, Clone)]
+pub enum UdfType {
+    Scalar,
+    Aggregation,
+}
+
+impl Default for UdfType {
+    fn default() -> Self {
+        UdfType::Scalar
+    }
+}
+
+#[derive(Default, Serialize, PartialEq, Eq, Debug, Clone)]
+pub struct Udf<'a> {
+    pub udf_type: UdfType,
+    pub id: &'a str,
+    pub func_impl: &'a str,
+    pub return_type: &'a str,
+    pub arg_properties: Vec<&'static str>,
+}
+
+#[derive(Serialize, PartialEq, Eq, Debug)]
+pub enum Return<'a> {
+    Property(ReturnProperty<'a>),
+    CallScalarUdf(Udf<'a>),
+    None,
+}
+
+impl<'a> Default for Return<'a> {
+    fn default() -> Self {
+        Return::None
+    }
 }
 
 #[derive(Default, Serialize)]
@@ -29,9 +63,11 @@ pub struct CodeGen<'a> {
     pub edges: Vec<(&'a str, &'a str)>,
     pub ids_to_properties: Vec<Property<'a>>,
     pub properties_to_collect: HashSet<ToCollect<'a>>,
-    pub return_action: Return<'a>,
+    pub return_stmt: Return<'a>,
     #[serde(skip_serializing)]
     property_map: HashMap<&'static str, ToCollect<'a>>,
+    #[serde(skip_serializing)]
+    pub udf_table: HashMap<&'static str, Udf<'a>>,
 }
 
 impl<'a> CodeGen<'a> {
@@ -69,6 +105,19 @@ impl<'a> CodeGen<'a> {
 }
 
 impl<'a> TreeFold<'a> for CodeGen<'a> {
+    fn visit_prog(&mut self, prog: &'a Prog) {
+        self.visit_patterns(&prog.patterns);
+        self.visit_filters(&prog.filters);
+        self.visit_action(&prog.action);
+
+        for udf in self.udf_table.values() {
+            for property in udf.arg_properties.iter() {
+                self.properties_to_collect
+                    .insert(self.property_map[property].clone());
+            }
+        }
+    }
+
     fn visit_pattern(&mut self, pattern: &'a Pattern) {
         let src_id = pattern.from_node.id_name;
         let dst_id = pattern.to_node.id_name;
@@ -101,15 +150,23 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
     }
 
     fn visit_action(&mut self, action: &'a Action) {
-        let Action::Property(id, p) = action;
+        match action {
+            Action::Property(id, p) => {
+                self.properties_to_collect
+                    .insert(self.property_map[p.id_name].clone());
 
-        self.properties_to_collect
-            .insert(self.property_map[p.id_name].clone());
-
-        self.return_action = Return {
-            id: id.id_name,
-            paths: self.property_map[p.id_name].paths.clone(),
-        };
+                self.return_stmt = Return::Property(ReturnProperty {
+                    id: id.id_name,
+                    paths: self.property_map[p.id_name].paths.clone(),
+                });
+            }
+            Action::None => {}
+            Action::CallUdf(id) => {
+                self.return_stmt = Return::CallScalarUdf(
+                    self.udf_table[id.id_name].clone()
+                )
+            }
+        }
     }
 }
 
@@ -196,11 +253,11 @@ mod tests {
             }]
         );
         assert_eq!(
-            code_gen.return_action,
-            Return {
+            code_gen.return_stmt,
+            Return::Property(ReturnProperty {
                 id: "n",
                 paths: vec!["x"]
-            }
+            })
         );
     }
 
@@ -227,11 +284,11 @@ mod tests {
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
-            code_gen.return_action,
-            Return {
+            code_gen.return_stmt,
+            Return::Property(ReturnProperty {
                 id: "n",
                 paths: vec!["x"]
-            }
+            })
         );
     }
 
@@ -291,11 +348,16 @@ mod tests {
             .collect()
         );
         assert_eq!(
-            code_gen.return_action,
-            Return {
+            code_gen.return_stmt,
+            Return::Property(ReturnProperty {
                 id: "n",
                 paths: vec!["y"]
-            }
+            })
         );
+    }
+
+    #[test]
+    fn test_codegen_udf() {
+
     }
 }

@@ -226,22 +226,33 @@ void BidiContext::onResponseHeadersInbound() {
         generate_trace_graph_from_headers(paths_joined, properties_joined);
 
     auto mapping = get_sub_graph_mapping(pattern, target);
-    if (mapping == nullptr || mapping->find("{{return_action.id}}") == mapping->end()) {
+    if (mapping == nullptr || mapping->find("{{return_property.id}}") == mapping->end()) {
       LOG_WARN("No mapping found");
       return;
     }
 
-    const Node* node_ptr = get_node_with_id(target, mapping->at("{{return_action.id}}"));
+    std::string to_store;
+
+    {{#with return_stmt}}
+    {{#if this.Property}}{{#with this.Property}}
+
+    const Node* node_ptr = get_node_with_id(target, mapping->at("{{this.id}}"));
     if (node_ptr == nullptr || node_ptr->properties.find({
-        {{#each return_action.paths}}"{{this}}", {{/each}}
+        {{#each this.paths}}"{{this}}", {{/each}}
     }) == node_ptr->properties.end()) {
       LOG_WARN("no node found");
       return;
     }
 
-    auto to_store = node_ptr->properties.at({
-        {{#each return_action.paths}}"{{this}}", {{/each}}
+    to_store = node_ptr->properties.at({
+        {{#each this.paths}}"{{this}}", {{/each}}
     });
+
+    {{/with}}{{/if}}
+    {{#if this.CallScalarUdf}}{{#with this.CallScalarUdf}}
+    // hello
+    {{/with}}{{/if}}
+    {{/with}}
 
     LOG_WARN("Value to store: " + to_store);
 

@@ -35,7 +35,7 @@ pub fn parse_prog<'a>(token_iter: &mut TokenIterator<'a>) -> Prog<'a> {
     Prog {
         patterns: parse_patterns(token_iter),
         filters: parse_filters(token_iter),
-        actions: parse_actions(token_iter),
+        action: parse_action(token_iter),
     }
 }
 
@@ -133,23 +133,21 @@ fn parse_filter<'a>(token_iter: &mut TokenIterator<'a>) -> Filter<'a> {
     }
 }
 
-fn parse_actions<'a>(token_iter: &mut TokenIterator<'a>) -> Actions<'a> {
-    Actions(parse_repeated::<Action>(
-        token_iter,
-        parse_action,
-        Token::Return,
-        true,
-    ))
-}
-
 fn parse_action<'a>(token_iter: &mut TokenIterator<'a>) -> Action<'a> {
+    if token_iter.peek().is_none() {
+        return Action::None;
+    }
+
+    consume_token(token_iter, &Token::Return, "Expected RETURN");
     let node = parse_identifier(token_iter);
     let operator_token = token_iter.next().unwrap();
     match &operator_token {
         Token::Period => {
             let property = parse_identifier(token_iter);
+            consume_token(token_iter, &Token::Comma, "Must end with a comma");
             Action::Property(node, property)
         }
+        Token::Comma => Action::CallUdf(node),
         _ => panic!("Unrecognized token: {:?}", operator_token),
     }
 }
@@ -283,24 +281,21 @@ mod tests {
                     Identifier { id_name: "x" },
                     Value::Str("k")
                 )]),
-                actions: Actions(Vec::new()),
+                action: Action::None,
             }
         )
     }
 
-    test_parser_success!(r"RETURN n.x,", parse_actions, test_parse_return_action);
+    test_parser_success!(r"RETURN n.x,", parse_action, test_parse_return_property);
     #[test]
     fn test_parse_actions_return() {
         let input = r"RETURN n.x,";
         let tokens = &mut get_tokens(input);
         let token_iter = &mut tokens.iter().peekable();
-        let actions = parse_actions(token_iter);
+        let action = parse_action(token_iter);
         assert_eq!(
-            actions,
-            Actions(vec![Action::Property(
-                Identifier { id_name: "n" },
-                Identifier { id_name: "x" },
-            )])
+            action,
+            Action::Property(Identifier { id_name: "n" }, Identifier { id_name: "x" },)
         )
     }
     test_parser_success!(
@@ -324,10 +319,27 @@ mod tests {
                     relationship_type: Relationship::Edge(Identifier { id_name: "a" })
                 }]),
                 filters: Filters::new(),
-                actions: Actions(vec![Action::Property(
-                    Identifier { id_name: "n" },
-                    Identifier { id_name: "x" },
-                )])
+                action: Action::Property(Identifier { id_name: "n" }, Identifier { id_name: "x" },)
+            }
+        )
+    }
+
+    #[test]
+    fn test_parse_action_call_udf() {
+        let input = r"MATCH n-->m: a, RETURN f,";
+        let tokens = &mut get_tokens(input);
+        let token_iter = &mut tokens.iter().peekable();
+        let prog = parse_prog(token_iter);
+        assert_eq!(
+            prog,
+            Prog {
+                patterns: Patterns(vec![Pattern {
+                    from_node: Identifier { id_name: "n" },
+                    to_node: Identifier { id_name: "m" },
+                    relationship_type: Relationship::Edge(Identifier { id_name: "a" })
+                }]),
+                filters: Filters::new(),
+                action: Action::CallUdf(Identifier { id_name: "f" },)
             }
         )
     }

@@ -4,7 +4,7 @@ use std::fmt;
 pub struct Prog<'a> {
     pub patterns: Patterns<'a>,
     pub filters: Filters<'a>,
-    pub actions: Actions<'a>,
+    pub action: Action<'a>,
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -37,28 +37,30 @@ pub enum Filter<'a> {
     Property(Identifier<'a>, Identifier<'a>, Value<'a>), // xyz.abc == 5, xyz.b == 5, x.a == k
 }
 
-#[derive(Debug, Default, PartialEq)]
-pub struct Actions<'a>(pub Vec<Action<'a>>);
-
-impl<'a> Actions<'a> {
-    pub fn new() -> Self {
-        Default::default()
-    }
-}
-
 #[derive(Debug, PartialEq)]
 pub enum Action<'a> {
+    None,
     Property(Identifier<'a>, Identifier<'a>), // xyz.a, xyz.b
+    CallUdf(Identifier<'a>),
 }
 
 impl<'a> fmt::Display for Action<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let Action::Property(id, p) = self;
-        let mut result = String::new();
-        result.push_str(&id.to_string());
-        result.push_str(".");
-        result.push_str(&p.to_string());
-        write!(f, "{}", result)
+        match self {
+            Action::None => {
+                write!(f, "none")
+            }
+            Action::Property(id, p) => {
+                let mut result = String::new();
+                result.push_str(&id.to_string());
+                result.push_str(".");
+                result.push_str(&p.to_string());
+                write!(f, "{}", result)
+            }
+            Action::CallUdf(id) => {
+                write!(f, "{}", id.to_string())
+            }
+        }
     }
 }
 

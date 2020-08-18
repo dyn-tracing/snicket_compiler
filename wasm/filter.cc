@@ -238,10 +238,10 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-        "c",
         "d",
-        "b",
         "a",
+        "b",
+        "c",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -288,10 +288,12 @@ void BidiContext::onResponseHeadersInbound() {
         generate_trace_graph_from_headers(paths_joined, properties_joined);
 
     auto mapping = get_sub_graph_mapping(pattern, target);
-    if (mapping == nullptr || mapping->find("a") == mapping->end()) {
+    if (mapping == nullptr || mapping->find("") == mapping->end()) {
       LOG_WARN("No mapping found");
       return;
     }
+
+    std::string to_store;
 
     const Node *node_ptr = get_node_with_id(target, mapping->at("a"));
     if (node_ptr == nullptr || node_ptr->properties.find({
@@ -302,7 +304,7 @@ void BidiContext::onResponseHeadersInbound() {
       return;
     }
 
-    auto to_store = node_ptr->properties.at({
+    to_store = node_ptr->properties.at({
         "response",
         "total_size",
     });
