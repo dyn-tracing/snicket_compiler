@@ -1,4 +1,4 @@
 {{#with value}}
-{{#if this.Float}}<input name="123" type="number" value={{this.Float.value}}/>{{/if}}
+{{#if this.Float}}{{#with this.Float}}<input name="123" type="number" value={{this.value}}/> {{/with}}{{/if}}
 {{#if this.Bool}}<input name="456" type="checkbox" {{#if this.Bool}}checked=checked{{/if}}/>{{/if}}
 {{/with}}
