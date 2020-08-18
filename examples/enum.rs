@@ -8,8 +8,13 @@ use std::io::prelude::*;
 use std::path::Path;
 
 #[derive(Serialize)]
+pub struct F64 {
+    value: f64,
+}
+
+#[derive(Serialize)]
 pub enum Value {
-    Float(f64),
+    Float(F64),
     Bool(bool),
 }
 
@@ -40,7 +45,7 @@ fn main() {
             .render_template(
                 &template_str,
                 &Data {
-                    value: Value::Float(3.0)
+                    value: Value::Float(F64{value: 3.0})
                 }
             )
             .expect("handlebar render failed")
