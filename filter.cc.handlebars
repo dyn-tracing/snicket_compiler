@@ -39,6 +39,8 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
+{{#if return_stmt.CallScalarUdf}}{{{return_stmt.CallScalarUdf.func_impl}}}{{/if}}
+
 class BidiRootContext : public RootContext {
 public:
   explicit BidiRootContext(uint32_t id, StringView root_id)
@@ -249,8 +251,15 @@ void BidiContext::onResponseHeadersInbound() {
     });
 
     {{/with}}{{/if}}
+
     {{#if this.CallScalarUdf}}{{#with this.CallScalarUdf}}
-    // hello
+    {
+        {{this.return_type}} udf_result;
+        {{this.id}} vis(&udf_result);
+        boost::depth_first_search(target, boost::visitor(vis));
+
+        to_store = {{#if (ne "string" this.return_type)}}std::to_string(udf_result); {{else}} udf_result; {{/if}}
+    }
     {{/with}}{{/if}}
     {{/with}}
 

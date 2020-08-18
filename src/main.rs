@@ -27,7 +27,7 @@ fn main() {
                             b.service_name == reviewsv2, \
                             c.service_name == ratingsv1, \
                             d.service_name == detailsv1, \
-                    RETURN a.response_size,";
+                    RETURN dfs_max_value_visitor,";
     let tokens = lexer::get_tokens(query);
     let mut token_iter = tokens.iter().peekable();
     let parse_tree = parser::parse_prog(&mut token_iter);
@@ -42,9 +42,7 @@ fn main() {
             func_impl: r#"
             class dfs_max_value_visitor : public boost::default_dfs_visitor {
                 public:
-                  dfs_max_value_visitor(std::initializer_list<std::string_view> keys,
-                                        int *max) {
-                    key_ = {keys.begin(), keys.end()};
+                  dfs_max_value_visitor(int *max) {
                     max_ = max;
                   }
 
@@ -60,7 +58,7 @@ fn main() {
                     }
                   }
 
-                  std::vector<std::string> key_;
+                  std::vector<std::string> key_{"response", "total_size"};
                   int *max_;
                 };
             "#,

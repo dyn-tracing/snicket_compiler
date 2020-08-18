@@ -39,6 +39,26 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
+class dfs_max_value_visitor : public boost::default_dfs_visitor {
+public:
+  dfs_max_value_visitor(int *max) { max_ = max; }
+
+  template <typename Vertex, typename Graph>
+  void discover_vertex(Vertex u, const Graph &g) {
+    auto map = g[u].properties;
+
+    int value = std::atoi(map.at(key_).c_str());
+    LOG_WARN(g[u].id + " " + std::to_string(value));
+
+    if (value > *max_) {
+      *max_ = value;
+    }
+  }
+
+  std::vector<std::string> key_{"response", "total_size"};
+  int *max_;
+};
+
 class BidiRootContext : public RootContext {
 public:
   explicit BidiRootContext(uint32_t id, StringView root_id)
@@ -238,10 +258,10 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
+        "c",
         "d",
         "a",
         "b",
-        "c",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -295,19 +315,13 @@ void BidiContext::onResponseHeadersInbound() {
 
     std::string to_store;
 
-    const Node *node_ptr = get_node_with_id(target, mapping->at("a"));
-    if (node_ptr == nullptr || node_ptr->properties.find({
-                                   "response",
-                                   "total_size",
-                               }) == node_ptr->properties.end()) {
-      LOG_WARN("no node found");
-      return;
-    }
+    {
+      int udf_result;
+      dfs_max_value_visitor vis(&udf_result);
+      boost::depth_first_search(target, boost::visitor(vis));
 
-    to_store = node_ptr->properties.at({
-        "response",
-        "total_size",
-    });
+      to_store = std::to_string(udf_result);
+    }
 
     LOG_WARN("Value to store: " + to_store);
 
