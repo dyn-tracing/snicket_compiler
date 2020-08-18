@@ -53,9 +53,8 @@ impl<'a> TreeFold<'a> for DefUse<'a> {
                     panic!("Edge/Node {:?} not defined.", id.id_name);
                 }
             }
-            _ => {
-
-            }
+            Action::CallUdf(_id, _p) => {}
+            Action::None => {}
         }
     }
 }

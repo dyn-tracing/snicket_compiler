@@ -41,7 +41,10 @@ std::string trafficDirectionToString(TrafficDirection dir) {
 
 class dfs_max_value_visitor : public boost::default_dfs_visitor {
 public:
-  dfs_max_value_visitor(int *max) { max_ = max; }
+  dfs_max_value_visitor(std::initializer_list<std::string> key, int *max) {
+    key_ = {key.begin(), key.end()};
+    max_ = max;
+  }
 
   template <typename Vertex, typename Graph>
   void discover_vertex(Vertex u, const Graph &g) {
@@ -55,7 +58,7 @@ public:
     }
   }
 
-  std::vector<std::string> key_{"response", "total_size"};
+  std::vector<std::string> key_;
   int *max_;
 };
 
@@ -181,6 +184,29 @@ void BidiContext::onResponseHeadersInbound() {
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
   {
+    int64_t value;
+    if (getValue(
+            {
+                "response",
+                "total_size",
+            },
+            &value)) {
+      std::string result = std::string(root_->getWorkloadName());
+      for (auto p : {
+               "response",
+               "total_size",
+           }) {
+        result += "." + std::string(p);
+      }
+      result += "==";
+      result += std::to_string(value);
+
+      properties.push_back(result);
+    } else {
+      LOG_WARN("failed to get property");
+    }
+  }
+  {
     std::string value;
     if (getValue(
             {
@@ -199,29 +225,6 @@ void BidiContext::onResponseHeadersInbound() {
       }
       result += "==";
       result += value;
-
-      properties.push_back(result);
-    } else {
-      LOG_WARN("failed to get property");
-    }
-  }
-  {
-    int64_t value;
-    if (getValue(
-            {
-                "response",
-                "total_size",
-            },
-            &value)) {
-      std::string result = std::string(root_->getWorkloadName());
-      for (auto p : {
-               "response",
-               "total_size",
-           }) {
-        result += "." + std::string(p);
-      }
-      result += "==";
-      result += std::to_string(value);
 
       properties.push_back(result);
     } else {
@@ -317,7 +320,9 @@ void BidiContext::onResponseHeadersInbound() {
 
     {
       int udf_result;
-      dfs_max_value_visitor vis(&udf_result);
+      dfs_max_value_visitor vis({"response"
+                                 "total_size"},
+                                &udf_result);
       boost::depth_first_search(target, boost::visitor(vis));
 
       to_store = std::to_string(udf_result);

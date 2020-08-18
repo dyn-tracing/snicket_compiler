@@ -40,13 +40,13 @@ pub struct Udf<'a> {
     pub id: &'a str,
     pub func_impl: &'a str,
     pub return_type: &'a str,
-    pub arg_properties: Vec<&'static str>,
+    pub arg: Vec<&'a str>,
 }
 
 #[derive(Serialize, PartialEq, Eq, Debug)]
 pub enum Return<'a> {
     Property(ReturnProperty<'a>),
-    CallScalarUdf(Udf<'a>),
+    CallUdf(Udf<'a>),
     None,
 }
 
@@ -109,13 +109,6 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
         self.visit_patterns(&prog.patterns);
         self.visit_filters(&prog.filters);
         self.visit_action(&prog.action);
-
-        for udf in self.udf_table.values() {
-            for property in udf.arg_properties.iter() {
-                self.properties_to_collect
-                    .insert(self.property_map[property].clone());
-            }
-        }
     }
 
     fn visit_pattern(&mut self, pattern: &'a Pattern) {
@@ -161,10 +154,18 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                 });
             }
             Action::None => {}
-            Action::CallUdf(id, _p) => {
-                self.return_stmt = Return::CallScalarUdf(
-                    self.udf_table[id.id_name].clone()
-                )
+            Action::CallUdf(id, p) => {
+                if !self.udf_table.contains_key(id.id_name) {
+                    panic!("Can't find udf function: {}", id.id_name);
+                }
+                let mut func = self.udf_table[id.id_name].clone();
+
+                self.properties_to_collect
+                    .insert(self.property_map[p.id_name].clone());
+
+                func.arg = self.property_map[p.id_name].paths.clone();
+
+                self.return_stmt = Return::CallUdf(func);
             }
         }
     }
@@ -357,7 +358,5 @@ mod tests {
     }
 
     #[test]
-    fn test_codegen_udf() {
-
-    }
+    fn test_codegen_udf() {}
 }

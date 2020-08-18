@@ -27,7 +27,7 @@ fn main() {
                             b.service_name == reviewsv2, \
                             c.service_name == ratingsv1, \
                             d.service_name == detailsv1, \
-                    RETURN dfs_max_value_visitor,";
+                    RETURN dfs_max_value_visitor(response_size),";
     let tokens = lexer::get_tokens(query);
     let mut token_iter = tokens.iter().peekable();
     let parse_tree = parser::parse_prog(&mut token_iter);
@@ -42,7 +42,8 @@ fn main() {
             func_impl: r#"
             class dfs_max_value_visitor : public boost::default_dfs_visitor {
                 public:
-                  dfs_max_value_visitor(int *max) {
+                  dfs_max_value_visitor(std::initializer_list<std::string> key, int *max) {
+                    key_{key.begin(), key.end()};
                     max_ = max;
                   }
 
@@ -58,12 +59,12 @@ fn main() {
                     }
                   }
 
-                  std::vector<std::string> key_{"response", "total_size"};
+                  std::vector<std::string> key_;
                   int *max_;
                 };
             "#,
             return_type: "int",
-            arg_properties: vec!["response_size"],
+            ..Default::default()
         },
     );
     code_gen.root_id = "productpagev1";
