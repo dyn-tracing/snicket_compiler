@@ -48,6 +48,12 @@ private:
   const PropertyMapSecond m_property_map2;
 };
 
+template <typename ReturnType>
+class user_func {
+public:
+  virtual ReturnType operator()(const trace_graph_t &graph) = 0;
+};
+
 // Returns a property_map_subset object that compares the values
 // of property_map1 and property_map2.
 template <typename PropertyMapFirst, typename PropertyMapSecond>

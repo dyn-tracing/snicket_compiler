@@ -278,3 +278,74 @@ TEST(VisitorTest, FindNodeWithMaxValue) {
 
   EXPECT_EQ(*vis.max_, 3);
 }
+
+class scalar_func : public user_func<int> {
+public:
+  int operator()(const trace_graph_t &graph) { return 0; }
+};
+
+class scalar_dfs_max_value : public user_func<int> {
+public:
+  int operator()(const trace_graph_t &graph) {
+    int max = INT_MIN;
+    scalar_visitor vis(&max);
+    boost::depth_first_search(graph, boost::visitor(vis));
+    return max;
+  }
+
+private:
+  class scalar_visitor : public boost::default_dfs_visitor {
+  public:
+    scalar_visitor(int *max) { max_ = max; }
+
+    template <typename Vertex, typename Graph>
+    void discover_vertex(Vertex u, const Graph &g) {
+      auto map = g[u].properties;
+
+      int value = std::atoi(map.at(key_).c_str());
+
+      if (value > *max_) {
+        *max_ = value;
+      }
+    }
+
+    std::vector<std::string> key_{"start_time"};
+    int *max_;
+  };
+};
+
+class aggr_func : public user_func<int> {
+public:
+  int operator()(const trace_graph_t &graph) {
+    num_vertices += graph.num_vertices();
+
+    return num_vertices;
+  }
+
+private:
+  int num_vertices = 0;
+};
+
+TEST(UserFuncTest, ScalarFunc) {
+  auto graph = generate_trace_graph_from_headers("a", "");
+  EXPECT_EQ(graph.num_vertices(), 1);
+  EXPECT_EQ(graph.num_edges(), 0);
+
+  scalar_func f;
+
+  EXPECT_EQ(f(graph), 0);
+
+  aggr_func f2;
+  EXPECT_EQ(f2(graph), 1);
+  EXPECT_EQ(f2(graph), 2);
+}
+
+TEST(UserFuncTest, ScalarInnerClassDef) {
+
+  auto graph = generate_trace_graph_from_headers(
+      "a-b-c", "a.start_time==1,b.start_time==2,c.start_time==3");
+
+  scalar_dfs_max_value f;
+
+  EXPECT_EQ(f(graph), 3);
+}
