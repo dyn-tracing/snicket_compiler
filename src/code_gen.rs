@@ -161,7 +161,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                 });
             }
             Action::None => {}
-            Action::CallUdf(id) => {
+            Action::CallUdf(id, _p) => {
                 self.return_stmt = Return::CallScalarUdf(
                     self.udf_table[id.id_name].clone()
                 )

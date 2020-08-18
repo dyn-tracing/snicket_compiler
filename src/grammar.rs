@@ -41,15 +41,13 @@ pub enum Filter<'a> {
 pub enum Action<'a> {
     None,
     Property(Identifier<'a>, Identifier<'a>), // xyz.a, xyz.b
-    CallUdf(Identifier<'a>),
+    CallUdf(Identifier<'a>, Identifier<'a>),  // f(a)
 }
 
 impl<'a> fmt::Display for Action<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Action::None => {
-                write!(f, "none")
-            }
+            Action::None => write!(f, "none"),
             Action::Property(id, p) => {
                 let mut result = String::new();
                 result.push_str(&id.to_string());
@@ -57,8 +55,13 @@ impl<'a> fmt::Display for Action<'a> {
                 result.push_str(&p.to_string());
                 write!(f, "{}", result)
             }
-            Action::CallUdf(id) => {
-                write!(f, "{}", id.to_string())
+            Action::CallUdf(id, p) => {
+                let mut result = String::new();
+                result.push_str(&id.to_string());
+                result.push_str("(");
+                result.push_str(&p.to_string());
+                result.push_str(")");
+                write!(f, "{}", result)
             }
         }
     }
