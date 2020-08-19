@@ -45,7 +45,7 @@ fn main() {
             .render_template(
                 &template_str,
                 &Data {
-                    value: Value::Float(F64{value: 3.0})
+                    value: Value::Float(F64 { value: 3.0 })
                 }
             )
             .expect("handlebar render failed")
