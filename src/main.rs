@@ -27,7 +27,7 @@ fn main() {
                             b.service_name == reviewsv2, \
                             c.service_name == ratingsv1, \
                             d.service_name == detailsv1, \
-                    RETURN dfs_max_value_visitor(response_size),";
+                    RETURN aggr_func,";
     let tokens = lexer::get_tokens(query);
     let mut token_iter = tokens.iter().peekable();
     let parse_tree = parser::parse_prog(&mut token_iter);
@@ -35,33 +35,31 @@ fn main() {
     let mut code_gen = code_gen::CodeGen::new();
 
     code_gen.udf_table.insert(
-        "dfs_max_value_visitor",
+        "aggr_func",
         code_gen::Udf {
-            udf_type: code_gen::UdfType::Scalar,
-            id: "dfs_max_value_visitor",
+            udf_type: code_gen::UdfType::Aggregation,
+            id: "aggr_func",
             func_impl: r#"
-            class dfs_max_value_visitor : public boost::default_dfs_visitor {
-                public:
-                  dfs_max_value_visitor(std::initializer_list<std::string> key, int *max) {
-                    key_{key.begin(), key.end()};
-                    max_ = max;
-                  }
+class aggr_func : public user_func<int> {
+public:
+    int operator()(const trace_graph_t &graph) {
+        num_vertices += graph.num_vertices();
+        return num_vertices;
+    }
 
-                  template <typename Vertex, typename Graph>
-                  void discover_vertex(Vertex u, const Graph &g) {
-                    auto map = g[u].properties;
-
-                    int value = std::atoi(map.at(key_).c_str());
-                    LOG_WARN(g[u].id + " " + std::to_string(value));
-
-                    if (value > *max_) {
-                      *max_ = value;
-                    }
-                  }
-
-                  std::vector<std::string> key_;
-                  int *max_;
-                };
+private:
+    int num_vertices = 0;
+};"#,
+            return_type: "int",
+            ..Default::default()
+        },
+    );
+    code_gen.udf_table.insert(
+        "sum_aggr",
+        code_gen::Udf {
+            udf_type: code_gen::UdfType::Aggregation,
+            id: "sum_aggr",
+            func_impl: r#"
             "#,
             return_type: "int",
             ..Default::default()

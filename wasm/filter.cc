@@ -39,27 +39,15 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
-class dfs_max_value_visitor : public boost::default_dfs_visitor {
+class aggr_func : public user_func<int> {
 public:
-  dfs_max_value_visitor(std::initializer_list<std::string> key, int *max) {
-    key_ = {key.begin(), key.end()};
-    max_ = max;
+  int operator()(const trace_graph_t &graph) {
+    num_vertices += graph.num_vertices();
+    return num_vertices;
   }
 
-  template <typename Vertex, typename Graph>
-  void discover_vertex(Vertex u, const Graph &g) {
-    auto map = g[u].properties;
-
-    int value = std::atoi(map.at(key_).c_str());
-    LOG_WARN(g[u].id + " " + std::to_string(value));
-
-    if (value > *max_) {
-      *max_ = value;
-    }
-  }
-
-  std::vector<std::string> key_;
-  int *max_;
+private:
+  int num_vertices = 0;
 };
 
 class BidiRootContext : public RootContext {
@@ -77,6 +65,8 @@ public:
   bool onConfigure(size_t /* configuration_size */) override;
 
   StringView getWorkloadName() { return workload_name_; }
+
+  aggr_func udf_;
 
 private:
   std::string workload_name_;
@@ -184,29 +174,6 @@ void BidiContext::onResponseHeadersInbound() {
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
   {
-    int64_t value;
-    if (getValue(
-            {
-                "response",
-                "total_size",
-            },
-            &value)) {
-      std::string result = std::string(root_->getWorkloadName());
-      for (auto p : {
-               "response",
-               "total_size",
-           }) {
-        result += "." + std::string(p);
-      }
-      result += "==";
-      result += std::to_string(value);
-
-      properties.push_back(result);
-    } else {
-      LOG_WARN("failed to get property");
-    }
-  }
-  {
     std::string value;
     if (getValue(
             {
@@ -261,8 +228,8 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-        "c",
         "d",
+        "c",
         "a",
         "b",
     };
@@ -319,12 +286,7 @@ void BidiContext::onResponseHeadersInbound() {
     std::string to_store;
 
     {
-      int udf_result;
-      dfs_max_value_visitor vis({"response"
-                                 "total_size"},
-                                &udf_result);
-      boost::depth_first_search(target, boost::visitor(vis));
-
+      int udf_result = root_->udf_(target);
       to_store = std::to_string(udf_result);
     }
 

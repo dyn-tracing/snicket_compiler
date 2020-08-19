@@ -314,18 +314,6 @@ private:
   };
 };
 
-class aggr_func : public user_func<int> {
-public:
-  int operator()(const trace_graph_t &graph) {
-    num_vertices += graph.num_vertices();
-
-    return num_vertices;
-  }
-
-private:
-  int num_vertices = 0;
-};
-
 TEST(UserFuncTest, ScalarFunc) {
   auto graph = generate_trace_graph_from_headers("a", "");
   EXPECT_EQ(graph.num_vertices(), 1);

@@ -147,12 +147,7 @@ fn parse_action<'a>(token_iter: &mut TokenIterator<'a>) -> Action<'a> {
             consume_token(token_iter, &Token::Comma, "Must end with a comma");
             Action::Property(id, property)
         }
-        Token::LParen => {
-            let arg = parse_identifier(token_iter);
-            consume_token(token_iter, &Token::RParen, "Missing RPAREN");
-            consume_token(token_iter, &Token::Comma, "Must end with a comma");
-            Action::CallUdf(id, arg)
-        }
+        Token::Comma => Action::CallUdf(id),
         _ => panic!("Unrecognized token: {:?}", operator_token),
     }
 }
@@ -331,7 +326,7 @@ mod tests {
 
     #[test]
     fn test_parse_action_call_udf() {
-        let input = r"MATCH n-->m: a, RETURN f(x),";
+        let input = r"MATCH n-->m: a, RETURN f,";
         let tokens = &mut get_tokens(input);
         let token_iter = &mut tokens.iter().peekable();
         let prog = parse_prog(token_iter);
@@ -344,7 +339,7 @@ mod tests {
                     relationship_type: Relationship::Edge(Identifier { id_name: "a" })
                 }]),
                 filters: Filters::new(),
-                action: Action::CallUdf(Identifier { id_name: "f" }, Identifier { id_name: "x" })
+                action: Action::CallUdf(Identifier { id_name: "f" })
             }
         )
     }

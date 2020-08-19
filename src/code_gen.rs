@@ -154,17 +154,11 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                 });
             }
             Action::None => {}
-            Action::CallUdf(id, p) => {
+            Action::CallUdf(id) => {
                 if !self.udf_table.contains_key(id.id_name) {
                     panic!("Can't find udf function: {}", id.id_name);
                 }
-                let mut func = self.udf_table[id.id_name].clone();
-
-                self.properties_to_collect
-                    .insert(self.property_map[p.id_name].clone());
-
-                func.arg = self.property_map[p.id_name].paths.clone();
-
+                let func = self.udf_table[id.id_name].clone();
                 self.return_stmt = Return::CallUdf(func);
             }
         }

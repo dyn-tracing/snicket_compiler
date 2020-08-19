@@ -57,6 +57,10 @@ public:
 
   StringView getWorkloadName() { return workload_name_; }
 
+  {{#if return_stmt.CallUdf}}{{#with return_stmt.CallUdf}}
+  {{this.id}} udf_;
+  {{/with}}{{/if}}
+
 private:
   std::string workload_name_;
 };
@@ -253,16 +257,10 @@ void BidiContext::onResponseHeadersInbound() {
     {{/with}}{{/if}}
 
     {{#if this.CallUdf}}{{#with this.CallUdf}}
-    {{#if (eq this.udf_type "Scalar")}}
     {
-        {{this.return_type}} udf_result;
-        {{this.id}} vis({ {{#each this.arg}}"{{this}}"{{/each}} }, &udf_result);
-        boost::depth_first_search(target, boost::visitor(vis));
-
+        {{this.return_type}} udf_result = root_->udf_(target);
         to_store = {{#if (ne "string" this.return_type)}}std::to_string(udf_result); {{else}} udf_result; {{/if}}
     }
-    {{/if}}
-
     {{/with}}{{/if}}
     {{/with}}
 

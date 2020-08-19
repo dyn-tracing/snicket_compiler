@@ -18,9 +18,6 @@ pub enum Token<'a> {
     Equals,
     Period,
 
-    LParen,
-    RParen,
-
     // Separators
     Comma,
 }
@@ -39,8 +36,6 @@ impl<'a> fmt::Display for Token<'a> {
             Token::Equals => write!(f, "=="),
             Token::Period => write!(f, "."),
             Token::Comma => write!(f, ","),
-            Token::LParen => write!(f, "("),
-            Token::RParen => write!(f, ")"),
         }
     }
 }
