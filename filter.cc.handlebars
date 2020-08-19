@@ -39,6 +39,8 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
+{{#if return_stmt.CallUdf}}{{{return_stmt.CallUdf.func_impl}}}{{/if}}
+
 class BidiRootContext : public RootContext {
 public:
   explicit BidiRootContext(uint32_t id, StringView root_id)
@@ -54,6 +56,10 @@ public:
   bool onConfigure(size_t /* configuration_size */) override;
 
   StringView getWorkloadName() { return workload_name_; }
+
+  {{#if return_stmt.CallUdf}}{{#with return_stmt.CallUdf}}
+  {{this.id}} udf_;
+  {{/with}}{{/if}}
 
 private:
   std::string workload_name_;
@@ -160,23 +166,24 @@ void BidiContext::onResponseHeadersInbound() {
 
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
-  std::string value;
-  {{#each properties_to_collect}}
+  {{#each properties_to_collect}}{
+  {{this.typ}} value;
   if (getValue({
-      {{#each this}}"{{this}}",{{/each}}
+      {{#each this.paths}}"{{this}}",{{/each}}
   }, &value)) {
     std::string result = std::string(root_->getWorkloadName());
     for (auto p : {
-        {{#each this}}"{{this}}",{{/each}}
+        {{#each this.paths}}"{{this}}",{{/each}}
     }) {
       result += "." + std::string(p);
     }
     result += "==";
-    result += value;
+    {{#if (eq this.typ "int64_t")}}result += std::to_string(value);{{else}}result += value;{{/if}}
 
     properties.push_back(result);
   } else {
     LOG_WARN("failed to get property");
+  }
   }{{/each}}
 
   LOG_WARN("number of properties collected " +
@@ -225,22 +232,37 @@ void BidiContext::onResponseHeadersInbound() {
         generate_trace_graph_from_headers(paths_joined, properties_joined);
 
     auto mapping = get_sub_graph_mapping(pattern, target);
-    if (mapping == nullptr || mapping->find("{{return_action.id}}") == mapping->end()) {
+    if (mapping == nullptr || mapping->find("{{return_property.id}}") == mapping->end()) {
       LOG_WARN("No mapping found");
       return;
     }
 
-    const Node* node_ptr = get_node_with_id(target, mapping->at("{{return_action.id}}"));
+    std::string to_store;
+
+    {{#with return_stmt}}
+    {{#if this.Property}}{{#with this.Property}}
+
+    const Node* node_ptr = get_node_with_id(target, mapping->at("{{this.id}}"));
     if (node_ptr == nullptr || node_ptr->properties.find({
-        {{#each return_action.paths}}"{{this}}", {{/each}}
+        {{#each this.paths}}"{{this}}", {{/each}}
     }) == node_ptr->properties.end()) {
       LOG_WARN("no node found");
       return;
     }
 
-    auto to_store = node_ptr->properties.at({
-        {{#each return_action.paths}}"{{this}}", {{/each}}
+    to_store = node_ptr->properties.at({
+        {{#each this.paths}}"{{this}}", {{/each}}
     });
+
+    {{/with}}{{/if}}
+
+    {{#if this.CallUdf}}{{#with this.CallUdf}}
+    {
+        {{this.return_type}} udf_result = root_->udf_(target);
+        to_store = {{#if (ne "string" this.return_type)}}std::to_string(udf_result); {{else}} udf_result; {{/if}}
+    }
+    {{/with}}{{/if}}
+    {{/with}}
 
     LOG_WARN("Value to store: " + to_store);
 

@@ -39,31 +39,15 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
-class dfs_max_value_visitor : public boost::default_dfs_visitor {
+class aggr_func : public user_func<int> {
 public:
-  dfs_max_value_visitor(std::initializer_list<std::string_view> keys,
-                        int *max) {
-    key_ = {keys.begin(), keys.end()};
-    max_ = max;
+  int operator()(const trace_graph_t &graph) {
+    num_vertices += graph.num_vertices();
+    return num_vertices;
   }
 
-  template <typename Vertex, typename Graph>
-  void discover_vertex(Vertex u, const Graph &g) {
-    auto map = g[u].properties;
-
-    int value = std::atoi(map.at(key_).c_str());
-    LOG_WARN(g[u].id + " " + std::to_string(value));
-
-    if (value > *max_) {
-      *max_ = value;
-    }
-  }
-
-  std::vector<std::string> key_;
-  // Pointer needs to be passed in. When constructing a visitor using
-  // boost::visitor, the function takes a const reference. Any computation
-  // result must be stored at a memory location that outlives this object.
-  int *max_;
+private:
+  int num_vertices = 0;
 };
 
 class BidiRootContext : public RootContext {
@@ -82,7 +66,7 @@ public:
 
   StringView getWorkloadName() { return workload_name_; }
 
-  std::vector<int64_t> data_;
+  aggr_func udf_;
 
 private:
   std::string workload_name_;
@@ -189,51 +173,30 @@ void BidiContext::onResponseHeadersInbound() {
 
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
-  std::string value;
+  {
+    std::string value;
+    if (getValue(
+            {
+                "node",
+                "metadata",
+                "WORKLOAD_NAME",
+            },
+            &value)) {
+      std::string result = std::string(root_->getWorkloadName());
+      for (auto p : {
+               "node",
+               "metadata",
+               "WORKLOAD_NAME",
+           }) {
+        result += "." + std::string(p);
+      }
+      result += "==";
+      result += value;
 
-  if (getValue(
-          {
-              "node",
-              "metadata",
-              "WORKLOAD_NAME",
-          },
-          &value)) {
-    std::string result = std::string(root_->getWorkloadName());
-    for (auto p : {
-             "node",
-             "metadata",
-             "WORKLOAD_NAME",
-         }) {
-      result += "." + std::string(p);
+      properties.push_back(result);
+    } else {
+      LOG_WARN("failed to get property");
     }
-    result += "==";
-    result += value;
-
-    properties.push_back(result);
-  } else {
-    LOG_WARN("failed to get property");
-  }
-
-  int64_t size;
-  if (getValue(
-          {
-              "response",
-              "total_size",
-          },
-          &size)) {
-    std::string result = std::string(root_->getWorkloadName());
-    for (auto p : {
-             "response",
-             "total_size",
-         }) {
-      result += "." + std::string(p);
-    }
-    result += "==";
-    result += std::to_string(size);
-
-    properties.push_back(result);
-  } else {
-    LOG_WARN("failed to get property");
   }
 
   LOG_WARN("number of properties collected " +
@@ -265,10 +228,10 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-        "a",
-        "c",
-        "b",
         "d",
+        "c",
+        "a",
+        "b",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -315,18 +278,17 @@ void BidiContext::onResponseHeadersInbound() {
         generate_trace_graph_from_headers(paths_joined, properties_joined);
 
     auto mapping = get_sub_graph_mapping(pattern, target);
-    if (mapping == nullptr || mapping->find("a") == mapping->end()) {
+    if (mapping == nullptr || mapping->find("") == mapping->end()) {
       LOG_WARN("No mapping found");
       return;
     }
 
-    int max = INT_MIN;
-    dfs_max_value_visitor vis({"response", "total_size"}, &max);
-    boost::depth_first_search(target, boost::visitor(vis));
+    std::string to_store;
 
-    root_->data_.push_back(max);
-    std::string to_store = std::to_string(
-        std::accumulate(root_->data_.begin(), root_->data_.end(), 0));
+    {
+      int udf_result = root_->udf_(target);
+      to_store = std::to_string(udf_result);
+    }
 
     LOG_WARN("Value to store: " + to_store);
 
