@@ -78,13 +78,16 @@ rules_proto_dependencies()
 
 rules_proto_toolchains()
 
-http_archive(
-    name = "boost",
-    build_file = "//bazel/external:boost.BUILD",
-    urls = [
-        "https://github.com/emscripten-ports/boost/releases/download/boost-1.70.0/boost-headers-1.70.0.zip",
-    ],
+git_repository(
+    name = "com_github_taegyunkim_rules_emscripten_boost",
+    commit = "3b9dd84879ede431c4233b137a5345490e060f58",
+    shallow_since = "1598019040 -0400",
+    remote = "https://github.com/taegyunkim/rules_emscripten_boost"
 )
+
+load("@com_github_taegyunkim_rules_emscripten_boost//boost:boost.bzl","boost_deps")
+
+boost_deps()
 
 http_archive(
     name = "com_google_absl",
