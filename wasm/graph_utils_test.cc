@@ -340,11 +340,54 @@ TEST(UserFuncTest, ScalarFunc) {
 }
 
 TEST(UserFuncTest, ScalarInnerClassDef) {
-
   auto graph = generate_trace_graph_from_headers(
       "a-b-c", "a.start_time==1,b.start_time==2,c.start_time==3");
 
   scalar_dfs_max_value f;
 
   EXPECT_EQ(f(graph), 3);
+}
+
+class tree_height_dfs_visitor : public boost::default_dfs_visitor {
+public:
+  tree_height_dfs_visitor(int *height) { height_ = height; }
+
+  template <typename Vertex, typename Graph>
+  void initialize_vertex(Vertex s, const Graph &g) {
+    dists_[s] = INT_MAX;
+  }
+
+  template <typename Vertex, typename Graph>
+  void start_vertex(Vertex u, const Graph &g) {
+    dists_[u] = 0;
+  }
+
+  template <typename Edge, typename Graph>
+  void tree_edge(Edge e, const Graph &g) {
+    auto src = boost::source(e, g);
+    auto dst = boost::target(e, g);
+
+    if (dists_[dst] > dists_[src] + 1) {
+      dists_[dst] = dists_[src] + 1;
+
+      if (*height_ < dists_[dst]) {
+        *height_ = dists_[dst];
+      }
+    }
+  }
+
+  std::map<boost::graph_traits<trace_graph_t>::vertex_descriptor, int> dists_;
+  int *height_;
+};
+
+TEST(GraphPropertiesTest, Height) {
+  auto graph = generate_trace_graph_from_headers("a-b-c,a-d", "");
+  EXPECT_EQ(graph.num_vertices(), 4);
+
+  int height = 0;
+  tree_height_dfs_visitor vis(&height);
+
+  boost::depth_first_search(graph, boost::visitor(vis));
+
+  EXPECT_EQ(height, 2);
 }
