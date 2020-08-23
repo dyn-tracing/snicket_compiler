@@ -357,4 +357,8 @@ TEST(GraphPropertiesTest, Height) {
   EXPECT_EQ(get_tree_height(graph), 4);
   graph = generate_trace_graph_from_headers("a-b-c-d,b-e,c-f,f-g,g-h", "");
   EXPECT_EQ(get_tree_height(graph), 5);
+  graph = generate_trace_graph_from_headers("b-a,b-c", "");
+  EXPECT_EQ(get_tree_height(graph), 1);
+  graph = generate_trace_graph_from_headers("a", "");
+  EXPECT_EQ(get_tree_height(graph), 0);
 }
