@@ -166,7 +166,7 @@ void BidiContext::onResponseHeadersInbound() {
 
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
-  {{#each properties_to_collect}}{
+  {{#each node_properties_to_collect}}{
   {{this.typ}} value;
   if (getValue({
       {{#each this.paths}}"{{this}}",{{/each}}

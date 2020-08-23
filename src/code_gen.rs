@@ -62,7 +62,7 @@ pub struct CodeGen<'a> {
     pub vertices: HashSet<&'a str>,
     pub edges: Vec<(&'a str, &'a str)>,
     pub ids_to_properties: Vec<Property<'a>>,
-    pub properties_to_collect: HashSet<ToCollect<'a>>,
+    pub node_properties_to_collect: HashSet<ToCollect<'a>>,
     pub return_stmt: Return<'a>,
     #[serde(skip_serializing)]
     property_map: HashMap<&'static str, ToCollect<'a>>,
@@ -133,7 +133,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
         let to_collect = &self.property_map[p.id_name];
         let value_str = value.to_string();
 
-        self.properties_to_collect.insert(to_collect.clone());
+        self.node_properties_to_collect.insert(to_collect.clone());
 
         self.ids_to_properties.push(Property {
             id: vertex_id,
@@ -145,7 +145,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
     fn visit_action(&mut self, action: &'a Action) {
         match action {
             Action::GetProperty(id, p) => {
-                self.properties_to_collect
+                self.node_properties_to_collect
                     .insert(self.property_map[p.id_name].clone());
 
                 self.return_stmt = Return::Property(ReturnProperty {
@@ -288,7 +288,7 @@ mod tests {
     }
 
     #[test]
-    fn test_codegen_multiple_properties_to_collect() {
+    fn test_codegen_multiple_node_properties_to_collect() {
         let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, WHERE n.x ==k, RETURN n.y,");
         let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
         let parse_tree = parser::parse_prog(&mut token_iter);
@@ -327,7 +327,7 @@ mod tests {
             }]
         );
         assert_eq!(
-            code_gen.properties_to_collect,
+            code_gen.node_properties_to_collect,
             [
                 ToCollect {
                     typ: "string",
