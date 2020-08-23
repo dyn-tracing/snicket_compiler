@@ -41,7 +41,7 @@ pub enum Filter<'a> {
 pub enum Action<'a> {
     None,
     GetProperty(Identifier<'a>, Identifier<'a>), // xyz.a, xyz.b
-    CallUdf(Identifier<'a>),                  // f, we assume that the udf takes graph as input.
+    CallUdf(Identifier<'a>),                     // f, we assume that the udf takes graph as input.
 }
 
 impl<'a> fmt::Display for Action<'a> {

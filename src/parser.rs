@@ -319,7 +319,10 @@ mod tests {
                     relationship_type: Relationship::Edge(Identifier { id_name: "a" })
                 }]),
                 filters: Filters::new(),
-                action: Action::GetProperty(Identifier { id_name: "n" }, Identifier { id_name: "x" },)
+                action: Action::GetProperty(
+                    Identifier { id_name: "n" },
+                    Identifier { id_name: "x" },
+                )
             }
         )
     }
