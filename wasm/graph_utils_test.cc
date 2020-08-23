@@ -348,46 +348,13 @@ TEST(UserFuncTest, ScalarInnerClassDef) {
   EXPECT_EQ(f(graph), 3);
 }
 
-class tree_height_dfs_visitor : public boost::default_dfs_visitor {
-public:
-  tree_height_dfs_visitor(int *height) { height_ = height; }
-
-  template <typename Vertex, typename Graph>
-  void initialize_vertex(Vertex s, const Graph &g) {
-    dists_[s] = INT_MAX;
-  }
-
-  template <typename Vertex, typename Graph>
-  void start_vertex(Vertex u, const Graph &g) {
-    dists_[u] = 0;
-  }
-
-  template <typename Edge, typename Graph>
-  void tree_edge(Edge e, const Graph &g) {
-    auto src = boost::source(e, g);
-    auto dst = boost::target(e, g);
-
-    if (dists_[dst] > dists_[src] + 1) {
-      dists_[dst] = dists_[src] + 1;
-
-      if (*height_ < dists_[dst]) {
-        *height_ = dists_[dst];
-      }
-    }
-  }
-
-  std::map<boost::graph_traits<trace_graph_t>::vertex_descriptor, int> dists_;
-  int *height_;
-};
-
 TEST(GraphPropertiesTest, Height) {
   auto graph = generate_trace_graph_from_headers("a-b-c,a-d", "");
-  EXPECT_EQ(graph.num_vertices(), 4);
-
-  int height = 0;
-  tree_height_dfs_visitor vis(&height);
-
-  boost::depth_first_search(graph, boost::visitor(vis));
-
-  EXPECT_EQ(height, 2);
+  EXPECT_EQ(get_tree_height(graph), 2);
+  graph = generate_trace_graph_from_headers("", "");
+  EXPECT_EQ(get_tree_height(graph), 0);
+  graph = generate_trace_graph_from_headers("a-b-c-d,d-e", "");
+  EXPECT_EQ(get_tree_height(graph), 4);
+  graph = generate_trace_graph_from_headers("a-b-c-d,b-e,c-f,f-g,g-h", "");
+  EXPECT_EQ(get_tree_height(graph), 5);
 }

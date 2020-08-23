@@ -142,3 +142,42 @@ const Node *get_node_with_id(const trace_graph_t &g, std::string_view id) {
 
   return nullptr;
 }
+
+class tree_height_dfs_visitor : public boost::default_dfs_visitor {
+public:
+  tree_height_dfs_visitor(int *height) { height_ = height; }
+
+  template <typename Vertex, typename Graph>
+  void initialize_vertex(Vertex s, const Graph &g) {
+    dists_[s] = INT_MAX;
+  }
+
+  template <typename Vertex, typename Graph>
+  void start_vertex(Vertex u, const Graph &g) {
+    dists_[u] = 0;
+  }
+
+  template <typename Edge, typename Graph>
+  void tree_edge(Edge e, const Graph &g) {
+    auto src = boost::source(e, g);
+    auto dst = boost::target(e, g);
+
+    if (dists_[dst] > dists_[src] + 1) {
+      dists_[dst] = dists_[src] + 1;
+
+      if (*height_ < dists_[dst]) {
+        *height_ = dists_[dst];
+      }
+    }
+  }
+
+  std::map<boost::graph_traits<trace_graph_t>::vertex_descriptor, int> dists_;
+  int *height_;
+};
+
+int get_tree_height(const trace_graph_t &graph) {
+  int height = 0;
+  tree_height_dfs_visitor vis(&height);
+  boost::depth_first_search(graph, boost::visitor(vis));
+  return height;
+}
