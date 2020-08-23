@@ -40,7 +40,7 @@ pub enum Filter<'a> {
 #[derive(Debug, PartialEq)]
 pub enum Action<'a> {
     None,
-    Property(Identifier<'a>, Identifier<'a>), // xyz.a, xyz.b
+    GetProperty(Identifier<'a>, Identifier<'a>), // xyz.a, xyz.b
     CallUdf(Identifier<'a>),                  // f, we assume that the udf takes graph as input.
 }
 
@@ -48,7 +48,7 @@ impl<'a> fmt::Display for Action<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Action::None => write!(f, "none"),
-            Action::Property(id, p) => {
+            Action::GetProperty(id, p) => {
                 let mut result = String::new();
                 result.push_str(&id.to_string());
                 result.push_str(".");

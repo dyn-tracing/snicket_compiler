@@ -145,7 +145,7 @@ fn parse_action<'a>(token_iter: &mut TokenIterator<'a>) -> Action<'a> {
         Token::Period => {
             let property = parse_identifier(token_iter);
             consume_token(token_iter, &Token::Comma, "Must end with a comma");
-            Action::Property(id, property)
+            Action::GetProperty(id, property)
         }
         Token::Comma => Action::CallUdf(id),
         _ => panic!("Unrecognized token: {:?}", operator_token),
@@ -295,7 +295,7 @@ mod tests {
         let action = parse_action(token_iter);
         assert_eq!(
             action,
-            Action::Property(Identifier { id_name: "n" }, Identifier { id_name: "x" },)
+            Action::GetProperty(Identifier { id_name: "n" }, Identifier { id_name: "x" },)
         )
     }
     test_parser_success!(
@@ -319,7 +319,7 @@ mod tests {
                     relationship_type: Relationship::Edge(Identifier { id_name: "a" })
                 }]),
                 filters: Filters::new(),
-                action: Action::Property(Identifier { id_name: "n" }, Identifier { id_name: "x" },)
+                action: Action::GetProperty(Identifier { id_name: "n" }, Identifier { id_name: "x" },)
             }
         )
     }
@@ -359,7 +359,7 @@ mod tests {
                     relationship_type: Relationship::Edge(Identifier { id_name: "a" })
                 }]),
                 filters: Filters::new(),
-                action: Action::Property(
+                action: Action::GetProperty(
                     Identifier { id_name: "graph" },
                     Identifier {
                         id_name: "num_vertices"

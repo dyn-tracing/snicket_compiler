@@ -44,7 +44,7 @@ pub trait TreeFold<'a> {
 
     fn visit_action(&mut self, tree: &'a Action) {
         match &tree {
-            Action::Property(ref id, ref p) => {
+            Action::GetProperty(ref id, ref p) => {
                 self.visit_identifier(id);
                 self.visit_identifier(p);
             }

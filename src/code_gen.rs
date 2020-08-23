@@ -144,7 +144,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
 
     fn visit_action(&mut self, action: &'a Action) {
         match action {
-            Action::Property(id, p) => {
+            Action::GetProperty(id, p) => {
                 self.properties_to_collect
                     .insert(self.property_map[p.id_name].clone());
 
