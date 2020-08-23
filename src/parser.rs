@@ -343,4 +343,29 @@ mod tests {
             }
         )
     }
+
+    #[test]
+    fn test_parse_graph_property() {
+        let input: &str = r"MATCH n-->m: a, RETURN graph.num_vertices,";
+        let tokens = &mut get_tokens(input);
+        let token_iter = &mut tokens.iter().peekable();
+        let prog = parse_prog(token_iter);
+        assert_eq!(
+            prog,
+            Prog {
+                patterns: Patterns(vec![Pattern {
+                    from_node: Identifier { id_name: "n" },
+                    to_node: Identifier { id_name: "m" },
+                    relationship_type: Relationship::Edge(Identifier { id_name: "a" })
+                }]),
+                filters: Filters::new(),
+                action: Action::Property(
+                    Identifier { id_name: "graph" },
+                    Identifier {
+                        id_name: "num_vertices"
+                    }
+                )
+            }
+        )
+    }
 }
