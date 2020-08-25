@@ -4,22 +4,23 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 use tree_fold::TreeFold;
 
-#[derive(Default, Serialize, PartialEq, Eq, Debug)]
-pub struct Property<'a> {
-    pub id: &'a str,
-    pub parts: Vec<&'a str>,
-    pub value: String,
-}
-
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq, Eq, Debug, Hash, Clone)]
 pub enum CppType {
+    Int,
     Int64T,
     String,
+}
+
+impl Default for CppType {
+    fn default() -> Self {
+        CppType::String
+    }
 }
 
 impl fmt::Display for CppType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            CppType::Int => write!(f, "int"),
             CppType::Int64T => write!(f, "int64_t"),
             CppType::String => write!(f, "std::string"),
         }
@@ -35,8 +36,9 @@ pub struct CppDefVar {
 
 #[derive(Default, Serialize, PartialEq, Eq, Debug, Hash, Clone)]
 pub struct Attribute<'a> {
-    pub typ: &'a str,
+    pub typ: CppType,
     pub parts: Vec<&'a str>,
+    pub value: Option<String>,
 }
 
 // pub struct Attribute {
@@ -102,6 +104,19 @@ impl<'a> Default for Return<'a> {
     }
 }
 
+#[derive(Serialize)]
+pub enum Result {
+    Return { typ: CppType, id: String },
+    GroupBy { typ: CppType, id: String },
+    None,
+}
+
+impl<'a> Default for Result {
+    fn default() -> Self {
+        Result::None
+    }
+}
+
 pub struct CodeGenConfig<'a> {
     pub attributes_to_property_parts: HashMap<&'static str, Attribute<'a>>,
     pub udf_table: HashMap<&'static str, Udf<'a>>,
@@ -119,16 +134,18 @@ impl<'a> Default for CodeGenConfig<'a> {
         attributes_to_property_parts.insert(
             "service_name",
             Attribute {
-                typ: "std::string",
+                typ: CppType::String,
                 parts: vec!["node", "metadata", "WORKLOAD_NAME"],
+                value: None,
             },
         );
 
         attributes_to_property_parts.insert(
             "response_size",
             Attribute {
-                typ: "int64_t",
+                typ: CppType::Int64T,
                 parts: vec!["response", "total_size"],
+                value: None,
             },
         );
 
@@ -145,14 +162,15 @@ pub struct CodeGen<'a> {
     pub root_id: &'a str,
     pub vertices: HashSet<&'a str>,
     pub edges: Vec<(&'a str, &'a str)>,
-    pub ids_to_properties: Vec<Property<'a>>,
+    pub ids_to_attributes: HashMap<&'a str, Vec<Attribute<'a>>>,
 
     // For running code to get node/graph attributes.
-    pub node_properties_to_collect: HashSet<Attribute<'a>>,
-    pub graph_properties_to_collect: Vec<Attribute<'a>>,
+    pub node_attributes_to_collect: HashSet<Attribute<'a>>,
+    pub graph_attributes_to_collect: Vec<Attribute<'a>>,
 
     // Final computation result
     pub return_stmt: Return<'a>,
+    pub result: Result,
 
     #[serde(skip_serializing)]
     pub config: CodeGenConfig<'a>,
@@ -197,16 +215,16 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
         let Filter::Property(id, p, value) = filter;
 
         let vertex_id = id.id_name;
-        let to_collect = &self.config.attributes_to_property_parts[p.id_name];
-        let value_str = value.to_string();
+        let mut attribute = self.config.attributes_to_property_parts[p.id_name].clone();
 
-        self.node_properties_to_collect.insert(to_collect.clone());
+        self.node_attributes_to_collect.insert(attribute.clone());
 
-        self.ids_to_properties.push(Property {
-            id: vertex_id,
-            parts: to_collect.parts.clone(),
-            value: value_str,
-        });
+        attribute.value = Some(value.to_string());
+
+        self.ids_to_attributes
+            .entry(vertex_id)
+            .or_default()
+            .push(attribute.clone());
     }
 
     fn visit_action(&mut self, action: &'a Action) {
@@ -214,15 +232,16 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
             Action::GetProperty(id, p) => {
                 if id.id_name == "target" {
                     if p.id_name == "height" {
-                        self.graph_properties_to_collect.push(Attribute {
-                            typ: "int",
+                        self.graph_attributes_to_collect.push(Attribute {
+                            typ: CppType::Int,
                             parts: vec!["get_tree_height"],
+                            value: None,
                         });
                     } else {
                         panic!("{} graph property not supported", p.id_name)
                     }
                 } else {
-                    self.node_properties_to_collect
+                    self.node_attributes_to_collect
                         .insert(self.config.attributes_to_property_parts[p.id_name].clone());
 
                     self.return_stmt = Return::Property(ReturnProperty {
@@ -264,7 +283,7 @@ mod tests {
 
         assert_eq!(code_gen.vertices, ["a", "b", "c"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("a", "b"), ("b", "c")]);
-        assert!(code_gen.ids_to_properties.is_empty());
+        assert!(code_gen.ids_to_attributes.is_empty());
     }
 
     #[test]
@@ -278,7 +297,7 @@ mod tests {
 
         assert_eq!(code_gen.vertices, ["a", "b", "c"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("b", "c"), ("a", "b")]);
-        assert!(code_gen.ids_to_properties.is_empty());
+        assert!(code_gen.ids_to_attributes.is_empty());
     }
 
     #[test]
@@ -295,7 +314,7 @@ mod tests {
             ["a", "b", "c", "d"].iter().cloned().collect()
         );
         assert_eq!(code_gen.edges, vec![("b", "c"), ("a", "b"), ("a", "d")]);
-        assert!(code_gen.ids_to_properties.is_empty());
+        assert!(code_gen.ids_to_attributes.is_empty());
     }
 
     #[test]
@@ -307,8 +326,9 @@ mod tests {
             attributes_to_property_parts: [(
                 "x",
                 Attribute {
-                    typ: "string",
+                    typ: CppType::String,
                     parts: vec!["x"],
+                    value: None,
                 },
             )]
             .iter()
@@ -320,14 +340,14 @@ mod tests {
 
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
-        assert_eq!(
-            code_gen.ids_to_properties,
-            vec![Property {
-                id: "n",
-                parts: vec!["x"],
-                value: String::from("k"),
-            }]
-        );
+        // assert_eq!(
+        //     code_gen.ids_to_properties,
+        //     vec![Property {
+        //         id: "n",
+        //         parts: vec!["x"],
+        //         value: String::from("k"),
+        //     }]
+        // );
         assert_eq!(
             code_gen.return_stmt,
             Return::Property(ReturnProperty {
@@ -346,8 +366,9 @@ mod tests {
             attributes_to_property_parts: [(
                 "x",
                 Attribute {
-                    typ: "string",
+                    typ: CppType::String,
                     parts: vec!["x"],
+                    value: None,
                 },
             )]
             .iter()
@@ -379,15 +400,17 @@ mod tests {
                 (
                     "x",
                     Attribute {
-                        typ: "string",
+                        typ: CppType::String,
                         parts: vec!["x"],
+                        value: None,
                     },
                 ),
                 (
                     "y",
                     Attribute {
-                        typ: "int64_t",
+                        typ: CppType::Int64T,
                         parts: vec!["y"],
+                        value: None,
                     },
                 ),
             ]
@@ -401,24 +424,26 @@ mod tests {
 
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
+        // assert_eq!(
+        //     code_gen.ids_to_properties,
+        //     vec![Property {
+        //         id: "n",
+        //         parts: vec!["x"],
+        //         value: String::from("k"),
+        //     }]
+        // );
         assert_eq!(
-            code_gen.ids_to_properties,
-            vec![Property {
-                id: "n",
-                parts: vec!["x"],
-                value: String::from("k"),
-            }]
-        );
-        assert_eq!(
-            code_gen.node_properties_to_collect,
+            code_gen.node_attributes_to_collect,
             [
                 Attribute {
-                    typ: "string",
+                    typ: CppType::String,
                     parts: vec!["x"],
+                    value: None,
                 },
                 Attribute {
-                    typ: "int64_t",
+                    typ: CppType::Int64T,
                     parts: vec!["y"],
+                    value: None,
                 },
             ]
             .iter()
@@ -444,10 +469,11 @@ mod tests {
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
-            code_gen.graph_properties_to_collect,
+            code_gen.graph_attributes_to_collect,
             vec![Attribute {
-                typ: "int",
-                parts: vec!["get_tree_height"]
+                typ: CppType::Int,
+                parts: vec!["get_tree_height"],
+                value: None,
             }]
         );
     }
