@@ -63,6 +63,7 @@ pub struct CodeGen<'a> {
     pub edges: Vec<(&'a str, &'a str)>,
     pub ids_to_properties: Vec<Property<'a>>,
     pub node_properties_to_collect: HashSet<ToCollect<'a>>,
+    pub graph_properties_to_collect: Vec<ToCollect<'a>>,
     pub return_stmt: Return<'a>,
     #[serde(skip_serializing)]
     property_map: HashMap<&'static str, ToCollect<'a>>,
@@ -145,13 +146,24 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
     fn visit_action(&mut self, action: &'a Action) {
         match action {
             Action::GetProperty(id, p) => {
-                self.node_properties_to_collect
-                    .insert(self.property_map[p.id_name].clone());
+                if id.id_name == "graph" {
+                    if p.id_name == "height" {
+                        self.graph_properties_to_collect.push(ToCollect {
+                            typ: "int",
+                            paths: vec!["get_tree_height"],
+                        });
+                    } else {
+                        panic!("{} graph property not supported", p.id_name)
+                    }
+                } else {
+                    self.node_properties_to_collect
+                        .insert(self.property_map[p.id_name].clone());
 
-                self.return_stmt = Return::Property(ReturnProperty {
-                    id: id.id_name,
-                    paths: self.property_map[p.id_name].paths.clone(),
-                });
+                    self.return_stmt = Return::Property(ReturnProperty {
+                        id: id.id_name,
+                        paths: self.property_map[p.id_name].paths.clone(),
+                    });
+                }
             }
             Action::None => {}
             Action::CallUdf(id) => {
@@ -352,5 +364,20 @@ mod tests {
     }
 
     #[test]
-    fn test_codegen_udf() {}
+    fn test_codegen_graph_properties() {
+        let tokens = lexer::get_tokens(r"MATCH n-->m: a, RETURN graph.height,");
+        let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
+        let parse_tree = parser::parse_prog(&mut token_iter);
+        let mut code_gen = CodeGen::new();
+        code_gen.visit_prog(&parse_tree);
+        assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
+        assert_eq!(code_gen.edges, vec![("n", "m")]);
+        assert_eq!(
+            code_gen.graph_properties_to_collect,
+            vec![ToCollect {
+                typ: "int",
+                paths: vec!["get_tree_height"]
+            }]
+        );
+    }
 }
