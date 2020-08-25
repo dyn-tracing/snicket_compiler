@@ -42,10 +42,16 @@ pub enum CppCodeBlock<'a> {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
-pub struct Attribute<'a> {
+pub struct NodeAttribute<'a> {
+    pub id: &'a str,
+    pub parts: Vec<&'a str>,
+    pub value: String,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
+pub struct AttributeDef<'a> {
     pub typ: CppType,
     pub parts: Vec<&'a str>,
-    pub value: Option<String>,
 }
 
 #[derive(Serialize, PartialEq, Eq, Debug, Clone)]
@@ -83,7 +89,7 @@ impl<'a> Default for Result {
 }
 
 pub struct CodeGenConfig<'a> {
-    pub attributes_to_property_parts: HashMap<&'static str, Attribute<'a>>,
+    pub attributes_to_property_parts: HashMap<&'static str, AttributeDef<'a>>,
     pub udf_table: HashMap<&'static str, Udf<'a>>,
 }
 
@@ -98,19 +104,17 @@ impl<'a> Default for CodeGenConfig<'a> {
         let mut attributes_to_property_parts = HashMap::new();
         attributes_to_property_parts.insert(
             "service_name",
-            Attribute {
+            AttributeDef {
                 typ: CppType::String,
                 parts: vec!["node", "metadata", "WORKLOAD_NAME"],
-                value: None,
             },
         );
 
         attributes_to_property_parts.insert(
             "response_size",
-            Attribute {
+            AttributeDef {
                 typ: CppType::Int64T,
                 parts: vec!["response", "total_size"],
-                value: None,
             },
         );
 
@@ -127,7 +131,10 @@ pub struct CodeGen<'a> {
     pub root_id: &'a str,
     pub vertices: HashSet<&'a str>,
     pub edges: Vec<(&'a str, &'a str)>,
-    pub ids_to_attributes: HashMap<&'a str, Vec<Attribute<'a>>>,
+    pub nodes_to_attributes: Vec<NodeAttribute<'a>>,
+
+    // Envoy node attribute initializer lists.
+    pub nodes_to_attributes_to_fetch: Vec<Vec<&'a str>>,
 
     // Intermediate computations necessary for computing result
     pub blocks: Vec<CppCodeBlock<'a>>,
@@ -177,15 +184,15 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
     fn visit_filter(&mut self, filter: &'a Filter) {
         let Filter::Property(id, p, value) = filter;
 
-        let vertex_id = id.id_name;
+        let node_id = id.id_name;
 
-        let mut attribute = self.config.attributes_to_property_parts[p.id_name].clone();
-        attribute.value = Some(value.to_string());
+        let attribute_def = &self.config.attributes_to_property_parts[p.id_name];
 
-        self.ids_to_attributes
-            .entry(vertex_id)
-            .or_default()
-            .push(attribute);
+        self.nodes_to_attributes.push(NodeAttribute {
+            id: node_id,
+            parts: attribute_def.parts.clone(),
+            value: value.to_string(),
+        });
     }
 
     fn visit_action(&mut self, action: &'a Action) {
@@ -267,7 +274,7 @@ mod tests {
 
         assert_eq!(code_gen.vertices, ["a", "b", "c"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("a", "b"), ("b", "c")]);
-        assert!(code_gen.ids_to_attributes.is_empty());
+        assert!(code_gen.nodes_to_attributes.is_empty());
     }
 
     #[test]
@@ -281,7 +288,7 @@ mod tests {
 
         assert_eq!(code_gen.vertices, ["a", "b", "c"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("b", "c"), ("a", "b")]);
-        assert!(code_gen.ids_to_attributes.is_empty());
+        assert!(code_gen.nodes_to_attributes.is_empty());
     }
 
     #[test]
@@ -298,7 +305,7 @@ mod tests {
             ["a", "b", "c", "d"].iter().cloned().collect()
         );
         assert_eq!(code_gen.edges, vec![("b", "c"), ("a", "b"), ("a", "d")]);
-        assert!(code_gen.ids_to_attributes.is_empty());
+        assert!(code_gen.nodes_to_attributes.is_empty());
     }
 
     #[test]
@@ -309,10 +316,9 @@ mod tests {
         let mut code_gen = CodeGen::new_with_config(CodeGenConfig {
             attributes_to_property_parts: [(
                 "x",
-                Attribute {
+                AttributeDef {
                     typ: CppType::String,
                     parts: vec!["x"],
-                    value: None,
                 },
             )]
             .iter()
@@ -333,18 +339,12 @@ mod tests {
             }]
         );
         assert_eq!(
-            code_gen.ids_to_attributes,
-            [(
-                "n",
-                vec![Attribute {
-                    typ: CppType::String,
-                    parts: vec!["x"],
-                    value: Some(String::from("k")),
-                }]
-            )]
-            .iter()
-            .cloned()
-            .collect()
+            code_gen.nodes_to_attributes,
+            vec![NodeAttribute {
+                id: "n",
+                parts: vec!["x"],
+                value: String::from("k"),
+            }]
         );
         assert_eq!(
             code_gen.result,
@@ -363,10 +363,9 @@ mod tests {
         let mut code_gen = CodeGen::new_with_config(CodeGenConfig {
             attributes_to_property_parts: [(
                 "x",
-                Attribute {
+                AttributeDef {
                     typ: CppType::String,
                     parts: vec!["x"],
-                    value: None,
                 },
             )]
             .iter()
@@ -405,18 +404,16 @@ mod tests {
             attributes_to_property_parts: [
                 (
                     "x",
-                    Attribute {
+                    AttributeDef {
                         typ: CppType::String,
                         parts: vec!["x"],
-                        value: None,
                     },
                 ),
                 (
                     "y",
-                    Attribute {
+                    AttributeDef {
                         typ: CppType::Int64T,
                         parts: vec!["y"],
-                        value: None,
                     },
                 ),
             ]
@@ -431,18 +428,12 @@ mod tests {
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
-            code_gen.ids_to_attributes,
-            [(
-                "n",
-                vec![Attribute {
-                    typ: CppType::String,
-                    parts: vec!["x"],
-                    value: Some(String::from("k")),
-                }]
-            )]
-            .iter()
-            .cloned()
-            .collect()
+            code_gen.nodes_to_attributes,
+            vec![NodeAttribute {
+                id: "n",
+                parts: vec!["x"],
+                value: String::from("k"),
+            }]
         );
     }
 
