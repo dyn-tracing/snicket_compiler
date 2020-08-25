@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 use tree_fold::TreeFold;
 
-#[derive(Serialize, PartialEq, Eq, Debug, Hash, Clone)]
+#[derive(Serialize, PartialEq, Eq, Debug, Hash, Clone, Copy)]
 pub enum CppType {
     Int,
     Int64T,
@@ -28,10 +28,17 @@ impl fmt::Display for CppType {
 }
 
 #[derive(Serialize)]
-pub struct CppDefVar {
-    typ: CppType,
-    id: String,
-    rvalue: String,
+pub enum CppCodeBlock<'a> {
+    NodeEnvoyProperty {
+        typ: CppType,
+        id: String,
+        parts: Vec<&'a str>,
+    },
+    CallFunc {
+        typ: CppType,
+        udf_id: &'a str,
+        args: Vec<&'a str>,
+    },
 }
 
 #[derive(Default, Serialize, PartialEq, Eq, Debug, Hash, Clone)]
@@ -40,29 +47,6 @@ pub struct Attribute<'a> {
     pub parts: Vec<&'a str>,
     pub value: Option<String>,
 }
-
-// pub struct Attribute {
-//     pub id: String,
-//     pub value: String,
-// }
-
-// // Run the code to retrieve Envoy property.
-// // {{typ}} {{parts.join(_)}};
-// // if (!getValue({ {{#each parts}} "{{this}}", {{/each}} }, &{{parts.join(_)}})) {
-// //   logWarn("Failed to retrieve property. {{parts.join(_}}");
-// // }
-// pub struct EnvoyProperty {
-//     pub typ: CPPType,
-//     pub parts: Vec<String>,
-// }
-
-// // Call function `func_name` which returns a value of type `return_type` using `args`.
-// // {{return_type}}
-// pub struct Callfunc {
-//     pub return_type: CPPType,
-//     pub func_name: String,
-//     pub args: Vec<String>,
-// }
 
 #[derive(Default, Serialize, PartialEq, Eq, Debug)]
 pub struct ReturnProperty<'a> {
@@ -89,19 +73,6 @@ pub struct Udf<'a> {
     pub func_impl: &'a str,
     pub return_type: CppType,
     pub arg: Vec<&'a str>,
-}
-
-#[derive(Serialize, PartialEq, Eq, Debug)]
-pub enum Return<'a> {
-    Property(ReturnProperty<'a>),
-    CallUdf(Udf<'a>),
-    None,
-}
-
-impl<'a> Default for Return<'a> {
-    fn default() -> Self {
-        Return::None
-    }
 }
 
 #[derive(Serialize)]
@@ -164,12 +135,9 @@ pub struct CodeGen<'a> {
     pub edges: Vec<(&'a str, &'a str)>,
     pub ids_to_attributes: HashMap<&'a str, Vec<Attribute<'a>>>,
 
-    // For running code to get node/graph attributes.
-    pub node_attributes_to_collect: HashSet<Attribute<'a>>,
-    pub graph_attributes_to_collect: Vec<Attribute<'a>>,
-
+    // Intermediate computations necessary for computing result
+    pub blocks: Vec<CppCodeBlock<'a>>,
     // Final computation result
-    pub return_stmt: Return<'a>,
     pub result: Result,
 
     #[serde(skip_serializing)]
@@ -215,16 +183,14 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
         let Filter::Property(id, p, value) = filter;
 
         let vertex_id = id.id_name;
+
         let mut attribute = self.config.attributes_to_property_parts[p.id_name].clone();
-
-        self.node_attributes_to_collect.insert(attribute.clone());
-
         attribute.value = Some(value.to_string());
 
         self.ids_to_attributes
             .entry(vertex_id)
             .or_default()
-            .push(attribute.clone());
+            .push(attribute);
     }
 
     fn visit_action(&mut self, action: &'a Action) {
@@ -232,24 +198,35 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
             Action::GetProperty(id, p) => {
                 if id.id_name == "target" {
                     if p.id_name == "height" {
-                        self.graph_attributes_to_collect.push(Attribute {
+                        let cpp_var_id = "get_tree_height_target";
+                        self.blocks.push(CppCodeBlock::CallFunc {
                             typ: CppType::Int,
-                            parts: vec!["get_tree_height"],
-                            value: None,
+                            udf_id: "get_tree_height",
+                            args: vec!["target"],
                         });
+
+                        self.result = Result::Return {
+                            typ: CppType::Int,
+                            id: String::from(cpp_var_id),
+                        };
                     } else {
                         panic!("{} graph property not supported", p.id_name)
                     }
                 } else {
-                    self.node_attributes_to_collect
-                        .insert(self.config.attributes_to_property_parts[p.id_name].clone());
+                    let attribute = &self.config.attributes_to_property_parts[p.id_name];
 
-                    self.return_stmt = Return::Property(ReturnProperty {
-                        id: id.id_name,
-                        paths: self.config.attributes_to_property_parts[p.id_name]
-                            .parts
-                            .clone(),
+                    let cpp_var_id: String =
+                        String::from(id.id_name) + "_" + &attribute.parts.join("_");
+                    self.blocks.push(CppCodeBlock::NodeEnvoyProperty {
+                        typ: attribute.typ,
+                        id: cpp_var_id.clone(),
+                        parts: attribute.parts.clone(),
                     });
+
+                    self.result = Result::Return {
+                        typ: attribute.typ,
+                        id: cpp_var_id,
+                    };
                 }
             }
             Action::None => {}
@@ -257,8 +234,13 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                 if !self.config.udf_table.contains_key(id.id_name) {
                     panic!("Can't find udf function: {}", id.id_name);
                 }
-                let func = self.config.udf_table[id.id_name].clone();
-                self.return_stmt = Return::CallUdf(func);
+                let func = &self.config.udf_table[id.id_name];
+
+                self.blocks.push(CppCodeBlock::CallFunc {
+                    typ: func.return_type,
+                    udf_id: func.id,
+                    args: vec![],
+                });
             }
         }
     }
@@ -348,13 +330,6 @@ mod tests {
         //         value: String::from("k"),
         //     }]
         // );
-        assert_eq!(
-            code_gen.return_stmt,
-            Return::Property(ReturnProperty {
-                id: "n",
-                paths: vec!["x"]
-            })
-        );
     }
 
     #[test]
@@ -381,13 +356,6 @@ mod tests {
 
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
-        assert_eq!(
-            code_gen.return_stmt,
-            Return::Property(ReturnProperty {
-                id: "n",
-                paths: vec!["x"]
-            })
-        );
     }
 
     #[test]
@@ -432,31 +400,6 @@ mod tests {
         //         value: String::from("k"),
         //     }]
         // );
-        assert_eq!(
-            code_gen.node_attributes_to_collect,
-            [
-                Attribute {
-                    typ: CppType::String,
-                    parts: vec!["x"],
-                    value: None,
-                },
-                Attribute {
-                    typ: CppType::Int64T,
-                    parts: vec!["y"],
-                    value: None,
-                },
-            ]
-            .iter()
-            .cloned()
-            .collect()
-        );
-        assert_eq!(
-            code_gen.return_stmt,
-            Return::Property(ReturnProperty {
-                id: "n",
-                paths: vec!["y"]
-            })
-        );
     }
 
     #[test]
@@ -468,13 +411,5 @@ mod tests {
         code_gen.visit_prog(&parse_tree);
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
-        assert_eq!(
-            code_gen.graph_attributes_to_collect,
-            vec![Attribute {
-                typ: CppType::Int,
-                parts: vec!["get_tree_height"],
-                value: None,
-            }]
-        );
     }
 }
