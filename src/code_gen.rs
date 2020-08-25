@@ -131,6 +131,7 @@ pub struct CodeGen<'a> {
 
     // Intermediate computations necessary for computing result
     pub blocks: Vec<CppCodeBlock<'a>>,
+    pub udf_impls: Vec<&'a str>,
     // Final computation result
     pub result: Result,
 
@@ -235,6 +236,8 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                     udf_id: func.id,
                     args: vec![],
                 });
+
+                self.udf_impls.push(func.func_impl);
 
                 self.result = Result::Return {
                     typ: func.return_type,
@@ -497,6 +500,7 @@ mod tests {
                 args: vec![],
             }]
         );
+        assert_eq!(code_gen.udf_impls, vec!["function_impl"]);
         assert_eq!(
             code_gen.result,
             Result::Return {
