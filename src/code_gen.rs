@@ -1,6 +1,7 @@
 use grammar::*;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 use tree_fold::TreeFold;
 
 #[derive(Default, Serialize, PartialEq, Eq, Debug)]
@@ -10,11 +11,49 @@ pub struct Property<'a> {
     pub value: String,
 }
 
+#[derive(Serialize)]
+pub enum CppType {
+    Int64T,
+    String,
+}
+
+impl fmt::Display for CppType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CppType::Int64T => write!(f, "int64_t"),
+            CppType::String => write!(f, "std::string"),
+        }
+    }
+}
+
 #[derive(Default, Serialize, PartialEq, Eq, Debug, Hash, Clone)]
 pub struct ToCollect<'a> {
     pub typ: &'a str,
     pub paths: Vec<&'a str>,
 }
+
+// pub struct Attribute {
+//     pub id: String,
+//     pub value: String,
+// }
+
+// // Run the code to retrieve Envoy property.
+// // {{typ}} {{parts.join(_)}};
+// // if (!getValue({ {{#each parts}} "{{this}}", {{/each}} }, &{{parts.join(_)}})) {
+// //   logWarn("Failed to retrieve property. {{parts.join(_}}");
+// // }
+// pub struct EnvoyProperty {
+//     pub typ: CPPType,
+//     pub parts: Vec<String>,
+// }
+
+// // Call function `func_name` which returns a value of type `return_type` using `args`.
+// // {{return_type}}
+// pub struct Callfunc {
+//     pub return_type: CPPType,
+//     pub func_name: String,
+//     pub args: Vec<String>,
+// }
 
 #[derive(Default, Serialize, PartialEq, Eq, Debug)]
 pub struct ReturnProperty<'a> {
@@ -56,33 +95,29 @@ impl<'a> Default for Return<'a> {
     }
 }
 
-#[derive(Default, Serialize)]
-pub struct CodeGen<'a> {
-    pub root_id: &'a str,
-    pub vertices: HashSet<&'a str>,
-    pub edges: Vec<(&'a str, &'a str)>,
-    pub ids_to_properties: Vec<Property<'a>>,
-    pub node_properties_to_collect: HashSet<ToCollect<'a>>,
-    pub graph_properties_to_collect: Vec<ToCollect<'a>>,
-    pub return_stmt: Return<'a>,
-    #[serde(skip_serializing)]
-    property_map: HashMap<&'static str, ToCollect<'a>>,
-    #[serde(skip_serializing)]
+pub struct CodeGenConfig<'a> {
+    pub attributes_to_property_parts: HashMap<&'static str, ToCollect<'a>>,
     pub udf_table: HashMap<&'static str, Udf<'a>>,
 }
 
-impl<'a> CodeGen<'a> {
-    pub fn new() -> CodeGen<'a> {
-        let mut property_map = HashMap::new();
-        // TODO: need to specify the type of value returned.
-        property_map.insert(
+impl<'a> CodeGenConfig<'a> {
+    pub fn new() -> Self {
+        Default::default()
+    }
+}
+
+impl<'a> Default for CodeGenConfig<'a> {
+    fn default() -> Self {
+        let mut attributes_to_property_parts = HashMap::new();
+        attributes_to_property_parts.insert(
             "service_name",
             ToCollect {
                 typ: "std::string",
                 paths: vec!["node", "metadata", "WORKLOAD_NAME"],
             },
         );
-        property_map.insert(
+
+        attributes_to_property_parts.insert(
             "response_size",
             ToCollect {
                 typ: "int64_t",
@@ -90,16 +125,40 @@ impl<'a> CodeGen<'a> {
             },
         );
 
-        CodeGen {
-            property_map,
-            ..Default::default()
+        CodeGenConfig {
+            attributes_to_property_parts,
+            udf_table: HashMap::new(),
         }
     }
+}
 
-    #[cfg(test)]
-    pub fn new_with_property_map(property_map: HashMap<&'static str, ToCollect<'a>>) -> Self {
+#[derive(Default, Serialize)]
+pub struct CodeGen<'a> {
+    // Graph structures
+    pub root_id: &'a str,
+    pub vertices: HashSet<&'a str>,
+    pub edges: Vec<(&'a str, &'a str)>,
+    pub ids_to_properties: Vec<Property<'a>>,
+
+    // For running code to get node/graph attributes.
+    pub node_properties_to_collect: HashSet<ToCollect<'a>>,
+    pub graph_properties_to_collect: Vec<ToCollect<'a>>,
+
+    // Final computation result
+    pub return_stmt: Return<'a>,
+
+    #[serde(skip_serializing)]
+    pub config: CodeGenConfig<'a>,
+}
+
+impl<'a> CodeGen<'a> {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn new_with_config(config: CodeGenConfig<'a>) -> Self {
         CodeGen {
-            property_map,
+            config,
             ..Default::default()
         }
     }
@@ -131,7 +190,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
         let Filter::Property(id, p, value) = filter;
 
         let vertex_id = id.id_name;
-        let to_collect = &self.property_map[p.id_name];
+        let to_collect = &self.config.attributes_to_property_parts[p.id_name];
         let value_str = value.to_string();
 
         self.node_properties_to_collect.insert(to_collect.clone());
@@ -146,7 +205,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
     fn visit_action(&mut self, action: &'a Action) {
         match action {
             Action::GetProperty(id, p) => {
-                if id.id_name == "graph" {
+                if id.id_name == "target" {
                     if p.id_name == "height" {
                         self.graph_properties_to_collect.push(ToCollect {
                             typ: "int",
@@ -157,20 +216,22 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                     }
                 } else {
                     self.node_properties_to_collect
-                        .insert(self.property_map[p.id_name].clone());
+                        .insert(self.config.attributes_to_property_parts[p.id_name].clone());
 
                     self.return_stmt = Return::Property(ReturnProperty {
                         id: id.id_name,
-                        paths: self.property_map[p.id_name].paths.clone(),
+                        paths: self.config.attributes_to_property_parts[p.id_name]
+                            .paths
+                            .clone(),
                     });
                 }
             }
             Action::None => {}
             Action::CallUdf(id) => {
-                if !self.udf_table.contains_key(id.id_name) {
+                if !self.config.udf_table.contains_key(id.id_name) {
                     panic!("Can't find udf function: {}", id.id_name);
                 }
-                let func = self.udf_table[id.id_name].clone();
+                let func = self.config.udf_table[id.id_name].clone();
                 self.return_stmt = Return::CallUdf(func);
             }
         }
@@ -235,8 +296,8 @@ mod tests {
         let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, WHERE n.x ==k, RETURN n.x,");
         let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
         let parse_tree = parser::parse_prog(&mut token_iter);
-        let mut code_gen = CodeGen::new_with_property_map(
-            [(
+        let mut code_gen = CodeGen::new_with_config(CodeGenConfig {
+            attributes_to_property_parts: [(
                 "x",
                 ToCollect {
                     typ: "string",
@@ -246,7 +307,8 @@ mod tests {
             .iter()
             .cloned()
             .collect(),
-        );
+            ..Default::default()
+        });
         code_gen.visit_prog(&parse_tree);
 
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
@@ -273,8 +335,8 @@ mod tests {
         let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, RETURN n.x,");
         let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
         let parse_tree = parser::parse_prog(&mut token_iter);
-        let mut code_gen = CodeGen::new_with_property_map(
-            [(
+        let mut code_gen = CodeGen::new_with_config(CodeGenConfig {
+            attributes_to_property_parts: [(
                 "x",
                 ToCollect {
                     typ: "string",
@@ -284,7 +346,8 @@ mod tests {
             .iter()
             .cloned()
             .collect(),
-        );
+            ..Default::default()
+        });
 
         code_gen.visit_prog(&parse_tree);
 
@@ -304,8 +367,8 @@ mod tests {
         let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, WHERE n.x ==k, RETURN n.y,");
         let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
         let parse_tree = parser::parse_prog(&mut token_iter);
-        let mut code_gen = CodeGen::new_with_property_map(
-            [
+        let mut code_gen = CodeGen::new_with_config(CodeGenConfig {
+            attributes_to_property_parts: [
                 (
                     "x",
                     ToCollect {
@@ -324,7 +387,8 @@ mod tests {
             .iter()
             .cloned()
             .collect(),
-        );
+            ..Default::default()
+        });
 
         code_gen.visit_prog(&parse_tree);
 
@@ -365,7 +429,7 @@ mod tests {
 
     #[test]
     fn test_codegen_graph_properties() {
-        let tokens = lexer::get_tokens(r"MATCH n-->m: a, RETURN graph.height,");
+        let tokens = lexer::get_tokens(r"MATCH n-->m: a, RETURN target.height,");
         let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
         let parse_tree = parser::parse_prog(&mut token_iter);
         let mut code_gen = CodeGen::new();

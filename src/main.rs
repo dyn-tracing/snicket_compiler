@@ -34,7 +34,7 @@ fn main() {
 
     let mut code_gen = code_gen::CodeGen::new();
 
-    code_gen.udf_table.insert(
+    code_gen.config.udf_table.insert(
         "aggr_func",
         code_gen::Udf {
             udf_type: code_gen::UdfType::Aggregation,
@@ -54,7 +54,8 @@ private:
             ..Default::default()
         },
     );
-    code_gen.udf_table.insert(
+
+    code_gen.config.udf_table.insert(
         "sum_aggr",
         code_gen::Udf {
             udf_type: code_gen::UdfType::Aggregation,
@@ -65,6 +66,7 @@ private:
             ..Default::default()
         },
     );
+
     code_gen.root_id = "productpagev1";
     code_gen.visit_prog(&parse_tree);
 
