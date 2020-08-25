@@ -50,7 +50,7 @@ public:
 private:
     int num_vertices = 0;
 };"#,
-            return_type: "int",
+            return_type: code_gen::CppType::Int,
             ..Default::default()
         },
     );
@@ -62,7 +62,7 @@ private:
             id: "sum_aggr",
             func_impl: r#"
             "#,
-            return_type: "int",
+            return_type: code_gen::CppType::Int,
             ..Default::default()
         },
     );

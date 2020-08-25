@@ -87,7 +87,7 @@ pub struct Udf<'a> {
     pub udf_type: UdfType,
     pub id: &'a str,
     pub func_impl: &'a str,
-    pub return_type: &'a str,
+    pub return_type: CppType,
     pub arg: Vec<&'a str>,
 }
 
