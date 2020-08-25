@@ -7,7 +7,7 @@ use tree_fold::TreeFold;
 #[derive(Default, Serialize, PartialEq, Eq, Debug)]
 pub struct Property<'a> {
     pub id: &'a str,
-    pub paths: Vec<&'a str>,
+    pub parts: Vec<&'a str>,
     pub value: String,
 }
 
@@ -26,10 +26,17 @@ impl fmt::Display for CppType {
     }
 }
 
+#[derive(Serialize)]
+pub struct CppDefVar {
+    typ: CppType,
+    id: String,
+    rvalue: String,
+}
+
 #[derive(Default, Serialize, PartialEq, Eq, Debug, Hash, Clone)]
-pub struct ToCollect<'a> {
+pub struct Attribute<'a> {
     pub typ: &'a str,
-    pub paths: Vec<&'a str>,
+    pub parts: Vec<&'a str>,
 }
 
 // pub struct Attribute {
@@ -96,7 +103,7 @@ impl<'a> Default for Return<'a> {
 }
 
 pub struct CodeGenConfig<'a> {
-    pub attributes_to_property_parts: HashMap<&'static str, ToCollect<'a>>,
+    pub attributes_to_property_parts: HashMap<&'static str, Attribute<'a>>,
     pub udf_table: HashMap<&'static str, Udf<'a>>,
 }
 
@@ -111,17 +118,17 @@ impl<'a> Default for CodeGenConfig<'a> {
         let mut attributes_to_property_parts = HashMap::new();
         attributes_to_property_parts.insert(
             "service_name",
-            ToCollect {
+            Attribute {
                 typ: "std::string",
-                paths: vec!["node", "metadata", "WORKLOAD_NAME"],
+                parts: vec!["node", "metadata", "WORKLOAD_NAME"],
             },
         );
 
         attributes_to_property_parts.insert(
             "response_size",
-            ToCollect {
+            Attribute {
                 typ: "int64_t",
-                paths: vec!["response", "total_size"],
+                parts: vec!["response", "total_size"],
             },
         );
 
@@ -141,8 +148,8 @@ pub struct CodeGen<'a> {
     pub ids_to_properties: Vec<Property<'a>>,
 
     // For running code to get node/graph attributes.
-    pub node_properties_to_collect: HashSet<ToCollect<'a>>,
-    pub graph_properties_to_collect: Vec<ToCollect<'a>>,
+    pub node_properties_to_collect: HashSet<Attribute<'a>>,
+    pub graph_properties_to_collect: Vec<Attribute<'a>>,
 
     // Final computation result
     pub return_stmt: Return<'a>,
@@ -197,7 +204,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
 
         self.ids_to_properties.push(Property {
             id: vertex_id,
-            paths: to_collect.paths.clone(),
+            parts: to_collect.parts.clone(),
             value: value_str,
         });
     }
@@ -207,9 +214,9 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
             Action::GetProperty(id, p) => {
                 if id.id_name == "target" {
                     if p.id_name == "height" {
-                        self.graph_properties_to_collect.push(ToCollect {
+                        self.graph_properties_to_collect.push(Attribute {
                             typ: "int",
-                            paths: vec!["get_tree_height"],
+                            parts: vec!["get_tree_height"],
                         });
                     } else {
                         panic!("{} graph property not supported", p.id_name)
@@ -221,7 +228,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                     self.return_stmt = Return::Property(ReturnProperty {
                         id: id.id_name,
                         paths: self.config.attributes_to_property_parts[p.id_name]
-                            .paths
+                            .parts
                             .clone(),
                     });
                 }
@@ -299,9 +306,9 @@ mod tests {
         let mut code_gen = CodeGen::new_with_config(CodeGenConfig {
             attributes_to_property_parts: [(
                 "x",
-                ToCollect {
+                Attribute {
                     typ: "string",
-                    paths: vec!["x"],
+                    parts: vec!["x"],
                 },
             )]
             .iter()
@@ -317,7 +324,7 @@ mod tests {
             code_gen.ids_to_properties,
             vec![Property {
                 id: "n",
-                paths: vec!["x"],
+                parts: vec!["x"],
                 value: String::from("k"),
             }]
         );
@@ -338,9 +345,9 @@ mod tests {
         let mut code_gen = CodeGen::new_with_config(CodeGenConfig {
             attributes_to_property_parts: [(
                 "x",
-                ToCollect {
+                Attribute {
                     typ: "string",
-                    paths: vec!["x"],
+                    parts: vec!["x"],
                 },
             )]
             .iter()
@@ -371,16 +378,16 @@ mod tests {
             attributes_to_property_parts: [
                 (
                     "x",
-                    ToCollect {
+                    Attribute {
                         typ: "string",
-                        paths: vec!["x"],
+                        parts: vec!["x"],
                     },
                 ),
                 (
                     "y",
-                    ToCollect {
+                    Attribute {
                         typ: "int64_t",
-                        paths: vec!["y"],
+                        parts: vec!["y"],
                     },
                 ),
             ]
@@ -398,20 +405,20 @@ mod tests {
             code_gen.ids_to_properties,
             vec![Property {
                 id: "n",
-                paths: vec!["x"],
+                parts: vec!["x"],
                 value: String::from("k"),
             }]
         );
         assert_eq!(
             code_gen.node_properties_to_collect,
             [
-                ToCollect {
+                Attribute {
                     typ: "string",
-                    paths: vec!["x"],
+                    parts: vec!["x"],
                 },
-                ToCollect {
+                Attribute {
                     typ: "int64_t",
-                    paths: vec!["y"],
+                    parts: vec!["y"],
                 },
             ]
             .iter()
@@ -438,9 +445,9 @@ mod tests {
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.graph_properties_to_collect,
-            vec![ToCollect {
+            vec![Attribute {
                 typ: "int",
-                paths: vec!["get_tree_height"]
+                parts: vec!["get_tree_height"]
             }]
         );
     }
