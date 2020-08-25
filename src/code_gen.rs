@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 use tree_fold::TreeFold;
 
-#[derive(Serialize, PartialEq, Eq, Debug, Hash, Clone, Copy)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize)]
 pub enum CppType {
     Int,
     Int64T,
@@ -27,7 +27,7 @@ impl fmt::Display for CppType {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Eq, PartialEq, Serialize)]
 pub enum CppCodeBlock<'a> {
     NodeEnvoyProperty {
         typ: CppType,
@@ -41,17 +41,11 @@ pub enum CppCodeBlock<'a> {
     },
 }
 
-#[derive(Default, Serialize, PartialEq, Eq, Debug, Hash, Clone)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
 pub struct Attribute<'a> {
     pub typ: CppType,
     pub parts: Vec<&'a str>,
     pub value: Option<String>,
-}
-
-#[derive(Default, Serialize, PartialEq, Eq, Debug)]
-pub struct ReturnProperty<'a> {
-    pub id: &'a str,
-    pub paths: Vec<&'a str>,
 }
 
 #[derive(Serialize, PartialEq, Eq, Debug, Clone)]
@@ -75,7 +69,7 @@ pub struct Udf<'a> {
     pub arg: Vec<&'a str>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq, Eq, Debug)]
 pub enum Result {
     Return { typ: CppType, id: String },
     GroupBy { typ: CppType, id: String },
@@ -241,6 +235,11 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                     udf_id: func.id,
                     args: vec![],
                 });
+
+                self.result = Result::Return {
+                    typ: func.return_type,
+                    id: String::from(func.id) + "_result",
+                }
             }
         }
     }
@@ -301,7 +300,7 @@ mod tests {
 
     #[test]
     fn test_codegen_action() {
-        let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, WHERE n.x ==k, RETURN n.x,");
+        let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, WHERE n.x == k, RETURN n.x,");
         let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
         let parse_tree = parser::parse_prog(&mut token_iter);
         let mut code_gen = CodeGen::new_with_config(CodeGenConfig {
@@ -322,14 +321,35 @@ mod tests {
 
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
-        // assert_eq!(
-        //     code_gen.ids_to_properties,
-        //     vec![Property {
-        //         id: "n",
-        //         parts: vec!["x"],
-        //         value: String::from("k"),
-        //     }]
-        // );
+        assert_eq!(
+            code_gen.blocks,
+            vec![CppCodeBlock::NodeEnvoyProperty {
+                typ: CppType::String,
+                id: String::from("n_x"),
+                parts: vec!["x"]
+            }]
+        );
+        assert_eq!(
+            code_gen.ids_to_attributes,
+            [(
+                "n",
+                vec![Attribute {
+                    typ: CppType::String,
+                    parts: vec!["x"],
+                    value: Some(String::from("k")),
+                }]
+            )]
+            .iter()
+            .cloned()
+            .collect()
+        );
+        assert_eq!(
+            code_gen.result,
+            Result::Return {
+                typ: CppType::String,
+                id: String::from("n_x"),
+            }
+        )
     }
 
     #[test]
@@ -356,6 +376,21 @@ mod tests {
 
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
+        assert_eq!(
+            code_gen.blocks,
+            vec![CppCodeBlock::NodeEnvoyProperty {
+                typ: CppType::String,
+                id: String::from("n_x"),
+                parts: vec!["x"]
+            }]
+        );
+        assert_eq!(
+            code_gen.result,
+            Result::Return {
+                typ: CppType::String,
+                id: String::from("n_x"),
+            }
+        )
     }
 
     #[test]
@@ -392,14 +427,20 @@ mod tests {
 
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
-        // assert_eq!(
-        //     code_gen.ids_to_properties,
-        //     vec![Property {
-        //         id: "n",
-        //         parts: vec!["x"],
-        //         value: String::from("k"),
-        //     }]
-        // );
+        assert_eq!(
+            code_gen.ids_to_attributes,
+            [(
+                "n",
+                vec![Attribute {
+                    typ: CppType::String,
+                    parts: vec!["x"],
+                    value: Some(String::from("k")),
+                }]
+            )]
+            .iter()
+            .cloned()
+            .collect()
+        );
     }
 
     #[test]
@@ -411,5 +452,57 @@ mod tests {
         code_gen.visit_prog(&parse_tree);
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
+        assert_eq!(
+            code_gen.blocks,
+            vec![CppCodeBlock::CallFunc {
+                typ: CppType::Int,
+                udf_id: "get_tree_height",
+                args: vec!["target"],
+            }]
+        );
+        assert_eq!(
+            code_gen.result,
+            Result::Return {
+                typ: CppType::Int,
+                id: String::from("get_tree_height_target")
+            }
+        );
+    }
+
+    #[test]
+    fn test_codegen_call_udf() {
+        let tokens = lexer::get_tokens(r"MATCH n-->m: a, RETURN max_response_size,");
+        let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
+        let parse_tree = parser::parse_prog(&mut token_iter);
+        let mut code_gen = CodeGen::new();
+        code_gen.config.udf_table.insert(
+            "max_response_size",
+            Udf {
+                udf_type: UdfType::Scalar,
+                id: "max_response_size",
+                func_impl: "function_impl",
+                return_type: CppType::Int64T,
+                arg: vec![],
+            },
+        );
+        code_gen.visit_prog(&parse_tree);
+        assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
+        assert_eq!(code_gen.edges, vec![("n", "m")]);
+
+        assert_eq!(
+            code_gen.blocks,
+            vec![CppCodeBlock::CallFunc {
+                typ: CppType::Int64T,
+                udf_id: "max_response_size",
+                args: vec![],
+            }]
+        );
+        assert_eq!(
+            code_gen.result,
+            Result::Return {
+                typ: CppType::Int64T,
+                id: String::from("max_response_size_result"),
+            }
+        );
     }
 }
