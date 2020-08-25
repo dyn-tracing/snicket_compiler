@@ -364,9 +364,7 @@ mod tests {
                 filters: Filters::new(),
                 action: Action::GetProperty(
                     Identifier { id_name: "graph" },
-                    Identifier {
-                        id_name: "height"
-                    }
+                    Identifier { id_name: "height" }
                 )
             }
         )
