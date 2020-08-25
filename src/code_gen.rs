@@ -134,7 +134,7 @@ pub struct CodeGen<'a> {
     pub nodes_to_attributes: Vec<NodeAttribute<'a>>,
 
     // Envoy node attribute initializer lists.
-    pub nodes_to_attributes_to_fetch: Vec<Vec<&'a str>>,
+    pub node_attributes_to_fetch: HashSet<Vec<&'a str>>,
 
     // Intermediate computations necessary for computing result
     pub blocks: Vec<CppCodeBlock<'a>>,
@@ -164,6 +164,11 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
         self.visit_patterns(&prog.patterns);
         self.visit_filters(&prog.filters);
         self.visit_action(&prog.action);
+
+        for node_attribute in self.nodes_to_attributes.iter() {
+            self.node_attributes_to_fetch
+                .insert(node_attribute.parts.clone());
+        }
     }
 
     fn visit_pattern(&mut self, pattern: &'a Pattern) {
@@ -224,6 +229,8 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                         id: cpp_var_id.clone(),
                         parts: attribute.parts.clone(),
                     });
+                    self.node_attributes_to_fetch
+                        .insert(attribute.parts.clone());
 
                     self.result = Result::Return {
                         typ: attribute.typ,
@@ -434,6 +441,10 @@ mod tests {
                 parts: vec!["x"],
                 value: String::from("k"),
             }]
+        );
+        assert_eq!(
+            code_gen.node_attributes_to_fetch,
+            vec![vec!["x"], vec!["y"]].iter().cloned().collect()
         );
     }
 
