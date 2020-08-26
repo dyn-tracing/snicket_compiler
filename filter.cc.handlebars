@@ -39,7 +39,7 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
-{{!-- {{#each udf_impls}}{{this}}{{/each}} --}}
+{{#each udfs}}{{this.func_impl}}{{/each}}
 
 class BidiRootContext : public RootContext {
 public:
@@ -56,10 +56,9 @@ public:
   bool onConfigure(size_t /* configuration_size */) override;
 
   StringView getWorkloadName() { return workload_name_; }
-{{!--
-  {{#if return_stmt.CallUdf}}{{#with return_stmt.CallUdf}}
-  {{this.id}} udf_;
-  {{/with}}{{/if}} --}}
+{{#each udfs}}
+{{this.id}} {{this.id}}_udf_;
+{{/each}}
 
 private:
   std::string workload_name_;
@@ -169,11 +168,11 @@ void BidiContext::onResponseHeadersInbound() {
   {{#each node_attributes_to_fetch}}{
   {{this.typ}} value;
   if (getValue({
-      {{#each this.paths}}"{{this}}",{{/each}}
+      {{#each this.parts}}"{{this}}",{{/each}}
   }, &value)) {
     std::string result = std::string(root_->getWorkloadName());
     for (auto p : {
-        {{#each this.paths}}"{{this}}",{{/each}}
+        {{#each this.parts}}"{{this}}",{{/each}}
     }) {
       result += "." + std::string(p);
     }
@@ -237,32 +236,45 @@ void BidiContext::onResponseHeadersInbound() {
       return;
     }
 
+    const Node* node_ptr = nullptr;
+    {{#each blocks}}
+    {{#if this.NodeEnvoyProperty}}{{#with this.NodeEnvoyProperty}}
+    node_ptr = get_node_with_id(target, mapping->at("{{this.node_id}}"));
+    if (node_ptr == nullptr || node_ptr->properties.find({
+        {{#each this.parts}}"{{this}}", {{/each}}
+    }) == node_ptr->properties.end()) {
+        LOG_WARN("Node not found");
+        return;
+    }
+    std::string {{this.cpp_var_id}} = node_ptr->properties.at({
+        {{#each this.parts}}"{{this}}", {{/each}}
+    });
+    {{/with}}{{/if}}
+
+    {{#if this.CallUserFunc}}{{#with this.CallUserFunc}}
+    {{this.typ}} {{this.cpp_var_id}} = root_->{{this.func_name}}_udf_(
+        {{#each this.args}}{{this}},{{/each}}
+    );
+    {{/with}}{{/if}}
+
+    {{#if this.CallLibFunc}}{{#with this.CallLibFunc}}
+    {{this.typ}} {{this.cpp_var_id}} = {{this.func_name}}(
+        {{#each this.args}}{{this}},{{/each}}
+    );
+    {{/with}}{{/if}}
+    {{/each}}
+
     std::string to_store;
 
-    {{!-- {{#with return_stmt}}
-    {{#if this.Property}}{{#with this.Property}}
-
-    const Node* node_ptr = get_node_with_id(target, mapping->at("{{this.id}}"));
-    if (node_ptr == nullptr || node_ptr->properties.find({
-        {{#each this.paths}}"{{this}}", {{/each}}
-    }) == node_ptr->properties.end()) {
-      LOG_WARN("no node found");
-      return;
-    }
-
-    to_store = node_ptr->properties.at({
-        {{#each this.paths}}"{{this}}", {{/each}}
-    });
-
+    {{#with result}}
+    {{#if this.Return}}{{#with this.Return}}
+    to_store = {{this.id}};
     {{/with}}{{/if}}
 
-    {{#if this.CallUdf}}{{#with this.CallUdf}}
-    {
-        {{this.return_type}} udf_result = root_->udf_(target);
-        to_store = {{#if (ne "string" this.return_type)}}std::to_string(udf_result); {{else}} udf_result; {{/if}}
-    }
+    {{#if this.GroupBy}}{{#with this.GroupBy}}
+    to_store = {{this.id}};
     {{/with}}{{/if}}
-    {{/with}} --}}
+    {{/with}}
 
     LOG_WARN("Value to store: " + to_store);
 

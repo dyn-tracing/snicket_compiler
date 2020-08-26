@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 use tree_fold::TreeFold;
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CppType {
     Int,
     Int64T,
@@ -27,16 +27,26 @@ impl fmt::Display for CppType {
     }
 }
 
+derive_serialize_from_display!(CppType);
+
 #[derive(Debug, Eq, PartialEq, Serialize)]
 pub enum CppCodeBlock<'a> {
     NodeEnvoyProperty {
         typ: CppType,
-        id: String,
+        cpp_var_id: String,
+        node_id: String,
         parts: Vec<&'a str>,
     },
-    CallFunc {
+    CallUserFunc {
         typ: CppType,
-        udf_id: &'a str,
+        cpp_var_id: String,
+        func_name: &'a str,
+        args: Vec<&'a str>,
+    },
+    CallLibFunc {
+        typ: CppType,
+        cpp_var_id: String,
+        func_name: &'a str,
         args: Vec<&'a str>,
     },
 }
@@ -76,15 +86,15 @@ pub struct Udf<'a> {
 }
 
 #[derive(Serialize, PartialEq, Eq, Debug)]
-pub enum Result {
+pub enum CppResult {
     Return { typ: CppType, id: String },
     GroupBy { typ: CppType, id: String },
     None,
 }
 
-impl<'a> Default for Result {
+impl<'a> Default for CppResult {
     fn default() -> Self {
-        Result::None
+        CppResult::None
     }
 }
 
@@ -138,9 +148,9 @@ pub struct CodeGen<'a> {
 
     // Intermediate computations necessary for computing result
     pub blocks: Vec<CppCodeBlock<'a>>,
-    pub udf_impls: Vec<&'a str>,
+    pub udfs: Vec<Udf<'a>>,
     // Final computation result
-    pub result: Result,
+    pub result: CppResult,
 
     #[serde(skip_serializing)]
     pub config: CodeGenConfig<'a>,
@@ -202,13 +212,14 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                 if id.id_name == "target" {
                     if p.id_name == "height" {
                         let cpp_var_id = "get_tree_height_target";
-                        self.blocks.push(CppCodeBlock::CallFunc {
+                        self.blocks.push(CppCodeBlock::CallLibFunc {
                             typ: CppType::Int,
-                            udf_id: "get_tree_height",
+                            cpp_var_id: String::from(cpp_var_id),
+                            func_name: "get_tree_height",
                             args: vec!["target"],
                         });
 
-                        self.result = Result::Return {
+                        self.result = CppResult::Return {
                             typ: CppType::Int,
                             id: String::from(cpp_var_id),
                         };
@@ -222,12 +233,13 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                         String::from(id.id_name) + "_" + &attribute.parts.join("_");
                     self.blocks.push(CppCodeBlock::NodeEnvoyProperty {
                         typ: attribute.typ,
-                        id: cpp_var_id.clone(),
+                        cpp_var_id: cpp_var_id.clone(),
+                        node_id: String::from(id.id_name),
                         parts: attribute.parts.clone(),
                     });
                     self.node_attributes_to_fetch.insert(attribute.clone());
 
-                    self.result = Result::Return {
+                    self.result = CppResult::Return {
                         typ: attribute.typ,
                         id: cpp_var_id,
                     };
@@ -240,17 +252,20 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                 }
                 let func = &self.config.udf_table[id.id_name];
 
-                self.blocks.push(CppCodeBlock::CallFunc {
+                let cpp_var_id = String::from(func.id) + "_result";
+
+                self.blocks.push(CppCodeBlock::CallUserFunc {
                     typ: func.return_type,
-                    udf_id: func.id,
+                    cpp_var_id: cpp_var_id.clone(),
+                    func_name: func.id,
                     args: vec![],
                 });
 
-                self.udf_impls.push(func.func_impl);
+                self.udfs.push(func.clone());
 
-                self.result = Result::Return {
+                self.result = CppResult::Return {
                     typ: func.return_type,
-                    id: String::from(func.id) + "_result",
+                    id: cpp_var_id,
                 }
             }
         }
@@ -336,7 +351,8 @@ mod tests {
             code_gen.blocks,
             vec![CppCodeBlock::NodeEnvoyProperty {
                 typ: CppType::String,
-                id: String::from("n_x"),
+                cpp_var_id: String::from("n_x"),
+                node_id: String::from("n"),
                 parts: vec!["x"]
             }]
         );
@@ -350,7 +366,7 @@ mod tests {
         );
         assert_eq!(
             code_gen.result,
-            Result::Return {
+            CppResult::Return {
                 typ: CppType::String,
                 id: String::from("n_x"),
             }
@@ -384,13 +400,14 @@ mod tests {
             code_gen.blocks,
             vec![CppCodeBlock::NodeEnvoyProperty {
                 typ: CppType::String,
-                id: String::from("n_x"),
+                cpp_var_id: String::from("n_x"),
+                node_id: String::from("n"),
                 parts: vec!["x"]
             }]
         );
         assert_eq!(
             code_gen.result,
-            Result::Return {
+            CppResult::Return {
                 typ: CppType::String,
                 id: String::from("n_x"),
             }
@@ -466,15 +483,16 @@ mod tests {
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.blocks,
-            vec![CppCodeBlock::CallFunc {
+            vec![CppCodeBlock::CallLibFunc {
                 typ: CppType::Int,
-                udf_id: "get_tree_height",
+                cpp_var_id: String::from("get_tree_height_target"),
+                func_name: "get_tree_height",
                 args: vec!["target"],
             }]
         );
         assert_eq!(
             code_gen.result,
-            Result::Return {
+            CppResult::Return {
                 typ: CppType::Int,
                 id: String::from("get_tree_height_target")
             }
@@ -503,16 +521,26 @@ mod tests {
 
         assert_eq!(
             code_gen.blocks,
-            vec![CppCodeBlock::CallFunc {
+            vec![CppCodeBlock::CallUserFunc {
                 typ: CppType::Int64T,
-                udf_id: "max_response_size",
+                cpp_var_id: String::from("max_response_size_result"),
+                func_name: "max_response_size",
                 args: vec![],
             }]
         );
-        assert_eq!(code_gen.udf_impls, vec!["function_impl"]);
+        assert_eq!(
+            code_gen.udfs,
+            vec![Udf {
+                udf_type: UdfType::Scalar,
+                id: "max_response_size",
+                func_impl: "function_impl",
+                return_type: CppType::Int64T,
+                arg: vec![],
+            }],
+        );
         assert_eq!(
             code_gen.result,
-            Result::Return {
+            CppResult::Return {
                 typ: CppType::Int64T,
                 id: String::from("max_response_size_result"),
             }
