@@ -134,7 +134,7 @@ pub struct CodeGen<'a> {
     pub nodes_to_attributes: Vec<NodeAttribute<'a>>,
 
     // Envoy node attribute initializer lists.
-    pub node_attributes_to_fetch: HashSet<Vec<&'a str>>,
+    pub node_attributes_to_fetch: HashSet<AttributeDef<'a>>,
 
     // Intermediate computations necessary for computing result
     pub blocks: Vec<CppCodeBlock<'a>>,
@@ -164,11 +164,6 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
         self.visit_patterns(&prog.patterns);
         self.visit_filters(&prog.filters);
         self.visit_action(&prog.action);
-
-        for node_attribute in self.nodes_to_attributes.iter() {
-            self.node_attributes_to_fetch
-                .insert(node_attribute.parts.clone());
-        }
     }
 
     fn visit_pattern(&mut self, pattern: &'a Pattern) {
@@ -198,6 +193,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
             parts: attribute_def.parts.clone(),
             value: value.to_string(),
         });
+        self.node_attributes_to_fetch.insert(attribute_def.clone());
     }
 
     fn visit_action(&mut self, action: &'a Action) {
@@ -229,8 +225,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                         id: cpp_var_id.clone(),
                         parts: attribute.parts.clone(),
                     });
-                    self.node_attributes_to_fetch
-                        .insert(attribute.parts.clone());
+                    self.node_attributes_to_fetch.insert(attribute.clone());
 
                     self.result = Result::Return {
                         typ: attribute.typ,
@@ -444,7 +439,19 @@ mod tests {
         );
         assert_eq!(
             code_gen.node_attributes_to_fetch,
-            vec![vec!["x"], vec!["y"]].iter().cloned().collect()
+            vec![
+                AttributeDef {
+                    typ: CppType::String,
+                    parts: vec!["x"]
+                },
+                AttributeDef {
+                    typ: CppType::Int64T,
+                    parts: vec!["y"]
+                }
+            ]
+            .iter()
+            .cloned()
+            .collect()
         );
     }
 
