@@ -37,12 +37,7 @@ pub enum CppCodeBlock<'a> {
         node_id: String,
         parts: Vec<&'a str>,
     },
-    CallUserFunc {
-        typ: CppType,
-        cpp_var_id: String,
-        func_name: &'a str,
-        args: Vec<&'a str>,
-    },
+    CallUserFunc(String),
     CallLibFunc(String),
 }
 
@@ -252,12 +247,23 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
 
                 let cpp_var_id = String::from(func.id) + "_result";
 
-                self.blocks.push(CppCodeBlock::CallUserFunc {
-                    typ: func.return_type,
-                    cpp_var_id: cpp_var_id.clone(),
-                    func_name: func.id,
-                    args: vec![],
-                });
+                let block = if func.return_type != CppType::String {
+                    format!(
+                        "std::string {cpp_var_id} = std::to_string(root_->{func_name}_udf_({args}));",
+                        cpp_var_id = cpp_var_id,
+                        func_name = func.id,
+                        args = "target"
+                    )
+                } else {
+                    format!(
+                        "std::string {cpp_var_id} = root_->{func_name}_udf_({args});",
+                        cpp_var_id = cpp_var_id,
+                        func_name = func.id,
+                        args = "target"
+                    )
+                };
+
+                self.blocks.push(CppCodeBlock::CallUserFunc(block));
 
                 self.udfs.push(func.clone());
 
@@ -516,12 +522,9 @@ mod tests {
 
         assert_eq!(
             code_gen.blocks,
-            vec![CppCodeBlock::CallUserFunc {
-                typ: CppType::Int64T,
-                cpp_var_id: String::from("max_response_size_result"),
-                func_name: "max_response_size",
-                args: vec![],
-            }]
+            vec![CppCodeBlock::CallUserFunc(String::from(
+                "std::string max_response_size_result = std::to_string(root_->max_response_size_udf_(target));"
+            ))]
         );
         assert_eq!(
             code_gen.udfs,
