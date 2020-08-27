@@ -39,17 +39,6 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
-class aggr_func : public user_func<int> {
-public:
-  int operator()(const trace_graph_t &graph) {
-    num_vertices += graph.num_vertices();
-    return num_vertices;
-  }
-
-private:
-  int num_vertices = 0;
-};
-
 class BidiRootContext : public RootContext {
 public:
   explicit BidiRootContext(uint32_t id, StringView root_id)
@@ -65,8 +54,6 @@ public:
   bool onConfigure(size_t /* configuration_size */) override;
 
   StringView getWorkloadName() { return workload_name_; }
-
-  aggr_func aggr_func_udf_;
 
 private:
   std::string workload_name_;
@@ -228,9 +215,9 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
+        "c",
         "d",
         "b",
-        "c",
         "a",
     };
 
@@ -285,12 +272,19 @@ void BidiContext::onResponseHeadersInbound() {
 
     const Node *node_ptr = nullptr;
 
-    std::string aggr_func_result =
-        std::to_string(root_->aggr_func_udf_(target));
+    node_ptr = get_node_with_id(target, mapping->at("a"));
+    if (node_ptr == nullptr ||
+        node_ptr->properties.find({"node", "metadata", "WORKLOAD_NAME"}) ==
+            node_ptr->properties.end()) {
+      LOG_WARN("Node a not found");
+      return;
+    }
+    std::string a_node_metadata_WORKLOAD_NAME =
+        node_ptr->properties.at({"node", "metadata", "WORKLOAD_NAME"});
 
     std::string to_store;
 
-    to_store = aggr_func_result;
+    to_store = a_node_metadata_WORKLOAD_NAME;
 
     LOG_WARN("Value to store: " + to_store);
 

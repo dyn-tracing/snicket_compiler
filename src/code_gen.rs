@@ -30,13 +30,8 @@ impl fmt::Display for CppType {
 derive_serialize_from_display!(CppType);
 
 #[derive(Debug, Eq, PartialEq, Serialize)]
-pub enum CppCodeBlock<'a> {
-    NodeEnvoyProperty {
-        typ: CppType,
-        cpp_var_id: String,
-        node_id: String,
-        parts: Vec<&'a str>,
-    },
+pub enum CppCodeBlock {
+    NodeEnvoyProperty(String),
     CallUserFunc(String),
     CallLibFunc(String),
 }
@@ -137,7 +132,7 @@ pub struct CodeGen<'a> {
     pub node_attributes_to_fetch: HashSet<AttributeDef<'a>>,
 
     // Intermediate computations necessary for computing result
-    pub blocks: Vec<CppCodeBlock<'a>>,
+    pub blocks: Vec<CppCodeBlock>,
     pub udfs: Vec<Udf<'a>>,
     // Final computation result
     pub result: CppResult,
@@ -224,12 +219,30 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
 
                     let cpp_var_id: String =
                         String::from(id.id_name) + "_" + &attribute.parts.join("_");
-                    self.blocks.push(CppCodeBlock::NodeEnvoyProperty {
-                        typ: attribute.typ,
-                        cpp_var_id: cpp_var_id.clone(),
-                        node_id: String::from(id.id_name),
-                        parts: attribute.parts.clone(),
-                    });
+
+                    let mut parts = String::from("{");
+                    parts.push_str(
+                        &attribute
+                            .parts
+                            .iter()
+                            .map(|s| String::from("\"") + s + "\"")
+                            .collect::<Vec<String>>()
+                            .join(", "),
+                    );
+                    parts.push_str("}");
+
+                    let block = format!(
+                        "node_ptr = get_node_with_id(target, mapping->at(\"{node_id}\"));
+if (node_ptr == nullptr || node_ptr->properties.find({parts}) == node_ptr->properties.end()) {{
+    LOG_WARN(\"Node {node_id} not found\");
+    return;
+}}
+std::string {cpp_var_id} = node_ptr->properties.at({parts});",
+                        node_id = id.id_name,
+                        parts = parts,
+                        cpp_var_id = cpp_var_id,
+                    );
+                    self.blocks.push(CppCodeBlock::NodeEnvoyProperty(block));
                     self.node_attributes_to_fetch.insert(attribute.clone());
 
                     self.result = CppResult::Return {
@@ -353,12 +366,14 @@ mod tests {
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.blocks,
-            vec![CppCodeBlock::NodeEnvoyProperty {
-                typ: CppType::String,
-                cpp_var_id: String::from("n_x"),
-                node_id: String::from("n"),
-                parts: vec!["x"]
-            }]
+            vec![CppCodeBlock::NodeEnvoyProperty(String::from(
+                "node_ptr = get_node_with_id(target, mapping->at(\"n\"));
+if (node_ptr == nullptr || node_ptr->properties.find({\"x\"}) == node_ptr->properties.end()) {
+    LOG_WARN(\"Node n not found\");
+    return;
+}
+std::string n_x = node_ptr->properties.at({\"x\"});"
+            ))]
         );
         assert_eq!(
             code_gen.nodes_to_attributes,
@@ -402,12 +417,14 @@ mod tests {
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.blocks,
-            vec![CppCodeBlock::NodeEnvoyProperty {
-                typ: CppType::String,
-                cpp_var_id: String::from("n_x"),
-                node_id: String::from("n"),
-                parts: vec!["x"]
-            }]
+            vec![CppCodeBlock::NodeEnvoyProperty(String::from(
+                "node_ptr = get_node_with_id(target, mapping->at(\"n\"));
+if (node_ptr == nullptr || node_ptr->properties.find({\"x\"}) == node_ptr->properties.end()) {
+    LOG_WARN(\"Node n not found\");
+    return;
+}
+std::string n_x = node_ptr->properties.at({\"x\"});"
+            ))]
         );
         assert_eq!(
             code_gen.result,
