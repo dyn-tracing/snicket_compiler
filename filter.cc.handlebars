@@ -39,7 +39,7 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
-{{#each udfs}}{{this.func_impl}}{{/each}}
+{{#each udfs}}{{{this.func_impl}}}{{/each}}
 
 class BidiRootContext : public RootContext {
 public:
@@ -251,11 +251,7 @@ void BidiContext::onResponseHeadersInbound() {
     });
     {{/with}}{{/if}}
 
-    {{#if this.CallUserFunc}}{{#with this.CallUserFunc}}
-    {{this.typ}} {{this.cpp_var_id}} = root_->{{this.func_name}}_udf_(
-        {{#each this.args}}{{this}},{{/each}}
-    );
-    {{/with}}{{/if}}
+    {{#if this.CallUserFunc}}{{{this.CallUserFunc}}}{{/if}}
 
     {{#if this.CallLibFunc}}{{this.CallLibFunc}}{{/if}}
     {{/each}}

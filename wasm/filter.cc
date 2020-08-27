@@ -39,6 +39,17 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
+class aggr_func : public user_func<int> {
+public:
+  int operator()(const trace_graph_t &graph) {
+    num_vertices += graph.num_vertices();
+    return num_vertices;
+  }
+
+private:
+  int num_vertices = 0;
+};
+
 class BidiRootContext : public RootContext {
 public:
   explicit BidiRootContext(uint32_t id, StringView root_id)
@@ -54,6 +65,8 @@ public:
   bool onConfigure(size_t /* configuration_size */) override;
 
   StringView getWorkloadName() { return workload_name_; }
+
+  aggr_func aggr_func_udf_;
 
 private:
   std::string workload_name_;
@@ -215,10 +228,10 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-        "b",
-        "a",
         "d",
+        "b",
         "c",
+        "a",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -272,12 +285,12 @@ void BidiContext::onResponseHeadersInbound() {
 
     const Node *node_ptr = nullptr;
 
-    std::string get_tree_height_target =
-        std::to_string(get_tree_height(target));
+    std::string aggr_func_result =
+        std::to_string(root_->aggr_func_udf_(target));
 
     std::string to_store;
 
-    to_store = get_tree_height_target;
+    to_store = aggr_func_result;
 
     LOG_WARN("Value to store: " + to_store);
 
