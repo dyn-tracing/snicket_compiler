@@ -43,12 +43,7 @@ pub enum CppCodeBlock<'a> {
         func_name: &'a str,
         args: Vec<&'a str>,
     },
-    CallLibFunc {
-        typ: CppType,
-        cpp_var_id: String,
-        func_name: &'a str,
-        args: Vec<&'a str>,
-    },
+    CallLibFunc(String),
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
@@ -212,12 +207,15 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                 if id.id_name == "target" {
                     if p.id_name == "height" {
                         let cpp_var_id = "get_tree_height_target";
-                        self.blocks.push(CppCodeBlock::CallLibFunc {
-                            typ: CppType::Int,
-                            cpp_var_id: String::from(cpp_var_id),
-                            func_name: "get_tree_height",
-                            args: vec!["target"],
-                        });
+
+                        let block = format!(
+                            "std::string {cpp_var_id} = std::to_string({func_name}({args}));",
+                            cpp_var_id = cpp_var_id,
+                            func_name = "get_tree_height",
+                            args = "target"
+                        );
+
+                        self.blocks.push(CppCodeBlock::CallLibFunc(block));
 
                         self.result = CppResult::Return {
                             typ: CppType::Int,
@@ -483,12 +481,9 @@ mod tests {
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.blocks,
-            vec![CppCodeBlock::CallLibFunc {
-                typ: CppType::Int,
-                cpp_var_id: String::from("get_tree_height_target"),
-                func_name: "get_tree_height",
-                args: vec!["target"],
-            }]
+            vec![CppCodeBlock::CallLibFunc(String::from(
+                "std::string get_tree_height_target = std::to_string(get_tree_height(target));"
+            ))]
         );
         assert_eq!(
             code_gen.result,

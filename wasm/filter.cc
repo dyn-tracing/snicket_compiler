@@ -185,29 +185,6 @@ void BidiContext::onResponseHeadersInbound() {
       LOG_WARN("failed to get property");
     }
   }
-  {
-    int64_t value;
-    if (getValue(
-            {
-                "response",
-                "total_size",
-            },
-            &value)) {
-      std::string result = std::string(root_->getWorkloadName());
-      for (auto p : {
-               "response",
-               "total_size",
-           }) {
-        result += "." + std::string(p);
-      }
-      result += "==";
-      result += std::to_string(value);
-
-      properties.push_back(result);
-    } else {
-      LOG_WARN("failed to get property");
-    }
-  }
 
   LOG_WARN("number of properties collected " +
            std::to_string(properties.size()));
@@ -239,8 +216,8 @@ void BidiContext::onResponseHeadersInbound() {
 
     std::set<std::string> vertices = {
         "b",
-        "d",
         "a",
+        "d",
         "c",
     };
 
@@ -295,22 +272,12 @@ void BidiContext::onResponseHeadersInbound() {
 
     const Node *node_ptr = nullptr;
 
-    node_ptr = get_node_with_id(target, mapping->at("a"));
-    if (node_ptr == nullptr || node_ptr->properties.find({
-                                   "response",
-                                   "total_size",
-                               }) == node_ptr->properties.end()) {
-      LOG_WARN("Node not found");
-      return;
-    }
-    std::string a_response_total_size = node_ptr->properties.at({
-        "response",
-        "total_size",
-    });
+    std::string get_tree_height_target =
+        std::to_string(get_tree_height(target));
 
     std::string to_store;
 
-    to_store = a_response_total_size;
+    to_store = get_tree_height_target;
 
     LOG_WARN("Value to store: " + to_store);
 
