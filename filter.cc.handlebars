@@ -39,7 +39,7 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
-{{#each udfs}}{{this.func_impl}}{{/each}}
+{{#each udfs}}{{{this.func_impl}}}{{/each}}
 
 class BidiRootContext : public RootContext {
 public:
@@ -237,32 +237,7 @@ void BidiContext::onResponseHeadersInbound() {
     }
 
     const Node* node_ptr = nullptr;
-    {{#each blocks}}
-    {{#if this.NodeEnvoyProperty}}{{#with this.NodeEnvoyProperty}}
-    node_ptr = get_node_with_id(target, mapping->at("{{this.node_id}}"));
-    if (node_ptr == nullptr || node_ptr->properties.find({
-        {{#each this.parts}}"{{this}}", {{/each}}
-    }) == node_ptr->properties.end()) {
-        LOG_WARN("Node not found");
-        return;
-    }
-    std::string {{this.cpp_var_id}} = node_ptr->properties.at({
-        {{#each this.parts}}"{{this}}", {{/each}}
-    });
-    {{/with}}{{/if}}
-
-    {{#if this.CallUserFunc}}{{#with this.CallUserFunc}}
-    {{this.typ}} {{this.cpp_var_id}} = root_->{{this.func_name}}_udf_(
-        {{#each this.args}}{{this}},{{/each}}
-    );
-    {{/with}}{{/if}}
-
-    {{#if this.CallLibFunc}}{{#with this.CallLibFunc}}
-    {{this.typ}} {{this.cpp_var_id}} = {{this.func_name}}(
-        {{#each this.args}}{{this}},{{/each}}
-    );
-    {{/with}}{{/if}}
-    {{/each}}
+    {{#each blocks}}{{{this}}}{{/each}}
 
     std::string to_store;
 
