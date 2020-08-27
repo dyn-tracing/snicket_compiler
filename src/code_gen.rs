@@ -359,14 +359,16 @@ mod tests {
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.blocks,
-            vec![(String::from(
-                "node_ptr = get_node_with_id(target, mapping->at(\"n\"));
+            vec![
+                (String::from(
+                    "node_ptr = get_node_with_id(target, mapping->at(\"n\"));
 if (node_ptr == nullptr || node_ptr->properties.find({\"x\"}) == node_ptr->properties.end()) {
     LOG_WARN(\"Node n not found\");
     return;
 }
 std::string n_x = node_ptr->properties.at({\"x\"});"
-            ))]
+                ))
+            ]
         );
         assert_eq!(
             code_gen.nodes_to_attributes,
@@ -410,14 +412,16 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.blocks,
-            vec![(String::from(
-                "node_ptr = get_node_with_id(target, mapping->at(\"n\"));
+            vec![
+                (String::from(
+                    "node_ptr = get_node_with_id(target, mapping->at(\"n\"));
 if (node_ptr == nullptr || node_ptr->properties.find({\"x\"}) == node_ptr->properties.end()) {
     LOG_WARN(\"Node n not found\");
     return;
 }
 std::string n_x = node_ptr->properties.at({\"x\"});"
-            ))]
+                ))
+            ]
         );
         assert_eq!(
             code_gen.result,
@@ -497,9 +501,11 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.blocks,
-            vec![(String::from(
-                "std::string get_tree_height_target = std::to_string(get_tree_height(target));"
-            ))]
+            vec![
+                (String::from(
+                    "std::string get_tree_height_target = std::to_string(get_tree_height(target));"
+                ))
+            ]
         );
         assert_eq!(
             code_gen.result,
