@@ -29,13 +29,6 @@ impl fmt::Display for CppType {
 
 derive_serialize_from_display!(CppType);
 
-#[derive(Debug, Eq, PartialEq, Serialize)]
-pub enum CppCodeBlock {
-    NodeEnvoyProperty(String),
-    CallUserFunc(String),
-    CallLibFunc(String),
-}
-
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
 pub struct NodeAttribute<'a> {
     pub id: &'a str,
@@ -132,7 +125,7 @@ pub struct CodeGen<'a> {
     pub node_attributes_to_fetch: HashSet<AttributeDef<'a>>,
 
     // Intermediate computations necessary for computing result
-    pub blocks: Vec<CppCodeBlock>,
+    pub blocks: Vec<String>,
     pub udfs: Vec<Udf<'a>>,
     // Final computation result
     pub result: CppResult,
@@ -205,7 +198,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                             args = "target"
                         );
 
-                        self.blocks.push(CppCodeBlock::CallLibFunc(block));
+                        self.blocks.push(block);
 
                         self.result = CppResult::Return {
                             typ: CppType::Int,
@@ -242,7 +235,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                         parts = parts,
                         cpp_var_id = cpp_var_id,
                     );
-                    self.blocks.push(CppCodeBlock::NodeEnvoyProperty(block));
+                    self.blocks.push(block);
                     self.node_attributes_to_fetch.insert(attribute.clone());
 
                     self.result = CppResult::Return {
@@ -276,7 +269,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                     )
                 };
 
-                self.blocks.push(CppCodeBlock::CallUserFunc(block));
+                self.blocks.push(block);
 
                 self.udfs.push(func.clone());
 
@@ -366,7 +359,7 @@ mod tests {
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.blocks,
-            vec![CppCodeBlock::NodeEnvoyProperty(String::from(
+            vec![(String::from(
                 "node_ptr = get_node_with_id(target, mapping->at(\"n\"));
 if (node_ptr == nullptr || node_ptr->properties.find({\"x\"}) == node_ptr->properties.end()) {
     LOG_WARN(\"Node n not found\");
@@ -417,7 +410,7 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.blocks,
-            vec![CppCodeBlock::NodeEnvoyProperty(String::from(
+            vec![(String::from(
                 "node_ptr = get_node_with_id(target, mapping->at(\"n\"));
 if (node_ptr == nullptr || node_ptr->properties.find({\"x\"}) == node_ptr->properties.end()) {
     LOG_WARN(\"Node n not found\");
@@ -504,7 +497,7 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.blocks,
-            vec![CppCodeBlock::CallLibFunc(String::from(
+            vec![(String::from(
                 "std::string get_tree_height_target = std::to_string(get_tree_height(target));"
             ))]
         );
@@ -539,7 +532,7 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
 
         assert_eq!(
             code_gen.blocks,
-            vec![CppCodeBlock::CallUserFunc(String::from(
+            vec![(String::from(
                 "std::string max_response_size_result = std::to_string(root_->max_response_size_udf_(target));"
             ))]
         );

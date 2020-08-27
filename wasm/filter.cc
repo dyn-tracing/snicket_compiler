@@ -215,10 +215,10 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-        "c",
-        "d",
         "b",
         "a",
+        "c",
+        "d",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -271,7 +271,6 @@ void BidiContext::onResponseHeadersInbound() {
     }
 
     const Node *node_ptr = nullptr;
-
     node_ptr = get_node_with_id(target, mapping->at("a"));
     if (node_ptr == nullptr ||
         node_ptr->properties.find({"node", "metadata", "WORKLOAD_NAME"}) ==

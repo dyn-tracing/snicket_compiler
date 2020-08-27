@@ -237,11 +237,7 @@ void BidiContext::onResponseHeadersInbound() {
     }
 
     const Node* node_ptr = nullptr;
-    {{#each blocks}}
-    {{#if this.NodeEnvoyProperty}}{{{this.NodeEnvoyProperty}}}{{/if}}
-    {{#if this.CallUserFunc}}{{{this.CallUserFunc}}}{{/if}}
-    {{#if this.CallLibFunc}}{{this.CallLibFunc}}{{/if}}
-    {{/each}}
+    {{#each blocks}}{{{this}}}{{/each}}
 
     std::string to_store;
 
