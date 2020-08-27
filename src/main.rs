@@ -27,14 +27,14 @@ fn main() {
                             b.service_name == reviewsv2, \
                             c.service_name == ratingsv1, \
                             d.service_name == detailsv1, \
-                    RETURN aggr_func,";
+                    RETURN a.response_size,";
     let tokens = lexer::get_tokens(query);
     let mut token_iter = tokens.iter().peekable();
     let parse_tree = parser::parse_prog(&mut token_iter);
 
     let mut code_gen = code_gen::CodeGen::new();
 
-    code_gen.udf_table.insert(
+    code_gen.config.udf_table.insert(
         "aggr_func",
         code_gen::Udf {
             udf_type: code_gen::UdfType::Aggregation,
@@ -50,21 +50,23 @@ public:
 private:
     int num_vertices = 0;
 };"#,
-            return_type: "int",
+            return_type: code_gen::CppType::Int,
             ..Default::default()
         },
     );
-    code_gen.udf_table.insert(
+
+    code_gen.config.udf_table.insert(
         "sum_aggr",
         code_gen::Udf {
             udf_type: code_gen::UdfType::Aggregation,
             id: "sum_aggr",
             func_impl: r#"
             "#,
-            return_type: "int",
+            return_type: code_gen::CppType::Int,
             ..Default::default()
         },
     );
+
     code_gen.root_id = "productpagev1";
     code_gen.visit_prog(&parse_tree);
 

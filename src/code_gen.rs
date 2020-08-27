@@ -1,25 +1,67 @@
 use grammar::*;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 use tree_fold::TreeFold;
 
-#[derive(Default, Serialize, PartialEq, Eq, Debug)]
-pub struct Property<'a> {
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum CppType {
+    Int,
+    Int64T,
+    String,
+}
+
+impl Default for CppType {
+    fn default() -> Self {
+        CppType::String
+    }
+}
+
+impl fmt::Display for CppType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CppType::Int => write!(f, "int"),
+            CppType::Int64T => write!(f, "int64_t"),
+            CppType::String => write!(f, "std::string"),
+        }
+    }
+}
+
+derive_serialize_from_display!(CppType);
+
+#[derive(Debug, Eq, PartialEq, Serialize)]
+pub enum CppCodeBlock<'a> {
+    NodeEnvoyProperty {
+        typ: CppType,
+        cpp_var_id: String,
+        node_id: String,
+        parts: Vec<&'a str>,
+    },
+    CallUserFunc {
+        typ: CppType,
+        cpp_var_id: String,
+        func_name: &'a str,
+        args: Vec<&'a str>,
+    },
+    CallLibFunc {
+        typ: CppType,
+        cpp_var_id: String,
+        func_name: &'a str,
+        args: Vec<&'a str>,
+    },
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
+pub struct NodeAttribute<'a> {
     pub id: &'a str,
-    pub paths: Vec<&'a str>,
+    pub parts: Vec<&'a str>,
     pub value: String,
 }
 
-#[derive(Default, Serialize, PartialEq, Eq, Debug, Hash, Clone)]
-pub struct ToCollect<'a> {
-    pub typ: &'a str,
-    pub paths: Vec<&'a str>,
-}
-
-#[derive(Default, Serialize, PartialEq, Eq, Debug)]
-pub struct ReturnProperty<'a> {
-    pub id: &'a str,
-    pub paths: Vec<&'a str>,
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
+pub struct AttributeDef<'a> {
+    pub typ: CppType,
+    pub parts: Vec<&'a str>,
 }
 
 #[derive(Serialize, PartialEq, Eq, Debug, Clone)]
@@ -39,66 +81,89 @@ pub struct Udf<'a> {
     pub udf_type: UdfType,
     pub id: &'a str,
     pub func_impl: &'a str,
-    pub return_type: &'a str,
+    pub return_type: CppType,
     pub arg: Vec<&'a str>,
 }
 
 #[derive(Serialize, PartialEq, Eq, Debug)]
-pub enum Return<'a> {
-    Property(ReturnProperty<'a>),
-    CallUdf(Udf<'a>),
+pub enum CppResult {
+    Return { typ: CppType, id: String },
+    GroupBy { typ: CppType, id: String },
     None,
 }
 
-impl<'a> Default for Return<'a> {
+impl<'a> Default for CppResult {
     fn default() -> Self {
-        Return::None
+        CppResult::None
+    }
+}
+
+pub struct CodeGenConfig<'a> {
+    pub attributes_to_property_parts: HashMap<&'static str, AttributeDef<'a>>,
+    pub udf_table: HashMap<&'static str, Udf<'a>>,
+}
+
+impl<'a> CodeGenConfig<'a> {
+    pub fn new() -> Self {
+        Default::default()
+    }
+}
+
+impl<'a> Default for CodeGenConfig<'a> {
+    fn default() -> Self {
+        let mut attributes_to_property_parts = HashMap::new();
+        attributes_to_property_parts.insert(
+            "service_name",
+            AttributeDef {
+                typ: CppType::String,
+                parts: vec!["node", "metadata", "WORKLOAD_NAME"],
+            },
+        );
+
+        attributes_to_property_parts.insert(
+            "response_size",
+            AttributeDef {
+                typ: CppType::Int64T,
+                parts: vec!["response", "total_size"],
+            },
+        );
+
+        CodeGenConfig {
+            attributes_to_property_parts,
+            udf_table: HashMap::new(),
+        }
     }
 }
 
 #[derive(Default, Serialize)]
 pub struct CodeGen<'a> {
+    // Graph structures
     pub root_id: &'a str,
     pub vertices: HashSet<&'a str>,
     pub edges: Vec<(&'a str, &'a str)>,
-    pub ids_to_properties: Vec<Property<'a>>,
-    pub node_properties_to_collect: HashSet<ToCollect<'a>>,
-    pub return_stmt: Return<'a>,
+    pub nodes_to_attributes: Vec<NodeAttribute<'a>>,
+
+    // Envoy node attribute initializer lists.
+    pub node_attributes_to_fetch: HashSet<AttributeDef<'a>>,
+
+    // Intermediate computations necessary for computing result
+    pub blocks: Vec<CppCodeBlock<'a>>,
+    pub udfs: Vec<Udf<'a>>,
+    // Final computation result
+    pub result: CppResult,
+
     #[serde(skip_serializing)]
-    property_map: HashMap<&'static str, ToCollect<'a>>,
-    #[serde(skip_serializing)]
-    pub udf_table: HashMap<&'static str, Udf<'a>>,
+    pub config: CodeGenConfig<'a>,
 }
 
 impl<'a> CodeGen<'a> {
-    pub fn new() -> CodeGen<'a> {
-        let mut property_map = HashMap::new();
-        // TODO: need to specify the type of value returned.
-        property_map.insert(
-            "service_name",
-            ToCollect {
-                typ: "std::string",
-                paths: vec!["node", "metadata", "WORKLOAD_NAME"],
-            },
-        );
-        property_map.insert(
-            "response_size",
-            ToCollect {
-                typ: "int64_t",
-                paths: vec!["response", "total_size"],
-            },
-        );
-
-        CodeGen {
-            property_map,
-            ..Default::default()
-        }
+    pub fn new() -> Self {
+        Default::default()
     }
 
-    #[cfg(test)]
-    pub fn new_with_property_map(property_map: HashMap<&'static str, ToCollect<'a>>) -> Self {
+    pub fn new_with_config(config: CodeGenConfig<'a>) -> Self {
         CodeGen {
-            property_map,
+            config,
             ..Default::default()
         }
     }
@@ -129,37 +194,79 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
     fn visit_filter(&mut self, filter: &'a Filter) {
         let Filter::Property(id, p, value) = filter;
 
-        let vertex_id = id.id_name;
-        let to_collect = &self.property_map[p.id_name];
-        let value_str = value.to_string();
+        let node_id = id.id_name;
 
-        self.node_properties_to_collect.insert(to_collect.clone());
+        let attribute_def = &self.config.attributes_to_property_parts[p.id_name];
 
-        self.ids_to_properties.push(Property {
-            id: vertex_id,
-            paths: to_collect.paths.clone(),
-            value: value_str,
+        self.nodes_to_attributes.push(NodeAttribute {
+            id: node_id,
+            parts: attribute_def.parts.clone(),
+            value: value.to_string(),
         });
+        self.node_attributes_to_fetch.insert(attribute_def.clone());
     }
 
     fn visit_action(&mut self, action: &'a Action) {
         match action {
             Action::GetProperty(id, p) => {
-                self.node_properties_to_collect
-                    .insert(self.property_map[p.id_name].clone());
+                if id.id_name == "target" {
+                    if p.id_name == "height" {
+                        let cpp_var_id = "get_tree_height_target";
+                        self.blocks.push(CppCodeBlock::CallLibFunc {
+                            typ: CppType::Int,
+                            cpp_var_id: String::from(cpp_var_id),
+                            func_name: "get_tree_height",
+                            args: vec!["target"],
+                        });
 
-                self.return_stmt = Return::Property(ReturnProperty {
-                    id: id.id_name,
-                    paths: self.property_map[p.id_name].paths.clone(),
-                });
+                        self.result = CppResult::Return {
+                            typ: CppType::Int,
+                            id: String::from(cpp_var_id),
+                        };
+                    } else {
+                        panic!("{} graph property not supported", p.id_name)
+                    }
+                } else {
+                    let attribute = &self.config.attributes_to_property_parts[p.id_name];
+
+                    let cpp_var_id: String =
+                        String::from(id.id_name) + "_" + &attribute.parts.join("_");
+                    self.blocks.push(CppCodeBlock::NodeEnvoyProperty {
+                        typ: attribute.typ,
+                        cpp_var_id: cpp_var_id.clone(),
+                        node_id: String::from(id.id_name),
+                        parts: attribute.parts.clone(),
+                    });
+                    self.node_attributes_to_fetch.insert(attribute.clone());
+
+                    self.result = CppResult::Return {
+                        typ: attribute.typ,
+                        id: cpp_var_id,
+                    };
+                }
             }
             Action::None => {}
             Action::CallUdf(id) => {
-                if !self.udf_table.contains_key(id.id_name) {
+                if !self.config.udf_table.contains_key(id.id_name) {
                     panic!("Can't find udf function: {}", id.id_name);
                 }
-                let func = self.udf_table[id.id_name].clone();
-                self.return_stmt = Return::CallUdf(func);
+                let func = &self.config.udf_table[id.id_name];
+
+                let cpp_var_id = String::from(func.id) + "_result";
+
+                self.blocks.push(CppCodeBlock::CallUserFunc {
+                    typ: func.return_type,
+                    cpp_var_id: cpp_var_id.clone(),
+                    func_name: func.id,
+                    args: vec![],
+                });
+
+                self.udfs.push(func.clone());
+
+                self.result = CppResult::Return {
+                    typ: func.return_type,
+                    id: cpp_var_id,
+                }
             }
         }
     }
@@ -184,7 +291,7 @@ mod tests {
 
         assert_eq!(code_gen.vertices, ["a", "b", "c"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("a", "b"), ("b", "c")]);
-        assert!(code_gen.ids_to_properties.is_empty());
+        assert!(code_gen.nodes_to_attributes.is_empty());
     }
 
     #[test]
@@ -198,7 +305,7 @@ mod tests {
 
         assert_eq!(code_gen.vertices, ["a", "b", "c"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("b", "c"), ("a", "b")]);
-        assert!(code_gen.ids_to_properties.is_empty());
+        assert!(code_gen.nodes_to_attributes.is_empty());
     }
 
     #[test]
@@ -215,45 +322,55 @@ mod tests {
             ["a", "b", "c", "d"].iter().cloned().collect()
         );
         assert_eq!(code_gen.edges, vec![("b", "c"), ("a", "b"), ("a", "d")]);
-        assert!(code_gen.ids_to_properties.is_empty());
+        assert!(code_gen.nodes_to_attributes.is_empty());
     }
 
     #[test]
     fn test_codegen_action() {
-        let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, WHERE n.x ==k, RETURN n.x,");
+        let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, WHERE n.x == k, RETURN n.x,");
         let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
         let parse_tree = parser::parse_prog(&mut token_iter);
-        let mut code_gen = CodeGen::new_with_property_map(
-            [(
+        let mut code_gen = CodeGen::new_with_config(CodeGenConfig {
+            attributes_to_property_parts: [(
                 "x",
-                ToCollect {
-                    typ: "string",
-                    paths: vec!["x"],
+                AttributeDef {
+                    typ: CppType::String,
+                    parts: vec!["x"],
                 },
             )]
             .iter()
             .cloned()
             .collect(),
-        );
+            ..Default::default()
+        });
         code_gen.visit_prog(&parse_tree);
 
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
-            code_gen.ids_to_properties,
-            vec![Property {
+            code_gen.blocks,
+            vec![CppCodeBlock::NodeEnvoyProperty {
+                typ: CppType::String,
+                cpp_var_id: String::from("n_x"),
+                node_id: String::from("n"),
+                parts: vec!["x"]
+            }]
+        );
+        assert_eq!(
+            code_gen.nodes_to_attributes,
+            vec![NodeAttribute {
                 id: "n",
-                paths: vec!["x"],
+                parts: vec!["x"],
                 value: String::from("k"),
             }]
         );
         assert_eq!(
-            code_gen.return_stmt,
-            Return::Property(ReturnProperty {
-                id: "n",
-                paths: vec!["x"]
-            })
-        );
+            code_gen.result,
+            CppResult::Return {
+                typ: CppType::String,
+                id: String::from("n_x"),
+            }
+        )
     }
 
     #[test]
@@ -261,30 +378,40 @@ mod tests {
         let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, RETURN n.x,");
         let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
         let parse_tree = parser::parse_prog(&mut token_iter);
-        let mut code_gen = CodeGen::new_with_property_map(
-            [(
+        let mut code_gen = CodeGen::new_with_config(CodeGenConfig {
+            attributes_to_property_parts: [(
                 "x",
-                ToCollect {
-                    typ: "string",
-                    paths: vec!["x"],
+                AttributeDef {
+                    typ: CppType::String,
+                    parts: vec!["x"],
                 },
             )]
             .iter()
             .cloned()
             .collect(),
-        );
+            ..Default::default()
+        });
 
         code_gen.visit_prog(&parse_tree);
 
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
-            code_gen.return_stmt,
-            Return::Property(ReturnProperty {
-                id: "n",
-                paths: vec!["x"]
-            })
+            code_gen.blocks,
+            vec![CppCodeBlock::NodeEnvoyProperty {
+                typ: CppType::String,
+                cpp_var_id: String::from("n_x"),
+                node_id: String::from("n"),
+                parts: vec!["x"]
+            }]
         );
+        assert_eq!(
+            code_gen.result,
+            CppResult::Return {
+                typ: CppType::String,
+                id: String::from("n_x"),
+            }
+        )
     }
 
     #[test]
@@ -292,65 +419,131 @@ mod tests {
         let tokens: Vec<Token> = lexer::get_tokens(r"MATCH n-->m: a, WHERE n.x ==k, RETURN n.y,");
         let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
         let parse_tree = parser::parse_prog(&mut token_iter);
-        let mut code_gen = CodeGen::new_with_property_map(
-            [
+        let mut code_gen = CodeGen::new_with_config(CodeGenConfig {
+            attributes_to_property_parts: [
                 (
                     "x",
-                    ToCollect {
-                        typ: "string",
-                        paths: vec!["x"],
+                    AttributeDef {
+                        typ: CppType::String,
+                        parts: vec!["x"],
                     },
                 ),
                 (
                     "y",
-                    ToCollect {
-                        typ: "int64_t",
-                        paths: vec!["y"],
+                    AttributeDef {
+                        typ: CppType::Int64T,
+                        parts: vec!["y"],
                     },
                 ),
             ]
             .iter()
             .cloned()
             .collect(),
-        );
+            ..Default::default()
+        });
 
         code_gen.visit_prog(&parse_tree);
 
         assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
-            code_gen.ids_to_properties,
-            vec![Property {
+            code_gen.nodes_to_attributes,
+            vec![NodeAttribute {
                 id: "n",
-                paths: vec!["x"],
+                parts: vec!["x"],
                 value: String::from("k"),
             }]
         );
         assert_eq!(
-            code_gen.node_properties_to_collect,
-            [
-                ToCollect {
-                    typ: "string",
-                    paths: vec!["x"],
+            code_gen.node_attributes_to_fetch,
+            vec![
+                AttributeDef {
+                    typ: CppType::String,
+                    parts: vec!["x"]
                 },
-                ToCollect {
-                    typ: "int64_t",
-                    paths: vec!["y"],
-                },
+                AttributeDef {
+                    typ: CppType::Int64T,
+                    parts: vec!["y"]
+                }
             ]
             .iter()
             .cloned()
             .collect()
         );
+    }
+
+    #[test]
+    fn test_codegen_graph_properties() {
+        let tokens = lexer::get_tokens(r"MATCH n-->m: a, RETURN target.height,");
+        let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
+        let parse_tree = parser::parse_prog(&mut token_iter);
+        let mut code_gen = CodeGen::new();
+        code_gen.visit_prog(&parse_tree);
+        assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
+        assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
-            code_gen.return_stmt,
-            Return::Property(ReturnProperty {
-                id: "n",
-                paths: vec!["y"]
-            })
+            code_gen.blocks,
+            vec![CppCodeBlock::CallLibFunc {
+                typ: CppType::Int,
+                cpp_var_id: String::from("get_tree_height_target"),
+                func_name: "get_tree_height",
+                args: vec!["target"],
+            }]
+        );
+        assert_eq!(
+            code_gen.result,
+            CppResult::Return {
+                typ: CppType::Int,
+                id: String::from("get_tree_height_target")
+            }
         );
     }
 
     #[test]
-    fn test_codegen_udf() {}
+    fn test_codegen_call_udf() {
+        let tokens = lexer::get_tokens(r"MATCH n-->m: a, RETURN max_response_size,");
+        let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
+        let parse_tree = parser::parse_prog(&mut token_iter);
+        let mut code_gen = CodeGen::new();
+        code_gen.config.udf_table.insert(
+            "max_response_size",
+            Udf {
+                udf_type: UdfType::Scalar,
+                id: "max_response_size",
+                func_impl: "function_impl",
+                return_type: CppType::Int64T,
+                arg: vec![],
+            },
+        );
+        code_gen.visit_prog(&parse_tree);
+        assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
+        assert_eq!(code_gen.edges, vec![("n", "m")]);
+
+        assert_eq!(
+            code_gen.blocks,
+            vec![CppCodeBlock::CallUserFunc {
+                typ: CppType::Int64T,
+                cpp_var_id: String::from("max_response_size_result"),
+                func_name: "max_response_size",
+                args: vec![],
+            }]
+        );
+        assert_eq!(
+            code_gen.udfs,
+            vec![Udf {
+                udf_type: UdfType::Scalar,
+                id: "max_response_size",
+                func_impl: "function_impl",
+                return_type: CppType::Int64T,
+                arg: vec![],
+            }],
+        );
+        assert_eq!(
+            code_gen.result,
+            CppResult::Return {
+                typ: CppType::Int64T,
+                id: String::from("max_response_size_result"),
+            }
+        );
+    }
 }

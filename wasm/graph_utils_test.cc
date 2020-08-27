@@ -340,11 +340,25 @@ TEST(UserFuncTest, ScalarFunc) {
 }
 
 TEST(UserFuncTest, ScalarInnerClassDef) {
-
   auto graph = generate_trace_graph_from_headers(
       "a-b-c", "a.start_time==1,b.start_time==2,c.start_time==3");
 
   scalar_dfs_max_value f;
 
   EXPECT_EQ(f(graph), 3);
+}
+
+TEST(GraphPropertiesTest, Height) {
+  auto graph = generate_trace_graph_from_headers("a-b-c,a-d", "");
+  EXPECT_EQ(get_tree_height(graph), 2);
+  graph = generate_trace_graph_from_headers("", "");
+  EXPECT_EQ(get_tree_height(graph), 0);
+  graph = generate_trace_graph_from_headers("a-b-c-d,d-e", "");
+  EXPECT_EQ(get_tree_height(graph), 4);
+  graph = generate_trace_graph_from_headers("a-b-c-d,b-e,c-f,f-g,g-h", "");
+  EXPECT_EQ(get_tree_height(graph), 5);
+  graph = generate_trace_graph_from_headers("b-a,b-c", "");
+  EXPECT_EQ(get_tree_height(graph), 1);
+  graph = generate_trace_graph_from_headers("a", "");
+  EXPECT_EQ(get_tree_height(graph), 0);
 }

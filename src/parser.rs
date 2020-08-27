@@ -349,7 +349,7 @@ mod tests {
 
     #[test]
     fn test_parse_graph_property() {
-        let input: &str = r"MATCH n-->m: a, RETURN graph.num_vertices,";
+        let input: &str = r"MATCH n-->m: a, RETURN graph.height,";
         let tokens = &mut get_tokens(input);
         let token_iter = &mut tokens.iter().peekable();
         let prog = parse_prog(token_iter);
@@ -364,9 +364,7 @@ mod tests {
                 filters: Filters::new(),
                 action: Action::GetProperty(
                     Identifier { id_name: "graph" },
-                    Identifier {
-                        id_name: "num_vertices"
-                    }
+                    Identifier { id_name: "height" }
                 )
             }
         )
