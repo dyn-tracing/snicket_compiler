@@ -405,7 +405,9 @@ mod tests {
                 filters: Filters::new(),
                 action: Action::GroupBy(
                     Identifier { id_name: "n" },
-                    Identifier { id_name: "response_size" }
+                    Identifier {
+                        id_name: "response_size"
+                    }
                 )
             }
         )
