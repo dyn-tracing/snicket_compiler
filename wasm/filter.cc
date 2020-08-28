@@ -215,9 +215,9 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-        "b",
-        "a",
         "c",
+        "a",
+        "b",
         "d",
     };
 

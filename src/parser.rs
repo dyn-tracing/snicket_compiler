@@ -138,17 +138,35 @@ fn parse_action<'a>(token_iter: &mut TokenIterator<'a>) -> Action<'a> {
         return Action::None;
     }
 
-    consume_token(token_iter, &Token::Return, "Expected RETURN");
-    let id = parse_identifier(token_iter);
-    let operator_token = token_iter.next().unwrap();
-    match &operator_token {
-        Token::Period => {
-            let property = parse_identifier(token_iter);
-            consume_token(token_iter, &Token::Comma, "Must end with a comma");
-            Action::GetProperty(id, property)
+    match token_iter.next() {
+        Some(Token::Return) => {
+            let id = parse_identifier(token_iter);
+            let operator_token = token_iter.next().unwrap();
+            match &operator_token {
+                Token::Period => {
+                    let property = parse_identifier(token_iter);
+                    consume_token(token_iter, &Token::Comma, "Must end with a comma");
+                    Action::GetProperty(id, property)
+                }
+                Token::Comma => Action::CallUdf(id),
+                _ => panic!("Unrecognized token: {:?}", operator_token),
+            }
         }
-        Token::Comma => Action::CallUdf(id),
-        _ => panic!("Unrecognized token: {:?}", operator_token),
+        Some(Token::Group) => {
+            consume_token(token_iter, &Token::By, "Expected BY after GROUP");
+            let id = parse_identifier(token_iter);
+            let operator_token = token_iter.next().unwrap();
+            match &operator_token {
+                Token::Period => {
+                    let property = parse_identifier(token_iter);
+                    consume_token(token_iter, &Token::Comma, "Must end with a comma");
+                    Action::GroupBy(id, property)
+                }
+                Token::Comma => Action::CallUdf(id),
+                _ => panic!("Unrecognized token: {:?}", operator_token),
+            }
+        }
+        Some(_) | None => panic!("Failed to parse action"),
     }
 }
 
@@ -365,6 +383,31 @@ mod tests {
                 action: Action::GetProperty(
                     Identifier { id_name: "graph" },
                     Identifier { id_name: "height" }
+                )
+            }
+        )
+    }
+
+    #[test]
+    fn test_group_by() {
+        let input: &str = r"MATCH n-->m: a, GROUP BY n.response_size,";
+        let tokens = &mut get_tokens(input);
+        let token_iter = &mut tokens.iter().peekable();
+        let prog = parse_prog(token_iter);
+        assert_eq!(
+            prog,
+            Prog {
+                patterns: Patterns(vec![Pattern {
+                    from_node: Identifier { id_name: "n" },
+                    to_node: Identifier { id_name: "m" },
+                    relationship_type: Relationship::Edge(Identifier { id_name: "a" })
+                }]),
+                filters: Filters::new(),
+                action: Action::GroupBy(
+                    Identifier { id_name: "n" },
+                    Identifier {
+                        id_name: "response_size"
+                    }
                 )
             }
         )
