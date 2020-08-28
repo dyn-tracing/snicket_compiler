@@ -10,6 +10,8 @@ pub enum Token<'a> {
     Match,
     Where,
     Return,
+    Group,
+    By,
 
     // Operators
     Edge,
@@ -31,6 +33,8 @@ impl<'a> fmt::Display for Token<'a> {
             Token::Where => write!(f, "WHERE"),
             Token::Return => write!(f, "RETURN"),
             Token::Edge => write!(f, "-->"),
+            Token::Group => write!(f, "GROUP"),
+            Token::By => write!(f, "BY"),
             Token::Path => write!(f, "-\\*>"),
             Token::Colon => write!(f, ":"),
             Token::Equals => write!(f, "=="),

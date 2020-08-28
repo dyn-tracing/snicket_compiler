@@ -54,6 +54,12 @@ impl<'a> TreeFold<'a> for DefUse<'a> {
                 }
             }
             Action::CallUdf(_id) => {}
+            Action::GroupBy(id, _) => {
+                if !self.known_nodes.contains(id.id_name) && !self.known_edges.contains(id.id_name)
+                {
+                    panic!("Edge/Node {:?} not defined.", id.id_name);
+                }
+            }
             Action::None => {}
         }
     }
