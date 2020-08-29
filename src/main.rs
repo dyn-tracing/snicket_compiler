@@ -23,24 +23,12 @@ fn main() {
         )
         .get_matches();
 
+    // Read query from file specified by command line argument.
     let query_file = matches.value_of("query").unwrap();
-
     let query = fs::read_to_string(query_file)
         .unwrap_or_else(|_| panic!("failed to read file {}", query_file));
 
-    let template_path = Path::new("filter.cc.handlebars");
-    let display = template_path.display();
-    let mut template_file = match File::open(&template_path) {
-        Err(msg) => panic!("Failed to open {}: {}", display, msg),
-        Ok(file) => file,
-    };
-
-    let mut template_str = String::new();
-    match template_file.read_to_string(&mut template_str) {
-        Err(msg) => panic!("Failed to read {}: {}", display, msg),
-        Ok(_) => println!("Successfully read {}", display),
-    }
-
+    // Run parsing and code generation.
     let tokens = lexer::get_tokens(&query);
     let mut token_iter = tokens.iter().peekable();
     let parse_tree = parser::parse_prog(&mut token_iter);
@@ -68,20 +56,22 @@ private:
         },
     );
 
-    code_gen.config.udf_table.insert(
-        "sum_aggr",
-        code_gen::Udf {
-            udf_type: code_gen::UdfType::Aggregation,
-            id: "sum_aggr",
-            func_impl: r#"
-            "#,
-            return_type: code_gen::CppType::Int,
-            ..Default::default()
-        },
-    );
-
     code_gen.root_id = "productpagev1";
     code_gen.visit_prog(&parse_tree);
+
+    // Open filter template.
+    let template_path = Path::new("filter.cc.handlebars");
+    let display = template_path.display();
+    let mut template_file = match File::open(&template_path) {
+        Err(msg) => panic!("Failed to open {}: {}", display, msg),
+        Ok(file) => file,
+    };
+
+    let mut template_str = String::new();
+    match template_file.read_to_string(&mut template_str) {
+        Err(msg) => panic!("Failed to read {}: {}", display, msg),
+        Ok(_) => println!("Successfully read {}", display),
+    }
 
     let handlebars = Handlebars::new();
 
