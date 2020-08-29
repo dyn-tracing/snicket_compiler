@@ -1,14 +1,33 @@
+extern crate clap;
 extern crate dyntracing;
 extern crate handlebars;
 extern crate serde;
 
+use clap::{App, Arg};
 use dyntracing::{code_gen, lexer, parser, tree_fold::TreeFold};
 use handlebars::Handlebars;
+use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
 fn main() {
+    let matches = App::new("Dynamic Tracing")
+        .arg(
+            Arg::with_name("query")
+                .short("q")
+                .long("query")
+                .required(true)
+                .value_name("FILE")
+                .help("Sets the .cql query file to use"),
+        )
+        .get_matches();
+
+    let query_file = matches.value_of("query").unwrap();
+
+    let query = fs::read_to_string(query_file)
+        .unwrap_or_else(|_| panic!("failed to read file {}", query_file));
+
     let template_path = Path::new("filter.cc.handlebars");
     let display = template_path.display();
     let mut template_file = match File::open(&template_path) {
@@ -22,13 +41,7 @@ fn main() {
         Ok(_) => println!("Successfully read {}", display),
     }
 
-    let query = "MATCH a-->b : x, b-->c : y, a-->d: z, \
-                    WHERE a.service_name == productpagev1, \
-                            b.service_name == reviewsv2, \
-                            c.service_name == ratingsv1, \
-                            d.service_name == detailsv1, \
-                    GROUP BY a.service_name,";
-    let tokens = lexer::get_tokens(query);
+    let tokens = lexer::get_tokens(&query);
     let mut token_iter = tokens.iter().peekable();
     let parse_tree = parser::parse_prog(&mut token_iter);
 
