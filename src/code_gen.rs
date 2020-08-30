@@ -1,13 +1,19 @@
 use grammar::*;
-use serde::Serialize;
+use regex::Regex;
+use serde::{Serialize, Serializer};
 use std::collections::{HashMap, HashSet};
-use std::fmt;
+use std::str::FromStr;
+use std::string::ToString;
+use strum_macros::EnumString;
 use tree_fold::TreeFold;
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Display, Debug, Eq, Hash, PartialEq, EnumString)]
 pub enum CppType {
+    #[strum(serialize = "int")]
     Int,
+    #[strum(serialize = "int64_t")]
     Int64T,
+    #[strum(serialize = "std::string")]
     String,
 }
 
@@ -17,17 +23,14 @@ impl Default for CppType {
     }
 }
 
-impl fmt::Display for CppType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            CppType::Int => write!(f, "int"),
-            CppType::Int64T => write!(f, "int64_t"),
-            CppType::String => write!(f, "std::string"),
-        }
+impl Serialize for CppType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
     }
 }
-
-derive_serialize_from_display!(CppType);
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
 pub struct NodeAttribute<'a> {
@@ -42,7 +45,7 @@ pub struct AttributeDef<'a> {
     pub parts: Vec<&'a str>,
 }
 
-#[derive(Serialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, PartialEq, Eq, Debug, Clone, EnumString)]
 pub enum UdfType {
     Scalar,
     Aggregation,
@@ -55,12 +58,12 @@ impl Default for UdfType {
 }
 
 #[derive(Default, Serialize, PartialEq, Eq, Debug, Clone)]
-pub struct Udf<'a> {
+pub struct Udf {
     pub udf_type: UdfType,
-    pub id: &'a str,
-    pub func_impl: &'a str,
+    pub id: String,
+    pub func_impl: String,
     pub return_type: CppType,
-    pub arg: Vec<&'a str>,
+    pub arg: Vec<String>,
 }
 
 #[derive(Serialize, PartialEq, Eq, Debug)]
@@ -78,12 +81,37 @@ impl<'a> Default for CppResult {
 
 pub struct CodeGenConfig<'a> {
     pub attributes_to_property_parts: HashMap<&'static str, AttributeDef<'a>>,
-    pub udf_table: HashMap<&'static str, Udf<'a>>,
+    pub udf_table: HashMap<String, Udf>,
 }
 
 impl<'a> CodeGenConfig<'a> {
     pub fn new() -> Self {
         Default::default()
+    }
+
+    pub fn parse_udf(&mut self, udf: String) {
+        let re = Regex::new(
+            r".*udf_type:\s+(?P<udf_type>\w+)\n.*id:\s+(?P<id>\w+)\n.*return_type:\s+(?P<return_type>\w+)\n.*arg:\s+(?P<arg>\w+)",
+        )
+        .unwrap();
+
+        let caps = re.captures(&udf).unwrap();
+
+        let udf_type = UdfType::from_str(caps.name("udf_type").unwrap().as_str()).unwrap();
+        let id = String::from(caps.name("id").unwrap().as_str());
+        let return_type = CppType::from_str(caps.name("return_type").unwrap().as_str()).unwrap();
+        let arg = String::from(caps.name("arg").unwrap().as_str());
+
+        self.udf_table.insert(
+            id.clone(),
+            Udf {
+                udf_type,
+                id,
+                func_impl: udf,
+                return_type,
+                arg: vec![arg],
+            },
+        );
     }
 }
 
@@ -126,7 +154,7 @@ pub struct CodeGen<'a> {
 
     // Intermediate computations necessary for computing result
     pub blocks: Vec<String>,
-    pub udfs: Vec<Udf<'a>>,
+    pub udfs: Vec<Udf>,
     // Final computation result
     pub result: CppResult,
 
@@ -251,7 +279,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                 }
                 let func = &self.config.udf_table[id.id_name];
 
-                let cpp_var_id = String::from(func.id) + "_result";
+                let cpp_var_id = func.id.clone() + "_result";
 
                 let block = if func.return_type != CppType::String {
                     format!(
@@ -581,11 +609,11 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
         let parse_tree = parser::parse_prog(&mut token_iter);
         let mut code_gen = CodeGen::new();
         code_gen.config.udf_table.insert(
-            "max_response_size",
+            String::from("max_response_size"),
             Udf {
                 udf_type: UdfType::Scalar,
-                id: "max_response_size",
-                func_impl: "function_impl",
+                id: String::from("max_response_size"),
+                func_impl: String::from("function_impl"),
                 return_type: CppType::Int64T,
                 arg: vec![],
             },
@@ -604,8 +632,8 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
             code_gen.udfs,
             vec![Udf {
                 udf_type: UdfType::Scalar,
-                id: "max_response_size",
-                func_impl: "function_impl",
+                id: String::from("max_response_size"),
+                func_impl: String::from("function_impl"),
                 return_type: CppType::Int64T,
                 arg: vec![],
             }],
@@ -646,5 +674,28 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
                 id: String::from("a_response_total_size"),
             }
         )
+    }
+
+    #[test]
+    fn test_init_udf_table() {
+        let mut config = CodeGenConfig::new();
+        config.parse_udf(String::from(
+            "// udf_type: Scalar
+                      // id: max_response_size
+                      // return_type: int
+                      // arg: target
+
+                      class max_response_size",
+        ));
+
+        let parsed_udf = config
+            .udf_table
+            .get(&String::from("max_response_size"))
+            .unwrap();
+        assert_eq!(parsed_udf.udf_type, UdfType::Scalar);
+        assert_eq!(parsed_udf.id, String::from("max_response_size"));
+        assert_eq!(parsed_udf.return_type, CppType::Int);
+        assert_eq!(parsed_udf.arg, vec![String::from("target")]);
+        assert!(parsed_udf.func_impl.contains("class max_response_size"));
     }
 }

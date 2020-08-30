@@ -21,6 +21,13 @@ fn main() {
                 .value_name("FILE")
                 .help("Sets the .cql query file to use"),
         )
+        .arg(
+            Arg::with_name("udf")
+                .short("u")
+                .long("udf")
+                .value_name("UDF_FILE")
+                .help("Optionally sets .cc user defined function file to use"),
+        )
         .get_matches();
 
     // Read query from file specified by command line argument.
@@ -28,34 +35,23 @@ fn main() {
     let query = fs::read_to_string(query_file)
         .unwrap_or_else(|_| panic!("failed to read file {}", query_file));
 
+    let mut config = code_gen::CodeGenConfig::new();
+
+    // Parse udf if any
+    if let Some(udf_file) = matches.value_of("udf") {
+        let udf = std::fs::read_to_string(udf_file)
+            .unwrap_or_else(|_| panic!("failed to read file {}", udf_file));
+        config.parse_udf(udf);
+    }
+
     // Run parsing and code generation.
     let tokens = lexer::get_tokens(&query);
     let mut token_iter = tokens.iter().peekable();
     let parse_tree = parser::parse_prog(&mut token_iter);
 
-    let mut code_gen = code_gen::CodeGen::new();
+    let mut code_gen = code_gen::CodeGen::new_with_config(config);
 
-    code_gen.config.udf_table.insert(
-        "aggr_func",
-        code_gen::Udf {
-            udf_type: code_gen::UdfType::Aggregation,
-            id: "aggr_func",
-            func_impl: r#"
-class aggr_func : public user_func<int> {
-public:
-    int operator()(const trace_graph_t &graph) {
-        num_vertices += graph.num_vertices();
-        return num_vertices;
-    }
-
-private:
-    int num_vertices = 0;
-};"#,
-            return_type: code_gen::CppType::Int,
-            ..Default::default()
-        },
-    );
-
+    // TODO(taegyunkim): Specify the root service name from commandline
     code_gen.root_id = "productpagev1";
     code_gen.visit_prog(&parse_tree);
 

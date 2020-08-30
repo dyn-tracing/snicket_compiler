@@ -39,6 +39,41 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
+// udf_type: Scalar
+// id: max_response_size
+// return_type: int
+// arg: target
+
+class max_response_size : public user_func<int> {
+public:
+  int operator()(const trace_graph_t &graph) {
+    int max = INT_MIN;
+    scalar_visitor vis(&max);
+    boost::depth_first_search(graph, boost::visitor(vis));
+    return max;
+  }
+
+private:
+  class scalar_visitor : public boost::default_dfs_visitor {
+  public:
+    scalar_visitor(int *max) { max_ = max; }
+
+    template <typename Vertex, typename Graph>
+    void discover_vertex(Vertex u, const Graph &g) {
+      auto map = g[u].properties;
+
+      int value = std::atoi(map.at(key_).c_str());
+
+      if (value > *max_) {
+        *max_ = value;
+      }
+    }
+
+    std::vector<std::string> key_{"response", "total_size"};
+    int *max_;
+  };
+};
+
 class BidiRootContext : public RootContext {
 public:
   explicit BidiRootContext(uint32_t id, StringView root_id)
@@ -54,6 +89,8 @@ public:
   bool onConfigure(size_t /* configuration_size */) override;
 
   StringView getWorkloadName() { return workload_name_; }
+
+  max_response_size max_response_size_udf_;
 
 private:
   std::string workload_name_;
@@ -216,9 +253,9 @@ void BidiContext::onResponseHeadersInbound() {
 
     std::set<std::string> vertices = {
         "a",
+        "b",
         "c",
         "d",
-        "b",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -271,19 +308,12 @@ void BidiContext::onResponseHeadersInbound() {
     }
 
     const Node *node_ptr = nullptr;
-    node_ptr = get_node_with_id(target, mapping->at("a"));
-    if (node_ptr == nullptr ||
-        node_ptr->properties.find({"node", "metadata", "WORKLOAD_NAME"}) ==
-            node_ptr->properties.end()) {
-      LOG_WARN("Node a not found");
-      return;
-    }
-    std::string a_node_metadata_WORKLOAD_NAME =
-        node_ptr->properties.at({"node", "metadata", "WORKLOAD_NAME"});
+    std::string max_response_size_result =
+        std::to_string(root_->max_response_size_udf_(target));
 
     std::string to_store;
 
-    to_store = a_node_metadata_WORKLOAD_NAME;
+    to_store = max_response_size_result;
 
     LOG_WARN("Value to store: " + to_store);
 

@@ -2,8 +2,9 @@
 extern crate lazy_static;
 extern crate regex;
 extern crate serde;
+extern crate strum;
 #[macro_use]
-extern crate serde_plain;
+extern crate strum_macros;
 
 pub mod code_gen;
 pub mod def_use;
