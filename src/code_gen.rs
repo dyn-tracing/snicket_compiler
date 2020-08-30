@@ -7,8 +7,10 @@ use std::string::ToString;
 use strum_macros::EnumString;
 use tree_fold::TreeFold;
 
+/// C++ type
 #[derive(Clone, Copy, Display, Debug, Eq, Hash, PartialEq, EnumString)]
 pub enum CppType {
+    // strum crate annotation is used to implement CppType::from_str()
     #[strum(serialize = "int")]
     Int,
     #[strum(serialize = "int64_t")]
@@ -23,6 +25,7 @@ impl Default for CppType {
     }
 }
 
+// Custom serialization using strum's Display implementation
 impl Serialize for CppType {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -34,11 +37,19 @@ impl Serialize for CppType {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
 pub struct NodeAttribute<'a> {
+    // Service (node) id
     pub id: &'a str,
+    // Envoy property parts, e.g. {"node", "metadata", "WORKLOAD_NAME"}
     pub parts: Vec<&'a str>,
+    // String representation of value for above property
+    // TODO: Use appropriate C++ type instead of string.
     pub value: String,
 }
 
+// This struct is used to represent Envoy property with its corresponding value type.
+// They're defined here: https://github.com/istio/envoy/blob/7043f39a2f5f7d072c35b3fe4d50865b5c61a9dc/source/extensions/common/wasm/context.cc#L406
+// e.g. typ: CppType::String, parts: {"node", "metadata", "WORKLOAD_NAME"},
+// typ: CppType::int64_t, parts: {"repsonse", "total_size"}
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
 pub struct AttributeDef<'a> {
     pub typ: CppType,
@@ -80,6 +91,9 @@ impl<'a> Default for CppResult {
 }
 
 pub struct CodeGenConfig<'a> {
+    // This map is used to keep track of which attribute corresponds to which Envoy property.
+    // e.g. service_name -> {"node", "metadata", "WORKLOAD_NAME"}
+    // Was introduced to simplify the query language.
     pub attributes_to_property_parts: HashMap<&'static str, AttributeDef<'a>>,
     pub udf_table: HashMap<String, Udf>,
 }
@@ -90,6 +104,12 @@ impl<'a> CodeGenConfig<'a> {
     }
 
     pub fn parse_udf(&mut self, udf: String) {
+        // The regex looks for following pattern
+        // // udf_type: <udf_type>
+        // // id: <id>
+        // // return_type: <return_type>
+        // // arg: <arg>
+        // TODO: Support parsing multiple arguments.
         let re = Regex::new(
             r".*udf_type:\s+(?P<udf_type>\w+)\n.*id:\s+(?P<id>\w+)\n.*return_type:\s+(?P<return_type>\w+)\n.*arg:\s+(?P<arg>\w+)",
         )
@@ -219,6 +239,8 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                     if p.id_name == "height" {
                         let cpp_var_id = "get_tree_height_target";
 
+                        // NOTE: I chose to use rust format! macro instead of handlebars templating
+                        // for the ease of testing and faster iteration.
                         let block = format!(
                             "std::string {cpp_var_id} = std::to_string({func_name}({args}));",
                             cpp_var_id = cpp_var_id,
