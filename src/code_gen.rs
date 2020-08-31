@@ -306,6 +306,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
             Action::GroupBy(id, p, fid) => {
                 let attribute = &self.config.attributes_to_property_parts[p.id_name];
 
+                // Generate C++ code for getting property
                 let property_var_id: String =
                     String::from(id.id_name) + "_" + &attribute.parts.join("_");
 
@@ -333,6 +334,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                 );
                 self.blocks.push(block);
 
+                // C++ code for type conversion for the property
                 let conv = match &attribute.typ {
                     CppType::Float => format!(
                         "float {cpp_var_id} = std::atof({cpp_var_id}_str.c_str());",
@@ -354,6 +356,8 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
 
                 self.blocks.push(conv);
 
+                // Now generate code for calling user function specified with the value retrieved
+                // above.
                 self.node_attributes_to_fetch.insert(attribute.clone());
 
                 if !self.config.udf_table.contains_key(fid.id_name) {
