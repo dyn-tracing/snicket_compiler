@@ -356,6 +356,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                 };
 
                 self.blocks.push(block);
+                self.udfs.push(func.clone());
 
                 self.result = CppResult::GroupBy {
                     typ: attribute.typ,

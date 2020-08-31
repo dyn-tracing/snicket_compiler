@@ -39,39 +39,20 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
-// udf_type: Scalar
-// id: max_response_size
+// udf_type: Aggregation
+// id: count
 // return_type: int
-// arg: target
 
-class max_response_size : public user_func<int> {
+class count {
 public:
-  int operator()(const trace_graph_t &graph) {
-    int max = INT_MIN;
-    scalar_visitor vis(&max);
-    boost::depth_first_search(graph, boost::visitor(vis));
-    return max;
+  int operator()(std::string height) {
+
+    buckets_[height] += 1;
+
+    return buckets_[height];
   }
 
-private:
-  class scalar_visitor : public boost::default_dfs_visitor {
-  public:
-    scalar_visitor(int *max) { max_ = max; }
-
-    template <typename Vertex, typename Graph>
-    void discover_vertex(Vertex u, const Graph &g) {
-      auto map = g[u].properties;
-
-      int value = std::atoi(map.at(key_).c_str());
-
-      if (value > *max_) {
-        *max_ = value;
-      }
-    }
-
-    std::vector<std::string> key_{"response", "total_size"};
-    int *max_;
-  };
+  std::map<std::string, int> buckets_;
 };
 
 class BidiRootContext : public RootContext {
@@ -90,7 +71,7 @@ public:
 
   StringView getWorkloadName() { return workload_name_; }
 
-  max_response_size max_response_size_udf_;
+  count count_udf_;
 
 private:
   std::string workload_name_;
@@ -222,6 +203,29 @@ void BidiContext::onResponseHeadersInbound() {
       LOG_WARN("failed to get property");
     }
   }
+  {
+    int64_t value;
+    if (getValue(
+            {
+                "response",
+                "total_size",
+            },
+            &value)) {
+      std::string result = std::string(root_->getWorkloadName());
+      for (auto p : {
+               "response",
+               "total_size",
+           }) {
+        result += "." + std::string(p);
+      }
+      result += "==";
+      result += std::to_string(value);
+
+      properties.push_back(result);
+    } else {
+      LOG_WARN("failed to get property");
+    }
+  }
 
   LOG_WARN("number of properties collected " +
            std::to_string(properties.size()));
@@ -252,10 +256,10 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-        "a",
         "b",
         "c",
         "d",
+        "a",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -308,12 +312,21 @@ void BidiContext::onResponseHeadersInbound() {
     }
 
     const Node *node_ptr = nullptr;
-    std::string max_response_size_result =
-        std::to_string(root_->max_response_size_udf_(target));
+    node_ptr = get_node_with_id(target, mapping->at("a"));
+    if (node_ptr == nullptr ||
+        node_ptr->properties.find({"response", "total_size"}) ==
+            node_ptr->properties.end()) {
+      LOG_WARN("Node a not found");
+      return;
+    }
+    std::string a_response_total_size =
+        node_ptr->properties.at({"response", "total_size"});
+    std::string count_result =
+        std::to_string(root_->count_udf_(a_response_total_size));
 
     std::string to_store;
 
-    to_store = max_response_size_result;
+    to_store = count_result;
 
     LOG_WARN("Value to store: " + to_store);
 
