@@ -232,64 +232,40 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
     fn visit_action(&mut self, action: &'a Action) {
         match action {
             Action::GetProperty(id, p) => {
-                if id.id_name == "target" {
-                    if p.id_name == "height" {
-                        let cpp_var_id = "get_tree_height_target";
+                let attribute = &self.config.attributes_to_property_parts[p.id_name];
 
-                        // NOTE: I chose to use rust format! macro instead of handlebars templating
-                        // for the ease of testing and faster iteration.
-                        let block = format!(
-                            "std::string {cpp_var_id} = std::to_string({func_name}({args}));",
-                            cpp_var_id = cpp_var_id,
-                            func_name = "get_tree_height",
-                            args = "target"
-                        );
+                let cpp_var_id: String =
+                    String::from(id.id_name) + "_" + &attribute.parts.join("_");
 
-                        self.blocks.push(block);
+                let mut parts = String::from("{");
+                parts.push_str(
+                    &attribute
+                        .parts
+                        .iter()
+                        .map(|s| String::from("\"") + s + "\"")
+                        .collect::<Vec<String>>()
+                        .join(", "),
+                );
+                parts.push_str("}");
 
-                        self.result = CppResult::Return {
-                            typ: CppType::Int,
-                            id: String::from(cpp_var_id),
-                        };
-                    } else {
-                        panic!("{} graph property not supported", p.id_name)
-                    }
-                } else {
-                    let attribute = &self.config.attributes_to_property_parts[p.id_name];
-
-                    let cpp_var_id: String =
-                        String::from(id.id_name) + "_" + &attribute.parts.join("_");
-
-                    let mut parts = String::from("{");
-                    parts.push_str(
-                        &attribute
-                            .parts
-                            .iter()
-                            .map(|s| String::from("\"") + s + "\"")
-                            .collect::<Vec<String>>()
-                            .join(", "),
-                    );
-                    parts.push_str("}");
-
-                    let block = format!(
-                        "node_ptr = get_node_with_id(target, mapping->at(\"{node_id}\"));
+                let block = format!(
+                    "node_ptr = get_node_with_id(target, mapping->at(\"{node_id}\"));
 if (node_ptr == nullptr || node_ptr->properties.find({parts}) == node_ptr->properties.end()) {{
     LOG_WARN(\"Node {node_id} not found\");
     return;
 }}
 std::string {cpp_var_id} = node_ptr->properties.at({parts});",
-                        node_id = id.id_name,
-                        parts = parts,
-                        cpp_var_id = cpp_var_id,
-                    );
-                    self.blocks.push(block);
-                    self.node_attributes_to_fetch.insert(attribute.clone());
+                    node_id = id.id_name,
+                    parts = parts,
+                    cpp_var_id = cpp_var_id,
+                );
+                self.blocks.push(block);
+                self.node_attributes_to_fetch.insert(attribute.clone());
 
-                    self.result = CppResult::Return {
-                        typ: attribute.typ,
-                        id: cpp_var_id,
-                    };
-                }
+                self.result = CppResult::Return {
+                    typ: attribute.typ,
+                    id: cpp_var_id,
+                };
             }
             Action::None => {}
             Action::CallUdf(id) => {
@@ -326,62 +302,40 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                 }
             }
             Action::GroupBy(id, p, _func) => {
-                if id.id_name == "target" {
-                    if p.id_name == "height" {
-                        let cpp_var_id = "get_tree_height_target";
+                let attribute = &self.config.attributes_to_property_parts[p.id_name];
 
-                        let block = format!(
-                            "std::string {cpp_var_id} = std::to_string({func_name}({args}));",
-                            cpp_var_id = cpp_var_id,
-                            func_name = "get_tree_height",
-                            args = "target"
-                        );
+                let cpp_var_id: String =
+                    String::from(id.id_name) + "_" + &attribute.parts.join("_");
 
-                        self.blocks.push(block);
+                let mut parts = String::from("{");
+                parts.push_str(
+                    &attribute
+                        .parts
+                        .iter()
+                        .map(|s| String::from("\"") + s + "\"")
+                        .collect::<Vec<String>>()
+                        .join(", "),
+                );
+                parts.push_str("}");
 
-                        self.result = CppResult::GroupBy {
-                            typ: CppType::Int,
-                            id: String::from(cpp_var_id),
-                        };
-                    } else {
-                        panic!("{} graph property not supported", p.id_name)
-                    }
-                } else {
-                    let attribute = &self.config.attributes_to_property_parts[p.id_name];
-
-                    let cpp_var_id: String =
-                        String::from(id.id_name) + "_" + &attribute.parts.join("_");
-
-                    let mut parts = String::from("{");
-                    parts.push_str(
-                        &attribute
-                            .parts
-                            .iter()
-                            .map(|s| String::from("\"") + s + "\"")
-                            .collect::<Vec<String>>()
-                            .join(", "),
-                    );
-                    parts.push_str("}");
-
-                    let block = format!(
-                        "node_ptr = get_node_with_id(target, mapping->at(\"{node_id}\"));
+                let block = format!(
+                    "node_ptr = get_node_with_id(target, mapping->at(\"{node_id}\"));
 if (node_ptr == nullptr || node_ptr->properties.find({parts}) == node_ptr->properties.end()) {{
     LOG_WARN(\"Node {node_id} not found\");
     return;
 }}
 std::string {cpp_var_id} = node_ptr->properties.at({parts});",
-                        node_id = id.id_name,
-                        parts = parts,
-                        cpp_var_id = cpp_var_id,
-                    );
-                    self.blocks.push(block);
-                    self.node_attributes_to_fetch.insert(attribute.clone());
+                    node_id = id.id_name,
+                    parts = parts,
+                    cpp_var_id = cpp_var_id,
+                );
+                self.blocks.push(block);
+                self.node_attributes_to_fetch.insert(attribute.clone());
 
-                    self.result = CppResult::GroupBy {
-                        typ: attribute.typ,
-                        id: cpp_var_id,
-                    };
-                }
+                self.result = CppResult::GroupBy {
+                    typ: attribute.typ,
+                    id: cpp_var_id,
+                };
             }
         }
     }
@@ -592,32 +546,6 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
             .iter()
             .cloned()
             .collect()
-        );
-    }
-
-    #[test]
-    fn test_codegen_graph_properties() {
-        let tokens = lexer::get_tokens(r"MATCH n-->m: a, RETURN target.height,");
-        let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
-        let parse_tree = parser::parse_prog(&mut token_iter);
-        let mut code_gen = CodeGen::new();
-        code_gen.visit_prog(&parse_tree);
-        assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
-        assert_eq!(code_gen.edges, vec![("n", "m")]);
-        assert_eq!(
-            code_gen.blocks,
-            vec![
-                (String::from(
-                    "std::string get_tree_height_target = std::to_string(get_tree_height(target));"
-                ))
-            ]
-        );
-        assert_eq!(
-            code_gen.result,
-            CppResult::Return {
-                typ: CppType::Int,
-                id: String::from("get_tree_height_target")
-            }
         );
     }
 
