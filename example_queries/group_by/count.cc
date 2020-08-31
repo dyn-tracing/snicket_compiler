@@ -4,11 +4,12 @@
 
 class count {
 public:
-  int operator()(int height) {
+  int operator()(std::string height) {
+
     buckets_[height] += 1;
 
     return buckets_[height];
   }
 
-  std::map<int, int> buckets_;
+  std::map<std::string, int> buckets_;
 };
