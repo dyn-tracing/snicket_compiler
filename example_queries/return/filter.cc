@@ -39,41 +39,6 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
-// udf_type: Scalar
-// id: max_response_size
-// return_type: int
-// arg: target
-
-class max_response_size : public user_func<int> {
-public:
-  int operator()(const trace_graph_t &graph) {
-    int max = INT_MIN;
-    scalar_visitor vis(&max);
-    boost::depth_first_search(graph, boost::visitor(vis));
-    return max;
-  }
-
-private:
-  class scalar_visitor : public boost::default_dfs_visitor {
-  public:
-    scalar_visitor(int *max) { max_ = max; }
-
-    template <typename Vertex, typename Graph>
-    void discover_vertex(Vertex u, const Graph &g) {
-      auto map = g[u].properties;
-
-      int value = std::atoi(map.at(key_).c_str());
-
-      if (value > *max_) {
-        *max_ = value;
-      }
-    }
-
-    std::vector<std::string> key_{"response", "total_size"};
-    int *max_;
-  };
-};
-
 class BidiRootContext : public RootContext {
 public:
   explicit BidiRootContext(uint32_t id, StringView root_id)
@@ -89,8 +54,6 @@ public:
   bool onConfigure(size_t /* configuration_size */) override;
 
   StringView getWorkloadName() { return workload_name_; }
-
-  max_response_size max_response_size_udf_;
 
 private:
   std::string workload_name_;
@@ -198,6 +161,29 @@ void BidiContext::onResponseHeadersInbound() {
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
   {
+    int64_t value;
+    if (getValue(
+            {
+                "response",
+                "total_size",
+            },
+            &value)) {
+      std::string result = std::string(root_->getWorkloadName());
+      for (auto p : {
+               "response",
+               "total_size",
+           }) {
+        result += "." + std::string(p);
+      }
+      result += "==";
+      result += std::to_string(value);
+
+      properties.push_back(result);
+    } else {
+      LOG_WARN("failed to get property");
+    }
+  }
+  {
     std::string value;
     if (getValue(
             {
@@ -252,10 +238,10 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-        "a",
         "b",
-        "c",
         "d",
+        "c",
+        "a",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -308,12 +294,19 @@ void BidiContext::onResponseHeadersInbound() {
     }
 
     const Node *node_ptr = nullptr;
-    std::string max_response_size_result =
-        std::to_string(root_->max_response_size_udf_(target));
+    node_ptr = get_node_with_id(target, mapping->at("a"));
+    if (node_ptr == nullptr ||
+        node_ptr->properties.find({"response", "total_size"}) ==
+            node_ptr->properties.end()) {
+      LOG_WARN("Node a not found");
+      return;
+    }
+    std::string a_response_total_size =
+        node_ptr->properties.at({"response", "total_size"});
 
     std::string to_store;
 
-    to_store = max_response_size_result;
+    to_store = a_response_total_size;
 
     LOG_WARN("Value to store: " + to_store);
 

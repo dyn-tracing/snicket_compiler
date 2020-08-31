@@ -4,11 +4,13 @@ version = "0.1.0"
 authors = ["Anirudh Sivaraman <sk.anirudh@gmail.com>"]
 
 [dependencies]
+clap = "~2.27.0"
 handlebars = "3.1.0"
 lazy_static = "1.4.0"
 regex = "0.2.2"
 serde = { version = "1.0", features = ["derive"] }
-serde_plain = "0.3.0"
+strum = "0.19"
+strum_macros = "0.19"
 
 [lib]
 name = "dyntracing"

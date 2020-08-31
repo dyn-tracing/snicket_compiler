@@ -101,6 +101,9 @@ kubectl apply -f wasm/productpage-cluster.yaml
 
 8. Generate `wasm/filter.cc` file by running `cargo run`
 
+For example,
+`cargo run -- -q ./example_queries/return/query.cql`
+
 9. Build WASME
    We use [wasme](https://github.com/solo-io/wasme) to build, push and deploy
    our WASM filter.
