@@ -325,7 +325,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                     id: cpp_var_id,
                 }
             }
-            Action::GroupBy(id, p) => {
+            Action::GroupBy(id, p, _func) => {
                 if id.id_name == "target" {
                     if p.id_name == "height" {
                         let cpp_var_id = "get_tree_height_target";
@@ -666,7 +666,7 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
 
     #[test]
     fn test_group_by() {
-        let tokens = lexer::get_tokens(r"MATCH n-->m: a, GROUP BY a.response_size,");
+        let tokens = lexer::get_tokens(r"MATCH n-->m: a, GROUP a.response_size BY max,");
         let mut token_iter: Peekable<std::slice::Iter<Token>> = tokens.iter().peekable();
         let parse_tree = parser::parse_prog(&mut token_iter);
         let mut code_gen = CodeGen::new();
