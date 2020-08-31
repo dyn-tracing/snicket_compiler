@@ -74,7 +74,6 @@ pub struct Udf {
     pub id: String,
     pub func_impl: String,
     pub return_type: CppType,
-    pub arg: Vec<String>,
 }
 
 #[derive(Serialize, PartialEq, Eq, Debug)]
@@ -111,7 +110,7 @@ impl<'a> CodeGenConfig<'a> {
         // // arg: <arg>
         // TODO: Support parsing multiple arguments.
         let re = Regex::new(
-            r".*udf_type:\s+(?P<udf_type>\w+)\n.*id:\s+(?P<id>\w+)\n.*return_type:\s+(?P<return_type>\w+)\n.*arg:\s+(?P<arg>\w+)",
+            r".*udf_type:\s+(?P<udf_type>\w+)\n.*id:\s+(?P<id>\w+)\n.*return_type:\s+(?P<return_type>\w+)",
         )
         .unwrap();
 
@@ -120,7 +119,6 @@ impl<'a> CodeGenConfig<'a> {
         let udf_type = UdfType::from_str(caps.name("udf_type").unwrap().as_str()).unwrap();
         let id = String::from(caps.name("id").unwrap().as_str());
         let return_type = CppType::from_str(caps.name("return_type").unwrap().as_str()).unwrap();
-        let arg = String::from(caps.name("arg").unwrap().as_str());
 
         self.udf_table.insert(
             id.clone(),
@@ -129,7 +127,6 @@ impl<'a> CodeGenConfig<'a> {
                 id,
                 func_impl: udf,
                 return_type,
-                arg: vec![arg],
             },
         );
     }
@@ -637,7 +634,6 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
                 id: String::from("max_response_size"),
                 func_impl: String::from("function_impl"),
                 return_type: CppType::Int64T,
-                arg: vec![],
             },
         );
         code_gen.visit_prog(&parse_tree);
@@ -657,7 +653,6 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
                 id: String::from("max_response_size"),
                 func_impl: String::from("function_impl"),
                 return_type: CppType::Int64T,
-                arg: vec![],
             }],
         );
         assert_eq!(
@@ -705,7 +700,6 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
             "// udf_type: Scalar
                       // id: max_response_size
                       // return_type: int
-                      // arg: target
 
                       class max_response_size",
         ));
@@ -717,7 +711,6 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
         assert_eq!(parsed_udf.udf_type, UdfType::Scalar);
         assert_eq!(parsed_udf.id, String::from("max_response_size"));
         assert_eq!(parsed_udf.return_type, CppType::Int);
-        assert_eq!(parsed_udf.arg, vec![String::from("target")]);
         assert!(parsed_udf.func_impl.contains("class max_response_size"));
     }
 }
