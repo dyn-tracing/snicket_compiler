@@ -40,20 +40,19 @@ std::string trafficDirectionToString(TrafficDirection dir) {
 }
 
 // udf_type: Aggregation
-// id: avg
-// return_type: float
+// id: count
+// return_type: int
 
-class avg {
+class count {
 public:
-  float operator()(int value) {
-    avg_ = avg_ + ((float)value - avg_) / (count_ + 1);
-    count_ += 1;
+  int operator()(int height) {
 
-    return avg_;
+    buckets_[height] += 1;
+
+    return buckets_[height];
   }
 
-  int count_ = 0;
-  float avg_ = 0.0;
+  std::map<int, int> buckets_;
 };
 
 class BidiRootContext : public RootContext {
@@ -72,7 +71,7 @@ public:
 
   StringView getWorkloadName() { return workload_name_; }
 
-  avg avg_udf_;
+  count count_udf_;
 
 private:
   std::string workload_name_;
@@ -180,6 +179,29 @@ void BidiContext::onResponseHeadersInbound() {
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
   {
+    int64_t value;
+    if (getValue(
+            {
+                "response",
+                "total_size",
+            },
+            &value)) {
+      std::string result = std::string(root_->getWorkloadName());
+      for (auto p : {
+               "response",
+               "total_size",
+           }) {
+        result += "." + std::string(p);
+      }
+      result += "==";
+      result += std::to_string(value);
+
+      properties.push_back(result);
+    } else {
+      LOG_WARN("failed to get property");
+    }
+  }
+  {
     std::string value;
     if (getValue(
             {
@@ -198,29 +220,6 @@ void BidiContext::onResponseHeadersInbound() {
       }
       result += "==";
       result += value;
-
-      properties.push_back(result);
-    } else {
-      LOG_WARN("failed to get property");
-    }
-  }
-  {
-    int64_t value;
-    if (getValue(
-            {
-                "response",
-                "total_size",
-            },
-            &value)) {
-      std::string result = std::string(root_->getWorkloadName());
-      for (auto p : {
-               "response",
-               "total_size",
-           }) {
-        result += "." + std::string(p);
-      }
-      result += "==";
-      result += std::to_string(value);
 
       properties.push_back(result);
     } else {
@@ -257,10 +256,10 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-        "d",
         "a",
         "b",
         "c",
+        "d",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -324,12 +323,12 @@ void BidiContext::onResponseHeadersInbound() {
         node_ptr->properties.at({"response", "total_size"});
     int64_t a_response_total_size =
         std::atoll(a_response_total_size_str.c_str());
-    std::string avg_result =
-        std::to_string(root_->avg_udf_(a_response_total_size));
+    std::string count_result =
+        std::to_string(root_->count_udf_(a_response_total_size));
 
     std::string to_store;
 
-    to_store = avg_result;
+    to_store = count_result;
 
     LOG_WARN("Value to store: " + to_store);
 
