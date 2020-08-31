@@ -17,6 +17,8 @@ pub enum CppType {
     Int64T,
     #[strum(serialize = "std::string")]
     String,
+    #[strum(serialize = "float")]
+    Float,
 }
 
 impl Default for CppType {
@@ -327,9 +329,31 @@ if (node_ptr == nullptr || node_ptr->properties.find({parts}) == node_ptr->prope
 std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                     node_id = id.id_name,
                     parts = parts,
-                    cpp_var_id = property_var_id,
+                    cpp_var_id = property_var_id.clone() + "_str",
                 );
                 self.blocks.push(block);
+
+                let conv = match &attribute.typ {
+                    CppType::Float => format!(
+                        "float {cpp_var_id} = std::atof({cpp_var_id}_str.c_str());",
+                        cpp_var_id = property_var_id
+                    ),
+                    CppType::Int => format!(
+                        "int {cpp_var_id} = std::atoi({cpp_var_id}_str.c_str());",
+                        cpp_var_id = property_var_id
+                    ),
+                    CppType::Int64T => format!(
+                        "int64_t {cpp_var_id} = std::atoll({cpp_var_id}_str.c_str());",
+                        cpp_var_id = property_var_id
+                    ),
+                    CppType::String => format!(
+                        "std::string {cpp_var_id} = {cpp_var_id}_str;",
+                        cpp_var_id = property_var_id
+                    ),
+                };
+
+                self.blocks.push(conv);
+
                 self.node_attributes_to_fetch.insert(attribute.clone());
 
                 if !self.config.udf_table.contains_key(fid.id_name) {
