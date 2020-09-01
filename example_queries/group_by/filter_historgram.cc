@@ -39,6 +39,22 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
+// udf_type: Aggregation
+// id: count
+// return_type: int
+
+class count {
+public:
+  int operator()(int height) {
+
+    buckets_[height] += 1;
+
+    return buckets_[height];
+  }
+
+  std::map<int, int> buckets_;
+};
+
 class BidiRootContext : public RootContext {
 public:
   explicit BidiRootContext(uint32_t id, StringView root_id)
@@ -54,6 +70,8 @@ public:
   bool onConfigure(size_t /* configuration_size */) override;
 
   StringView getWorkloadName() { return workload_name_; }
+
+  count count_udf_;
 
 private:
   std::string workload_name_;
@@ -161,6 +179,29 @@ void BidiContext::onResponseHeadersInbound() {
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
   {
+    int64_t value;
+    if (getValue(
+            {
+                "response",
+                "total_size",
+            },
+            &value)) {
+      std::string result = std::string(root_->getWorkloadName());
+      for (auto p : {
+               "response",
+               "total_size",
+           }) {
+        result += "." + std::string(p);
+      }
+      result += "==";
+      result += std::to_string(value);
+
+      properties.push_back(result);
+    } else {
+      LOG_WARN("failed to get property");
+    }
+  }
+  {
     std::string value;
     if (getValue(
             {
@@ -216,9 +257,9 @@ void BidiContext::onResponseHeadersInbound() {
 
     std::set<std::string> vertices = {
         "a",
+        "b",
         "c",
         "d",
-        "b",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -273,17 +314,21 @@ void BidiContext::onResponseHeadersInbound() {
     const Node *node_ptr = nullptr;
     node_ptr = get_node_with_id(target, mapping->at("a"));
     if (node_ptr == nullptr ||
-        node_ptr->properties.find({"node", "metadata", "WORKLOAD_NAME"}) ==
+        node_ptr->properties.find({"response", "total_size"}) ==
             node_ptr->properties.end()) {
       LOG_WARN("Node a not found");
       return;
     }
-    std::string a_node_metadata_WORKLOAD_NAME =
-        node_ptr->properties.at({"node", "metadata", "WORKLOAD_NAME"});
+    std::string a_response_total_size_str =
+        node_ptr->properties.at({"response", "total_size"});
+    int64_t a_response_total_size =
+        std::atoll(a_response_total_size_str.c_str());
+    std::string count_result =
+        std::to_string(root_->count_udf_(a_response_total_size));
 
     std::string to_store;
 
-    to_store = a_node_metadata_WORKLOAD_NAME;
+    to_store = count_result;
 
     LOG_WARN("Value to store: " + to_store);
 

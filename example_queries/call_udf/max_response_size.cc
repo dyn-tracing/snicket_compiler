@@ -1,7 +1,6 @@
 // udf_type: Scalar
 // id: max_response_size
 // return_type: int
-// arg: target
 
 class max_response_size : public user_func<int> {
 public:

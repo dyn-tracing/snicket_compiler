@@ -51,9 +51,10 @@ pub trait TreeFold<'a> {
             Action::CallUdf(ref id) => {
                 self.visit_identifier(id);
             }
-            Action::GroupBy(ref id, ref p) => {
+            Action::GroupBy(ref id, ref p, ref func) => {
                 self.visit_identifier(id);
                 self.visit_identifier(p);
+                self.visit_identifier(func);
             }
             Action::None => {}
         }

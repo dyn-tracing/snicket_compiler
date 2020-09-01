@@ -153,18 +153,14 @@ fn parse_action<'a>(token_iter: &mut TokenIterator<'a>) -> Action<'a> {
             }
         }
         Some(Token::Group) => {
-            consume_token(token_iter, &Token::By, "Expected BY after GROUP");
             let id = parse_identifier(token_iter);
-            let operator_token = token_iter.next().unwrap();
-            match &operator_token {
-                Token::Period => {
-                    let property = parse_identifier(token_iter);
-                    consume_token(token_iter, &Token::Comma, "Must end with a comma");
-                    Action::GroupBy(id, property)
-                }
-                Token::Comma => Action::CallUdf(id),
-                _ => panic!("Unrecognized token: {:?}", operator_token),
-            }
+            consume_token(token_iter, &Token::Period, "Expected comma");
+            let p = parse_identifier(token_iter);
+            consume_token(token_iter, &Token::By, "Expected BY after GROUP");
+            let func = parse_identifier(token_iter);
+            consume_token(token_iter, &Token::Comma, "Must end with a comma");
+
+            Action::GroupBy(id, p, func)
         }
         Some(_) | None => panic!("Failed to parse action"),
     }
@@ -390,7 +386,7 @@ mod tests {
 
     #[test]
     fn test_group_by() {
-        let input: &str = r"MATCH n-->m: a, GROUP BY n.response_size,";
+        let input: &str = r"MATCH n-->m: a, GROUP n.response_size BY max,";
         let tokens = &mut get_tokens(input);
         let token_iter = &mut tokens.iter().peekable();
         let prog = parse_prog(token_iter);
@@ -407,7 +403,8 @@ mod tests {
                     Identifier { id_name: "n" },
                     Identifier {
                         id_name: "response_size"
-                    }
+                    },
+                    Identifier { id_name: "max" }
                 )
             }
         )
