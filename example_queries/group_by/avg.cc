@@ -4,11 +4,11 @@
 
 class avg {
 public:
-  float operator()(int value) {
+  std::pair<std::string, float> operator()(int value) {
     avg_  = avg_ + ((float)value - avg_ ) / (count_ + 1);
     count_ += 1;
 
-    return avg_;
+    return std::make_pair("moving_avg", avg_);
   }
 
   int count_ =  0;

@@ -248,7 +248,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                         .collect::<Vec<String>>()
                         .join(", "),
                 );
-                parts.push_str("}");
+                parts.push('}');
 
                 let block = format!(
                     "node_ptr = get_node_with_id(target, mapping->at(\"{node_id}\"));
@@ -319,7 +319,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                         .collect::<Vec<String>>()
                         .join(", "),
                 );
-                parts.push_str("}");
+                parts.push('}');
 
                 let block = format!(
                     "node_ptr = get_node_with_id(target, mapping->at(\"{node_id}\"));
@@ -369,15 +369,14 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
 
                 let block = if func.return_type != CppType::String {
                     format!(
-                        "std::string {cpp_var_id} = std::to_string(root_->{func_name}_udf_({args}));",
-                        cpp_var_id = cpp_var_id,
+                        "auto udf_result = root_->{func_name}_udf_({args});
+                        std::tie(key, value) = std::make_pair(udf_result.first, std::to_string(udf_result.second));",
                         func_name = func.id,
                         args = property_var_id
                     )
                 } else {
                     format!(
-                        "std::string {cpp_var_id} = root_->{func_name}_udf_({args});",
-                        cpp_var_id = cpp_var_id,
+                        "std::tie(key, value) = root_->{func_name}_udf_({args});",
                         func_name = func.id,
                         args = property_var_id
                     )
