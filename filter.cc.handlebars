@@ -237,21 +237,19 @@ void BidiContext::onResponseHeadersInbound() {
     }
 
     const Node* node_ptr = nullptr;
-    {{#each blocks}}{{{this}}}{{/each}}
 
-    std::string to_store;
+    std::string key = b3_trace_id_;
+    std::string value;
+
+    {{#each blocks}}{{{this}}}{{/each}}
 
     {{#with result}}
     {{#if this.Return}}{{#with this.Return}}
-    to_store = {{this.id}};
-    {{/with}}{{/if}}
-
-    {{#if this.GroupBy}}{{#with this.GroupBy}}
-    to_store = {{this.id}};
+    value = {{this.id}};
     {{/with}}{{/if}}
     {{/with}}
 
-    LOG_WARN("Value to store: " + to_store);
+    LOG_WARN("Value to store: " + value);
 
     auto context_id = id();
     auto callback = [context_id](uint32_t, size_t body_size, uint32_t) {
@@ -265,8 +263,8 @@ void BidiContext::onResponseHeadersInbound() {
                                    { {":method", "GET"},
                                     {":path", "/store"},
                                     {":authority", "storage-upstream"},
-                                    {"key", b3_trace_id_},
-                                    {"value", to_store} },
+                                    {"key", key},
+                                    {"value", value} },
                                    "", {}, 1000, callback);
     if (result != WasmResult::Ok) {
       LOG_WARN("Failed to make a call to storage-upstream: " +

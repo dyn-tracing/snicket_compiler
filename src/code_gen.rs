@@ -369,15 +369,14 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
 
                 let block = if func.return_type != CppType::String {
                     format!(
-                        "std::string {cpp_var_id} = std::to_string(root_->{func_name}_udf_({args}));",
-                        cpp_var_id = cpp_var_id,
+                        "auto udf_result = root_->{func_name}_udf_({args});
+                        std::tie(key, value) = std::make_pair(udf_result.first, std::to_string(udf_result.second));",
                         func_name = func.id,
                         args = property_var_id
                     )
                 } else {
                     format!(
-                        "std::string {cpp_var_id} = root_->{func_name}_udf_({args});",
-                        cpp_var_id = cpp_var_id,
+                        "std::tie(key, value) = root_->{func_name}_udf_({args});",
                         func_name = func.id,
                         args = property_var_id
                     )
