@@ -31,7 +31,7 @@ impl<'a> TreeFold<'a> for PrettyPrinter {
             }
         };
         self.pretty_print_str.push_str(tree.to_node.id_name);
-        self.pretty_print_str.push_str(":");
+        self.pretty_print_str.push(':');
         self.pretty_print_str.push_str(
             match &tree.relationship_type {
                 Relationship::Path(id) | Relationship::Edge(id) => id,
@@ -52,7 +52,7 @@ impl<'a> TreeFold<'a> for PrettyPrinter {
         match &tree {
             Filter::Property(node, p, val) => {
                 self.pretty_print_str.push_str(node.id_name);
-                self.pretty_print_str.push_str(".");
+                self.pretty_print_str.push('.');
                 self.pretty_print_str.push_str(p.id_name);
                 self.pretty_print_str.push_str(" == ");
                 self.pretty_print_str.push_str(&val.to_string());
