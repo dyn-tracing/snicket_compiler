@@ -248,7 +248,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                         .collect::<Vec<String>>()
                         .join(", "),
                 );
-                parts.push_str("}");
+                parts.push('}');
 
                 let block = format!(
                     "node_ptr = get_node_with_id(target, mapping->at(\"{node_id}\"));
