@@ -288,7 +288,7 @@ void BidiContext::onResponseHeadersInbound() {
         generate_trace_graph_from_headers(paths_joined, properties_joined);
 
     auto mapping = get_sub_graph_mapping(pattern, target);
-    if (mapping == nullptr || mapping->find("") == mapping->end()) {
+    if (mapping == nullptr) {
       LOG_WARN("No mapping found");
       return;
     }
