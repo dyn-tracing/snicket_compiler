@@ -248,11 +248,11 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-      "d", "c", "a", "b", 
+      "d", "c", "a", "b",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
-         { "a", "b",  },  { "b", "c",  },  { "a", "d",  }, 
+         { "a", "b",  },  { "b", "c",  },  { "a", "d",  },
     };
 
     std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
@@ -260,7 +260,7 @@ void BidiContext::onResponseHeadersInbound() {
     ids_to_properties["b"][{ "node","metadata","WORKLOAD_NAME", }] = "reviewsv2";
     ids_to_properties["c"][{ "node","metadata","WORKLOAD_NAME", }] = "ratingsv1";
     ids_to_properties["d"][{ "node","metadata","WORKLOAD_NAME", }] = "detailsv1";
-    
+
 
     trace_graph_t pattern =
         generate_trace_graph(vertices, edges, ids_to_properties);
@@ -268,7 +268,7 @@ void BidiContext::onResponseHeadersInbound() {
         generate_trace_graph_from_headers(paths_joined, properties_joined);
 
     auto mapping = get_sub_graph_mapping(pattern, target);
-    if (mapping == nullptr || mapping->find("") == mapping->end()) {
+    if (mapping == nullptr) {
       LOG_WARN("No mapping found");
       return;
     }
@@ -278,13 +278,13 @@ void BidiContext::onResponseHeadersInbound() {
 
     std::string to_store;
 
-    
-    
-    to_store = max_response_size_result;
-    
 
-    
-    
+
+    to_store = max_response_size_result;
+
+
+
+
 
     LOG_WARN("Value to store: " + to_store);
 
