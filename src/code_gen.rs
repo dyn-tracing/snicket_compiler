@@ -192,6 +192,37 @@ impl<'a> CodeGen<'a> {
             ..Default::default()
         }
     }
+
+    fn codegen_get_property(&mut self, id: &Identifier, p: &Identifier) {
+        let attribute = &self.config.attributes_to_property_parts[p.id_name];
+
+        let property_var_id: String = String::from(id.id_name) + "_" + &attribute.parts.join("_");
+
+        let mut parts = String::from("{");
+        parts.push_str(
+            &attribute
+                .parts
+                .iter()
+                .map(|s| String::from("\"") + s + "\"")
+                .collect::<Vec<String>>()
+                .join(", "),
+        );
+        parts.push('}');
+
+        let block = format!(
+            "node_ptr = get_node_with_id(target, mapping->at(\"{node_id}\"));
+if (node_ptr == nullptr || node_ptr->properties.find({parts}) == node_ptr->properties.end()) {{
+    LOG_WARN(\"Node {node_id} not found\");
+    return;
+}}
+std::string {cpp_var_id} = node_ptr->properties.at({parts});",
+            node_id = id.id_name,
+            parts = parts,
+            cpp_var_id = property_var_id.clone() + "_str",
+        );
+        self.blocks.push(block);
+        self.node_attributes_to_fetch.insert(attribute.clone());
+    }
 }
 
 impl<'a> TreeFold<'a> for CodeGen<'a> {
@@ -234,39 +265,15 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
     fn visit_action(&mut self, action: &'a Action) {
         match action {
             Action::GetProperty(id, p) => {
+                self.codegen_get_property(id, p);
+
                 let attribute = &self.config.attributes_to_property_parts[p.id_name];
 
-                let cpp_var_id: String =
+                let property_var_id: String =
                     String::from(id.id_name) + "_" + &attribute.parts.join("_");
-
-                let mut parts = String::from("{");
-                parts.push_str(
-                    &attribute
-                        .parts
-                        .iter()
-                        .map(|s| String::from("\"") + s + "\"")
-                        .collect::<Vec<String>>()
-                        .join(", "),
-                );
-                parts.push('}');
-
-                let block = format!(
-                    "node_ptr = get_node_with_id(target, mapping->at(\"{node_id}\"));
-if (node_ptr == nullptr || node_ptr->properties.find({parts}) == node_ptr->properties.end()) {{
-    LOG_WARN(\"Node {node_id} not found\");
-    return;
-}}
-std::string {cpp_var_id} = node_ptr->properties.at({parts});",
-                    node_id = id.id_name,
-                    parts = parts,
-                    cpp_var_id = cpp_var_id,
-                );
-                self.blocks.push(block);
-                self.node_attributes_to_fetch.insert(attribute.clone());
-
                 self.result = CppResult::Return {
                     typ: attribute.typ,
-                    id: cpp_var_id,
+                    id: property_var_id + "_str",
                 };
             }
             Action::None => {}
@@ -304,6 +311,8 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                 }
             }
             Action::GroupBy(id, p, fid) => {
+                self.codegen_get_property(id, p);
+
                 let attribute = self
                     .config
                     .attributes_to_property_parts
@@ -313,30 +322,6 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                 // Generate C++ code for getting property
                 let property_var_id: String =
                     String::from(id.id_name) + "_" + &attribute.parts.join("_");
-
-                let mut parts = String::from("{");
-                parts.push_str(
-                    &attribute
-                        .parts
-                        .iter()
-                        .map(|s| String::from("\"") + s + "\"")
-                        .collect::<Vec<String>>()
-                        .join(", "),
-                );
-                parts.push('}');
-
-                let block = format!(
-                    "node_ptr = get_node_with_id(target, mapping->at(\"{node_id}\"));
-if (node_ptr == nullptr || node_ptr->properties.find({parts}) == node_ptr->properties.end()) {{
-    LOG_WARN(\"Node {node_id} not found\");
-    return;
-}}
-std::string {cpp_var_id} = node_ptr->properties.at({parts});",
-                    node_id = id.id_name,
-                    parts = parts,
-                    cpp_var_id = property_var_id.clone() + "_str",
-                );
-                self.blocks.push(block);
 
                 // C++ code for type conversion for the property
                 let conv = match &attribute.typ {
@@ -362,8 +347,6 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
 
                 // Now generate code for calling user function specified with the value retrieved
                 // above.
-                self.node_attributes_to_fetch.insert(attribute.clone());
-
                 if !self.config.udf_table.contains_key(fid.id_name) {
                     panic!("can't find udf function: {}", fid.id_name);
                 }
@@ -482,7 +465,7 @@ if (node_ptr == nullptr || node_ptr->properties.find({\"x\"}) == node_ptr->prope
     LOG_WARN(\"Node n not found\");
     return;
 }
-std::string n_x = node_ptr->properties.at({\"x\"});"
+std::string n_x_str = node_ptr->properties.at({\"x\"});"
                 ))
             ]
         );
@@ -498,7 +481,7 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
             code_gen.result,
             CppResult::Return {
                 typ: CppType::String,
-                id: String::from("n_x"),
+                id: String::from("n_x_str"),
             }
         )
     }
@@ -535,7 +518,7 @@ if (node_ptr == nullptr || node_ptr->properties.find({\"x\"}) == node_ptr->prope
     LOG_WARN(\"Node n not found\");
     return;
 }
-std::string n_x = node_ptr->properties.at({\"x\"});"
+std::string n_x_str = node_ptr->properties.at({\"x\"});"
                 ))
             ]
         );
@@ -543,7 +526,7 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
             code_gen.result,
             CppResult::Return {
                 typ: CppType::String,
-                id: String::from("n_x"),
+                id: String::from("n_x_str"),
             }
         )
     }
