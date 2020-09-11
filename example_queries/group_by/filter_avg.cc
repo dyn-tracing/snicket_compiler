@@ -180,29 +180,6 @@ void BidiContext::onResponseHeadersInbound() {
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
   {
-    int64_t value;
-    if (getValue(
-            {
-                "response",
-                "total_size",
-            },
-            &value)) {
-      std::string result = std::string(root_->getWorkloadName());
-      for (auto p : {
-               "response",
-               "total_size",
-           }) {
-        result += "." + std::string(p);
-      }
-      result += "==";
-      result += std::to_string(value);
-
-      properties.push_back(result);
-    } else {
-      LOG_WARN("failed to get property");
-    }
-  }
-  {
     std::string value;
     if (getValue(
             {
@@ -221,6 +198,29 @@ void BidiContext::onResponseHeadersInbound() {
       }
       result += "==";
       result += value;
+
+      properties.push_back(result);
+    } else {
+      LOG_WARN("failed to get property");
+    }
+  }
+  {
+    int64_t value;
+    if (getValue(
+            {
+                "response",
+                "total_size",
+            },
+            &value)) {
+      std::string result = std::string(root_->getWorkloadName());
+      for (auto p : {
+               "response",
+               "total_size",
+           }) {
+        result += "." + std::string(p);
+      }
+      result += "==";
+      result += std::to_string(value);
 
       properties.push_back(result);
     } else {
@@ -258,9 +258,9 @@ void BidiContext::onResponseHeadersInbound() {
 
     std::set<std::string> vertices = {
         "a",
+        "c",
         "b",
         "d",
-        "c",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -328,9 +328,9 @@ void BidiContext::onResponseHeadersInbound() {
         node_ptr->properties.at({"response", "total_size"});
     int64_t a_response_total_size =
         std::atoll(a_response_total_size_str.c_str());
-    auto udf_result = root_->avg_udf_(a_response_total_size);
-    std::tie(key, value) =
-        std::make_pair(udf_result.first, std::to_string(udf_result.second));
+    auto avg_udf_result = root_->avg_udf_(a_response_total_size);
+    std::tie(key, value) = std::make_pair(
+        avg_udf_result.first, std::to_string(avg_udf_result.second));
 
     LOG_WARN("Value to store: " + value);
 

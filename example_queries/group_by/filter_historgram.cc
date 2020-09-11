@@ -40,10 +40,10 @@ std::string trafficDirectionToString(TrafficDirection dir) {
 }
 
 // udf_type: Aggregation
-// id: count
+// id: histogram
 // return_type: int
 
-class count {
+class histogram {
 public:
   std::pair<std::string, int> operator()(int height) {
 
@@ -71,7 +71,7 @@ public:
 
   StringView getWorkloadName() { return workload_name_; }
 
-  count count_udf_;
+  histogram histogram_udf_;
 
 private:
   std::string workload_name_;
@@ -256,10 +256,10 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-        "d",
-        "c",
         "a",
+        "c",
         "b",
+        "d",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -327,9 +327,10 @@ void BidiContext::onResponseHeadersInbound() {
         node_ptr->properties.at({"response", "total_size"});
     int64_t a_response_total_size =
         std::atoll(a_response_total_size_str.c_str());
-    auto udf_result = root_->count_udf_(a_response_total_size);
+    auto histogram_udf_result = root_->histogram_udf_(a_response_total_size);
     std::tie(key, value) =
-        std::make_pair(udf_result.first, std::to_string(udf_result.second));
+        std::make_pair(histogram_udf_result.first,
+                       std::to_string(histogram_udf_result.second));
 
     LOG_WARN("Value to store: " + value);
 

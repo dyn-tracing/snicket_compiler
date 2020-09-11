@@ -192,6 +192,95 @@ impl<'a> CodeGen<'a> {
             ..Default::default()
         }
     }
+
+    pub fn get_attribute_def(&self, attribute_id: &str) -> &AttributeDef<'a> {
+        &self
+            .config
+            .attributes_to_property_parts
+            .get(attribute_id)
+            .unwrap_or_else(|| panic!("Don't support attribute {}", attribute_id))
+    }
+
+    fn codegen_get_property(&mut self, id: &Identifier, p: &Identifier) {
+        let attribute = self.get_attribute_def(p.id_name).clone();
+
+        let property_var_id: String = String::from(id.id_name) + "_" + &attribute.parts.join("_");
+
+        let mut parts = String::from("{");
+        parts.push_str(
+            &attribute
+                .parts
+                .iter()
+                .map(|s| String::from("\"") + s + "\"")
+                .collect::<Vec<String>>()
+                .join(", "),
+        );
+        parts.push('}');
+
+        let block = format!(
+            "node_ptr = get_node_with_id(target, mapping->at(\"{node_id}\"));
+if (node_ptr == nullptr || node_ptr->properties.find({parts}) == node_ptr->properties.end()) {{
+    LOG_WARN(\"Node {node_id} not found\");
+    return;
+}}
+std::string {cpp_var_id} = node_ptr->properties.at({parts});",
+            node_id = id.id_name,
+            parts = parts,
+            cpp_var_id = property_var_id + "_str",
+        );
+        self.node_attributes_to_fetch.insert(attribute);
+        self.blocks.push(block);
+    }
+
+    fn codegen_call_func(&mut self, func_name: &str, arg: &str) {
+        if !self.config.udf_table.contains_key(func_name) {
+            panic!("can't find udf function: {}", func_name);
+        }
+
+        let func = &self.config.udf_table[func_name];
+        self.udfs.push(func.clone());
+        let result_cpp_var_id = String::from(func_name) + "_udf_result";
+
+        let block = format!(
+            "auto {result_cpp_var_id} = root_->{func_name}_udf_({arg});",
+            result_cpp_var_id = result_cpp_var_id,
+            func_name = func_name,
+            arg = arg
+        );
+
+        self.blocks.push(block);
+
+        let key_value_block = match func.udf_type {
+            UdfType::Scalar => {
+                if func.return_type != CppType::String {
+                    format!(
+                        "value = std::to_string({result_cpp_var_id});",
+                        result_cpp_var_id = result_cpp_var_id
+                    )
+                } else {
+                    format!(
+                        "value = {result_cpp_var_id};",
+                        result_cpp_var_id = result_cpp_var_id
+                    )
+                }
+            }
+            UdfType::Aggregation => {
+                if func.return_type != CppType::String {
+                    format!(
+                        "std::tie(key, value) = std::make_pair({result_cpp_var_id}.first, std::to_string({result_cpp_var_id}.second));",
+                        result_cpp_var_id = result_cpp_var_id
+                    )
+                } else {
+                    format!(
+                        "std::tie(key, value) = {result_cpp_var_id};",
+                        result_cpp_var_id = result_cpp_var_id
+                    )
+                }
+            }
+        };
+
+        self.blocks.push(key_value_block);
+    }
 }
 
 impl<'a> TreeFold<'a> for CodeGen<'a> {
@@ -234,109 +323,29 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
     fn visit_action(&mut self, action: &'a Action) {
         match action {
             Action::GetProperty(id, p) => {
-                let attribute = &self.config.attributes_to_property_parts[p.id_name];
+                self.codegen_get_property(id, p);
 
-                let cpp_var_id: String =
+                let attribute = self.get_attribute_def(p.id_name);
+
+                let property_var_id: String =
                     String::from(id.id_name) + "_" + &attribute.parts.join("_");
-
-                let mut parts = String::from("{");
-                parts.push_str(
-                    &attribute
-                        .parts
-                        .iter()
-                        .map(|s| String::from("\"") + s + "\"")
-                        .collect::<Vec<String>>()
-                        .join(", "),
-                );
-                parts.push('}');
-
-                let block = format!(
-                    "node_ptr = get_node_with_id(target, mapping->at(\"{node_id}\"));
-if (node_ptr == nullptr || node_ptr->properties.find({parts}) == node_ptr->properties.end()) {{
-    LOG_WARN(\"Node {node_id} not found\");
-    return;
-}}
-std::string {cpp_var_id} = node_ptr->properties.at({parts});",
-                    node_id = id.id_name,
-                    parts = parts,
-                    cpp_var_id = cpp_var_id,
-                );
-                self.blocks.push(block);
-                self.node_attributes_to_fetch.insert(attribute.clone());
-
                 self.result = CppResult::Return {
                     typ: attribute.typ,
-                    id: cpp_var_id,
+                    id: property_var_id + "_str",
                 };
             }
             Action::None => {}
             Action::CallUdf(id) => {
-                if !self.config.udf_table.contains_key(id.id_name) {
-                    panic!("Can't find udf function: {}", id.id_name);
-                }
-                let func = &self.config.udf_table[id.id_name];
-
-                let cpp_var_id = func.id.clone() + "_result";
-
-                let block = if func.return_type != CppType::String {
-                    format!(
-                        "std::string {cpp_var_id} = std::to_string(root_->{func_name}_udf_({args}));",
-                        cpp_var_id = cpp_var_id,
-                        func_name = func.id,
-                        args = "target"
-                    )
-                } else {
-                    format!(
-                        "std::string {cpp_var_id} = root_->{func_name}_udf_({args});",
-                        cpp_var_id = cpp_var_id,
-                        func_name = func.id,
-                        args = "target"
-                    )
-                };
-
-                self.blocks.push(block);
-
-                self.udfs.push(func.clone());
-
-                self.result = CppResult::Return {
-                    typ: func.return_type,
-                    id: cpp_var_id,
-                }
+                self.codegen_call_func(id.id_name, "target");
             }
             Action::GroupBy(id, p, fid) => {
-                let attribute = self
-                    .config
-                    .attributes_to_property_parts
-                    .get(p.id_name)
-                    .unwrap_or_else(|| panic!("Don't support property {}", p.id_name));
+                self.codegen_get_property(id, p);
+
+                let attribute = self.get_attribute_def(p.id_name);
 
                 // Generate C++ code for getting property
                 let property_var_id: String =
                     String::from(id.id_name) + "_" + &attribute.parts.join("_");
-
-                let mut parts = String::from("{");
-                parts.push_str(
-                    &attribute
-                        .parts
-                        .iter()
-                        .map(|s| String::from("\"") + s + "\"")
-                        .collect::<Vec<String>>()
-                        .join(", "),
-                );
-                parts.push('}');
-
-                let block = format!(
-                    "node_ptr = get_node_with_id(target, mapping->at(\"{node_id}\"));
-if (node_ptr == nullptr || node_ptr->properties.find({parts}) == node_ptr->properties.end()) {{
-    LOG_WARN(\"Node {node_id} not found\");
-    return;
-}}
-std::string {cpp_var_id} = node_ptr->properties.at({parts});",
-                    node_id = id.id_name,
-                    parts = parts,
-                    cpp_var_id = property_var_id.clone() + "_str",
-                );
-                self.blocks.push(block);
 
                 // C++ code for type conversion for the property
                 let conv = match &attribute.typ {
@@ -362,37 +371,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
 
                 // Now generate code for calling user function specified with the value retrieved
                 // above.
-                self.node_attributes_to_fetch.insert(attribute.clone());
-
-                if !self.config.udf_table.contains_key(fid.id_name) {
-                    panic!("can't find udf function: {}", fid.id_name);
-                }
-
-                let func = &self.config.udf_table[fid.id_name];
-                let cpp_var_id = func.id.clone() + "_result";
-
-                let block = if func.return_type != CppType::String {
-                    format!(
-                        "auto udf_result = root_->{func_name}_udf_({args});
-                        std::tie(key, value) = std::make_pair(udf_result.first, std::to_string(udf_result.second));",
-                        func_name = func.id,
-                        args = property_var_id
-                    )
-                } else {
-                    format!(
-                        "std::tie(key, value) = root_->{func_name}_udf_({args});",
-                        func_name = func.id,
-                        args = property_var_id
-                    )
-                };
-
-                self.blocks.push(block);
-                self.udfs.push(func.clone());
-
-                self.result = CppResult::GroupBy {
-                    typ: attribute.typ,
-                    id: cpp_var_id,
-                };
+                self.codegen_call_func(fid.id_name, &property_var_id);
             }
         }
     }
@@ -482,7 +461,7 @@ if (node_ptr == nullptr || node_ptr->properties.find({\"x\"}) == node_ptr->prope
     LOG_WARN(\"Node n not found\");
     return;
 }
-std::string n_x = node_ptr->properties.at({\"x\"});"
+std::string n_x_str = node_ptr->properties.at({\"x\"});"
                 ))
             ]
         );
@@ -498,7 +477,7 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
             code_gen.result,
             CppResult::Return {
                 typ: CppType::String,
-                id: String::from("n_x"),
+                id: String::from("n_x_str"),
             }
         )
     }
@@ -535,7 +514,7 @@ if (node_ptr == nullptr || node_ptr->properties.find({\"x\"}) == node_ptr->prope
     LOG_WARN(\"Node n not found\");
     return;
 }
-std::string n_x = node_ptr->properties.at({\"x\"});"
+std::string n_x_str = node_ptr->properties.at({\"x\"});"
                 ))
             ]
         );
@@ -543,7 +522,7 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
             code_gen.result,
             CppResult::Return {
                 typ: CppType::String,
-                id: String::from("n_x"),
+                id: String::from("n_x_str"),
             }
         )
     }
@@ -627,9 +606,12 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
 
         assert_eq!(
             code_gen.blocks,
-            vec![(String::from(
-                "std::string max_response_size_result = std::to_string(root_->max_response_size_udf_(target));"
-            ))]
+            vec![
+                String::from(
+                    "auto max_response_size_udf_result = root_->max_response_size_udf_(target);"
+                ),
+                String::from("value = std::to_string(max_response_size_udf_result);")
+            ]
         );
         assert_eq!(
             code_gen.udfs,
@@ -639,13 +621,6 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
                 func_impl: String::from("function_impl"),
                 return_type: CppType::Int64T,
             }],
-        );
-        assert_eq!(
-            code_gen.result,
-            CppResult::Return {
-                typ: CppType::Int64T,
-                id: String::from("max_response_size_result"),
-            }
         );
     }
 
@@ -679,13 +654,6 @@ std::string n_x = node_ptr->properties.at({\"x\"});"
             .cloned()
             .collect()
         );
-        assert_eq!(
-            code_gen.result,
-            CppResult::GroupBy {
-                typ: CppType::Int64T,
-                id: String::from("max_result"),
-            }
-        )
     }
 
     #[test]

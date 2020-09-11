@@ -238,9 +238,9 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
+        "c",
         "b",
         "d",
-        "c",
         "a",
     };
 
@@ -294,6 +294,10 @@ void BidiContext::onResponseHeadersInbound() {
     }
 
     const Node *node_ptr = nullptr;
+
+    std::string key = b3_trace_id_;
+    std::string value;
+
     node_ptr = get_node_with_id(target, mapping->at("a"));
     if (node_ptr == nullptr ||
         node_ptr->properties.find({"response", "total_size"}) ==
@@ -301,14 +305,12 @@ void BidiContext::onResponseHeadersInbound() {
       LOG_WARN("Node a not found");
       return;
     }
-    std::string a_response_total_size =
+    std::string a_response_total_size_str =
         node_ptr->properties.at({"response", "total_size"});
 
-    std::string to_store;
+    value = a_response_total_size_str;
 
-    to_store = a_response_total_size;
-
-    LOG_WARN("Value to store: " + to_store);
+    LOG_WARN("Value to store: " + value);
 
     auto context_id = id();
     auto callback = [context_id](uint32_t, size_t body_size, uint32_t) {
@@ -322,8 +324,8 @@ void BidiContext::onResponseHeadersInbound() {
                                    {{":method", "GET"},
                                     {":path", "/store"},
                                     {":authority", "storage-upstream"},
-                                    {"key", b3_trace_id_},
-                                    {"value", to_store}},
+                                    {"key", key},
+                                    {"value", value}},
                                    "", {}, 1000, callback);
     if (result != WasmResult::Ok) {
       LOG_WARN("Failed to make a call to storage-upstream: " +

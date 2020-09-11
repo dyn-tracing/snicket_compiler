@@ -1,8 +1,8 @@
 // udf_type: Aggregation
-// id: count
+// id: histogram
 // return_type: int
 
-class count {
+class histogram {
 public:
   std::pair<std::string, int> operator()(int height) {
 
