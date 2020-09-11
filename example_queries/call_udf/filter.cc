@@ -42,7 +42,6 @@ std::string trafficDirectionToString(TrafficDirection dir) {
 // udf_type: Scalar
 // id: max_response_size
 // return_type: int
-// arg: target
 
 class max_response_size : public user_func<int> {
 public:
@@ -253,9 +252,9 @@ void BidiContext::onResponseHeadersInbound() {
 
     std::set<std::string> vertices = {
         "d",
-        "c",
-        "a",
         "b",
+        "a",
+        "c",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -308,14 +307,14 @@ void BidiContext::onResponseHeadersInbound() {
     }
 
     const Node *node_ptr = nullptr;
-    std::string max_response_size_result =
-        std::to_string(root_->max_response_size_udf_(target));
 
-    std::string to_store;
+    std::string key = b3_trace_id_;
+    std::string value;
 
-    to_store = max_response_size_result;
+    auto max_response_size_udf_result = root_->max_response_size_udf_(target);
+    value = std::to_string(max_response_size_udf_result);
 
-    LOG_WARN("Value to store: " + to_store);
+    LOG_WARN("Value to store: " + value);
 
     auto context_id = id();
     auto callback = [context_id](uint32_t, size_t body_size, uint32_t) {
@@ -329,8 +328,8 @@ void BidiContext::onResponseHeadersInbound() {
                                    {{":method", "GET"},
                                     {":path", "/store"},
                                     {":authority", "storage-upstream"},
-                                    {"key", b3_trace_id_},
-                                    {"value", to_store}},
+                                    {"key", key},
+                                    {"value", value}},
                                    "", {}, 1000, callback);
     if (result != WasmResult::Ok) {
       LOG_WARN("Failed to make a call to storage-upstream: " +
