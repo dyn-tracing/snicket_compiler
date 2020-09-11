@@ -606,9 +606,12 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
 
         assert_eq!(
             code_gen.blocks,
-            vec![(String::from(
-                "std::string max_response_size_result = std::to_string(root_->max_response_size_udf_(target));"
-            ))]
+            vec![
+                String::from(
+                    "auto max_response_size_udf_result = root_->max_response_size_udf_(target);"
+                ),
+                String::from("value = std::to_string(max_response_size_udf_result);")
+            ]
         );
         assert_eq!(
             code_gen.udfs,
@@ -618,13 +621,6 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
                 func_impl: String::from("function_impl"),
                 return_type: CppType::Int64T,
             }],
-        );
-        assert_eq!(
-            code_gen.result,
-            CppResult::Return {
-                typ: CppType::Int64T,
-                id: String::from("max_response_size_result"),
-            }
         );
     }
 
@@ -658,13 +654,6 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
             .cloned()
             .collect()
         );
-        assert_eq!(
-            code_gen.result,
-            CppResult::GroupBy {
-                typ: CppType::Int64T,
-                id: String::from("max_result"),
-            }
-        )
     }
 
     #[test]
