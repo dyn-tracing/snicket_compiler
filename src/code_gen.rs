@@ -304,7 +304,11 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                 }
             }
             Action::GroupBy(id, p, fid) => {
-                let attribute = &self.config.attributes_to_property_parts[p.id_name];
+                let attribute = self
+                    .config
+                    .attributes_to_property_parts
+                    .get(p.id_name)
+                    .unwrap_or_else(|| panic!("Don't support property {}", p.id_name));
 
                 // Generate C++ code for getting property
                 let property_var_id: String =
