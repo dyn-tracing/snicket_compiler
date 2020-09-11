@@ -74,7 +74,6 @@ private:
   };
 };
 
-
 class BidiRootContext : public RootContext {
 public:
   explicit BidiRootContext(uint32_t id, StringView root_id)
@@ -91,8 +90,7 @@ public:
 
   StringView getWorkloadName() { return workload_name_; }
 
-max_response_size max_response_size_udf_;
-
+  max_response_size max_response_size_udf_;
 
 private:
   std::string workload_name_;
@@ -200,23 +198,29 @@ void BidiContext::onResponseHeadersInbound() {
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
   {
-  std::string value;
-  if (getValue({
-      "node","metadata","WORKLOAD_NAME",
-  }, &value)) {
-    std::string result = std::string(root_->getWorkloadName());
-    for (auto p : {
-        "node","metadata","WORKLOAD_NAME",
-    }) {
-      result += "." + std::string(p);
-    }
-    result += "==";
-    result += value;
+    std::string value;
+    if (getValue(
+            {
+                "node",
+                "metadata",
+                "WORKLOAD_NAME",
+            },
+            &value)) {
+      std::string result = std::string(root_->getWorkloadName());
+      for (auto p : {
+               "node",
+               "metadata",
+               "WORKLOAD_NAME",
+           }) {
+        result += "." + std::string(p);
+      }
+      result += "==";
+      result += value;
 
-    properties.push_back(result);
-  } else {
-    LOG_WARN("failed to get property");
-  }
+      properties.push_back(result);
+    } else {
+      LOG_WARN("failed to get property");
+    }
   }
 
   LOG_WARN("number of properties collected " +
@@ -248,19 +252,49 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-      "d", "c", "a", "b",
+        "d",
+        "c",
+        "a",
+        "b",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
-         { "a", "b",  },  { "b", "c",  },  { "a", "d",  },
+        {
+            "a",
+            "b",
+        },
+        {
+            "b",
+            "c",
+        },
+        {
+            "a",
+            "d",
+        },
     };
 
-    std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
-    ids_to_properties["a"][{ "node","metadata","WORKLOAD_NAME", }] = "productpagev1";
-    ids_to_properties["b"][{ "node","metadata","WORKLOAD_NAME", }] = "reviewsv2";
-    ids_to_properties["c"][{ "node","metadata","WORKLOAD_NAME", }] = "ratingsv1";
-    ids_to_properties["d"][{ "node","metadata","WORKLOAD_NAME", }] = "detailsv1";
-
+    std::map<std::string, std::map<std::vector<std::string>, std::string>>
+        ids_to_properties;
+    ids_to_properties["a"][{
+        "node",
+        "metadata",
+        "WORKLOAD_NAME",
+    }] = "productpagev1";
+    ids_to_properties["b"][{
+        "node",
+        "metadata",
+        "WORKLOAD_NAME",
+    }] = "reviewsv2";
+    ids_to_properties["c"][{
+        "node",
+        "metadata",
+        "WORKLOAD_NAME",
+    }] = "ratingsv1";
+    ids_to_properties["d"][{
+        "node",
+        "metadata",
+        "WORKLOAD_NAME",
+    }] = "detailsv1";
 
     trace_graph_t pattern =
         generate_trace_graph(vertices, edges, ids_to_properties);
@@ -273,18 +307,13 @@ void BidiContext::onResponseHeadersInbound() {
       return;
     }
 
-    const Node* node_ptr = nullptr;
-    std::string max_response_size_result = std::to_string(root_->max_response_size_udf_(target));
+    const Node *node_ptr = nullptr;
+    std::string max_response_size_result =
+        std::to_string(root_->max_response_size_udf_(target));
 
     std::string to_store;
 
-
-
     to_store = max_response_size_result;
-
-
-
-
 
     LOG_WARN("Value to store: " + to_store);
 
@@ -297,11 +326,11 @@ void BidiContext::onResponseHeadersInbound() {
     };
 
     auto result = root()->httpCall("storage-upstream",
-                                   { {":method", "GET"},
+                                   {{":method", "GET"},
                                     {":path", "/store"},
                                     {":authority", "storage-upstream"},
                                     {"key", b3_trace_id_},
-                                    {"value", to_store} },
+                                    {"value", to_store}},
                                    "", {}, 1000, callback);
     if (result != WasmResult::Ok) {
       LOG_WARN("Failed to make a call to storage-upstream: " +
