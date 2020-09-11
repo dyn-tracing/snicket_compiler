@@ -193,8 +193,16 @@ impl<'a> CodeGen<'a> {
         }
     }
 
+    pub fn get_attribute_def(&self, attribute_id: &str) -> &AttributeDef<'a> {
+        &self
+            .config
+            .attributes_to_property_parts
+            .get(attribute_id)
+            .unwrap_or_else(|| panic!("Don't support attribute {}", attribute_id))
+    }
+
     fn codegen_get_property(&mut self, id: &Identifier, p: &Identifier) {
-        let attribute = &self.config.attributes_to_property_parts[p.id_name];
+        let attribute = self.get_attribute_def(p.id_name).clone();
 
         let property_var_id: String = String::from(id.id_name) + "_" + &attribute.parts.join("_");
 
@@ -220,8 +228,8 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
             parts = parts,
             cpp_var_id = property_var_id + "_str",
         );
+        self.node_attributes_to_fetch.insert(attribute);
         self.blocks.push(block);
-        self.node_attributes_to_fetch.insert(attribute.clone());
     }
 
     fn codegen_call_func(&mut self, func_name: &str, arg: &str) {
@@ -317,7 +325,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
             Action::GetProperty(id, p) => {
                 self.codegen_get_property(id, p);
 
-                let attribute = &self.config.attributes_to_property_parts[p.id_name];
+                let attribute = self.get_attribute_def(p.id_name);
 
                 let property_var_id: String =
                     String::from(id.id_name) + "_" + &attribute.parts.join("_");
@@ -333,11 +341,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
             Action::GroupBy(id, p, fid) => {
                 self.codegen_get_property(id, p);
 
-                let attribute = self
-                    .config
-                    .attributes_to_property_parts
-                    .get(p.id_name)
-                    .unwrap_or_else(|| panic!("Don't support property {}", p.id_name));
+                let attribute = self.get_attribute_def(p.id_name);
 
                 // Generate C++ code for getting property
                 let property_var_id: String =
