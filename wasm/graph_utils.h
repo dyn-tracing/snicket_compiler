@@ -93,6 +93,8 @@ get_sub_graph_mapping(const trace_graph_t &graph_small,
 // Returns vertex_iterator which has id
 const Node *get_node_with_id(const trace_graph_t &g, std::string_view id);
 
-int get_tree_height(const trace_graph_t &graph);
+int get_tree_height(
+    const trace_graph_t &graph,
+    std::string_view id = "");
 
 #endif // GRAPH_UTILS_H

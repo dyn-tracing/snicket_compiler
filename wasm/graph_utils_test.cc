@@ -381,6 +381,7 @@ private:
 TEST(GraphPropertiesTest, Height) {
   auto graph = generate_trace_graph_from_headers("a-b-c,a-d", "");
   EXPECT_EQ(get_tree_height(graph), 2);
+  EXPECT_EQ(get_tree_height(graph, "b"), 1);
   graph = generate_trace_graph_from_headers("", "");
   EXPECT_EQ(get_tree_height(graph), 0);
   graph = generate_trace_graph_from_headers("a-b-c-d,d-e", "");

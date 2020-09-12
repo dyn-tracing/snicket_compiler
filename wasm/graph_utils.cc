@@ -145,39 +145,52 @@ const Node *get_node_with_id(const trace_graph_t &g, std::string_view id) {
 
 class tree_height_dfs_visitor : public boost::default_dfs_visitor {
 public:
-  tree_height_dfs_visitor(int *height) { height_ = height; }
+  tree_height_dfs_visitor(
+      std::map<boost::graph_traits<trace_graph_t>::vertex_descriptor, int>
+          *heights) {
+    heights_ = heights;
+  }
 
   template <typename Vertex, typename Graph>
   void initialize_vertex(Vertex s, const Graph &g) {
-    dists_[s] = INT_MAX;
+    (*heights_)[s] = 0;
   }
 
   template <typename Vertex, typename Graph>
-  void start_vertex(Vertex u, const Graph &g) {
-    dists_[u] = 0;
-  }
-
-  template <typename Edge, typename Graph>
-  void tree_edge(Edge e, const Graph &g) {
-    auto src = boost::source(e, g);
-    auto dst = boost::target(e, g);
-
-    if (dists_[dst] > dists_[src] + 1) {
-      dists_[dst] = dists_[src] + 1;
-
-      if (*height_ < dists_[dst]) {
-        *height_ = dists_[dst];
+  void finish_vertex(Vertex u, const Graph &g) {
+    auto neighbors = boost::adjacent_vertices(u, g);
+    for (auto vd : boost::make_iterator_range(neighbors)) {
+      if ((*heights_)[vd] + 1 > (*heights_)[u]) {
+        (*heights_)[u] = (*heights_)[vd] + 1;
       }
     }
   }
 
-  std::map<boost::graph_traits<trace_graph_t>::vertex_descriptor, int> dists_;
-  int *height_;
+  std::map<boost::graph_traits<trace_graph_t>::vertex_descriptor, int>
+      *heights_;
 };
 
-int get_tree_height(const trace_graph_t &graph) {
-  int height = 0;
-  tree_height_dfs_visitor vis(&height);
+int get_tree_height(const trace_graph_t &graph, std::string_view id) {
+  std::map<boost::graph_traits<trace_graph_t>::vertex_descriptor, int> heights;
+  tree_height_dfs_visitor vis(&heights);
   boost::depth_first_search(graph, boost::visitor(vis));
-  return height;
+
+  if (!id.empty()) {
+
+    auto vertices = boost::vertices(graph);
+    for (auto vd : boost::make_iterator_range(vertices)) {
+      if (graph[vd].id == id) {
+        return heights[vd];
+      }
+    }
+  }
+
+  int max = 0;
+  for (const auto &[key, value] : heights) {
+    if (value > max) {
+      max = value;
+    }
+  }
+
+  return max;
 }
