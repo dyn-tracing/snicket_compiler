@@ -48,13 +48,20 @@ pub struct NodeAttribute<'a> {
     pub value: String,
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
+pub enum AttributeType {
+    Envoy,
+    Custom,
+}
+
 // This struct is used to represent Envoy property with its corresponding value type.
 // They're defined here: https://github.com/istio/envoy/blob/7043f39a2f5f7d072c35b3fe4d50865b5c61a9dc/source/extensions/common/wasm/context.cc#L406
 // e.g. typ: CppType::String, parts: {"node", "metadata", "WORKLOAD_NAME"},
 // typ: CppType::int64_t, parts: {"repsonse", "total_size"}
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
 pub struct AttributeDef<'a> {
-    pub typ: CppType,
+    pub cpp_type: CppType,
+    pub attribute_type: AttributeType,
     pub parts: Vec<&'a str>,
 }
 
@@ -140,7 +147,8 @@ impl<'a> Default for CodeGenConfig<'a> {
         attributes_to_property_parts.insert(
             "service_name",
             AttributeDef {
-                typ: CppType::String,
+                cpp_type: CppType::String,
+                attribute_type: AttributeType::Envoy,
                 parts: vec!["node", "metadata", "WORKLOAD_NAME"],
             },
         );
@@ -148,8 +156,18 @@ impl<'a> Default for CodeGenConfig<'a> {
         attributes_to_property_parts.insert(
             "response_size",
             AttributeDef {
-                typ: CppType::Int64T,
+                cpp_type: CppType::Int64T,
+                attribute_type: AttributeType::Envoy,
                 parts: vec!["response", "total_size"],
+            },
+        );
+
+        attributes_to_property_parts.insert(
+            "height",
+            AttributeDef {
+                cpp_type: CppType::Int,
+                attribute_type: AttributeType::Custom,
+                parts: vec![],
             },
         );
 
@@ -201,9 +219,7 @@ impl<'a> CodeGen<'a> {
             .unwrap_or_else(|| panic!("Don't support attribute {}", attribute_id))
     }
 
-    fn codegen_get_property(&mut self, id: &Identifier, p: &Identifier) {
-        let attribute = self.get_attribute_def(p.id_name).clone();
-
+    fn codegen_envoy_property(&mut self, id: &Identifier, attribute: AttributeDef<'a>) {
         let property_var_id: String = String::from(id.id_name) + "_" + &attribute.parts.join("_");
 
         let mut parts = String::from("{");
@@ -228,8 +244,40 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
             parts = parts,
             cpp_var_id = property_var_id + "_str",
         );
-        self.node_attributes_to_fetch.insert(attribute);
         self.blocks.push(block);
+
+        let property_var_id: String = String::from(id.id_name) + "_" + &attribute.parts.join("_");
+        self.result = CppResult::Return {
+            typ: attribute.cpp_type,
+            id: property_var_id + "_str",
+        };
+        self.node_attributes_to_fetch.insert(attribute);
+    }
+
+    fn codegen_get_property(&mut self, id: &Identifier, p: &Identifier) {
+        let attribute = self.get_attribute_def(p.id_name).clone();
+
+        match attribute.attribute_type {
+            AttributeType::Envoy => {
+                self.codegen_envoy_property(id, attribute);
+            }
+            AttributeType::Custom => match p.id_name {
+                "height" => {
+                    let cpp_var_id = String::from(id.id_name) + "_height";
+                    let block = format!(
+                            "std::string {cpp_var_id} = std::to_string(get_tree_height(target, mapping->at(\"{node_id}\")));",
+                            cpp_var_id = cpp_var_id,
+                            node_id = id.id_name,
+                        );
+                    self.blocks.push(block);
+                    self.result = CppResult::Return {
+                        typ: attribute.cpp_type,
+                        id: cpp_var_id,
+                    }
+                }
+                _ => unreachable!(),
+            },
+        }
     }
 
     fn codegen_call_func(&mut self, func_name: &str, arg: &str) {
@@ -324,15 +372,6 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
         match action {
             Action::GetProperty(id, p) => {
                 self.codegen_get_property(id, p);
-
-                let attribute = self.get_attribute_def(p.id_name);
-
-                let property_var_id: String =
-                    String::from(id.id_name) + "_" + &attribute.parts.join("_");
-                self.result = CppResult::Return {
-                    typ: attribute.typ,
-                    id: property_var_id + "_str",
-                };
             }
             Action::None => {}
             Action::CallUdf(id) => {
@@ -348,7 +387,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                     String::from(id.id_name) + "_" + &attribute.parts.join("_");
 
                 // C++ code for type conversion for the property
-                let conv = match &attribute.typ {
+                let conv = match &attribute.cpp_type {
                     CppType::Float => format!(
                         "float {cpp_var_id} = std::atof({cpp_var_id}_str.c_str());",
                         cpp_var_id = property_var_id
@@ -439,7 +478,8 @@ mod tests {
             attributes_to_property_parts: [(
                 "x",
                 AttributeDef {
-                    typ: CppType::String,
+                    cpp_type: CppType::String,
+                    attribute_type: AttributeType::Envoy,
                     parts: vec!["x"],
                 },
             )]
@@ -491,7 +531,8 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
             attributes_to_property_parts: [(
                 "x",
                 AttributeDef {
-                    typ: CppType::String,
+                    cpp_type: CppType::String,
+                    attribute_type: AttributeType::Envoy,
                     parts: vec!["x"],
                 },
             )]
@@ -537,14 +578,16 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
                 (
                     "x",
                     AttributeDef {
-                        typ: CppType::String,
+                        cpp_type: CppType::String,
+                        attribute_type: AttributeType::Envoy,
                         parts: vec!["x"],
                     },
                 ),
                 (
                     "y",
                     AttributeDef {
-                        typ: CppType::Int64T,
+                        cpp_type: CppType::Int64T,
+                        attribute_type: AttributeType::Envoy,
                         parts: vec!["y"],
                     },
                 ),
@@ -571,11 +614,13 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
             code_gen.node_attributes_to_fetch,
             vec![
                 AttributeDef {
-                    typ: CppType::String,
+                    cpp_type: CppType::String,
+                    attribute_type: AttributeType::Envoy,
                     parts: vec!["x"]
                 },
                 AttributeDef {
-                    typ: CppType::Int64T,
+                    cpp_type: CppType::Int64T,
+                    attribute_type: AttributeType::Envoy,
                     parts: vec!["y"]
                 }
             ]
@@ -647,7 +692,8 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
         assert_eq!(
             code_gen.node_attributes_to_fetch,
             vec![AttributeDef {
-                typ: CppType::Int64T,
+                cpp_type: CppType::Int64T,
+                attribute_type: AttributeType::Envoy,
                 parts: vec!["response", "total_size"]
             }]
             .iter()
