@@ -244,8 +244,14 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
             parts = parts,
             cpp_var_id = property_var_id + "_str",
         );
-        self.node_attributes_to_fetch.insert(attribute);
         self.blocks.push(block);
+
+        let property_var_id: String = String::from(id.id_name) + "_" + &attribute.parts.join("_");
+        self.result = CppResult::Return {
+            typ: attribute.cpp_type,
+            id: property_var_id + "_str",
+        };
+        self.node_attributes_to_fetch.insert(attribute);
     }
 
     fn codegen_get_property(&mut self, id: &Identifier, p: &Identifier) {
@@ -257,11 +263,17 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
             }
             AttributeType::Custom => match p.id_name {
                 "height" => {
+                    let cpp_var_id = String::from(id.id_name) + "_height";
                     let block = format!(
-                            "value = std::to_string(get_tree_height(target, mapping->at(\"{node_id}\")));",
-                            node_id = id.id_name
+                            "std::string {cpp_var_id} = std::to_string(get_tree_height(target, mapping->at(\"{node_id}\")));",
+                            cpp_var_id = cpp_var_id,
+                            node_id = id.id_name,
                         );
                     self.blocks.push(block);
+                    self.result = CppResult::Return {
+                        typ: attribute.cpp_type,
+                        id: cpp_var_id,
+                    }
                 }
                 _ => unreachable!(),
             },
@@ -360,15 +372,6 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
         match action {
             Action::GetProperty(id, p) => {
                 self.codegen_get_property(id, p);
-
-                let attribute = self.get_attribute_def(p.id_name);
-
-                let property_var_id: String =
-                    String::from(id.id_name) + "_" + &attribute.parts.join("_");
-                self.result = CppResult::Return {
-                    typ: attribute.cpp_type,
-                    id: property_var_id + "_str",
-                };
             }
             Action::None => {}
             Action::CallUdf(id) => {
