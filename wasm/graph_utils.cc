@@ -194,3 +194,14 @@ int get_tree_height(const trace_graph_t &graph, std::string_view id) {
 
   return max;
 }
+
+int get_out_degree(const trace_graph_t &graph, std::string_view id) {
+  boost::graph_traits<trace_graph_t>::vertex_iterator it, end;
+  for (boost::tie(it, end) = boost::vertices(graph); it != end; ++it) {
+    if (graph[*it].id == id) {
+      return boost::out_degree(*it, graph);
+    }
+  }
+
+  return -1;
+}
