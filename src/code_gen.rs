@@ -219,8 +219,9 @@ impl<'a> CodeGen<'a> {
             .unwrap_or_else(|| panic!("Don't support attribute {}", attribute_id))
     }
 
-    fn codegen_envoy_property(&mut self, id: &Identifier, attribute: AttributeDef<'a>) {
-        let property_var_id: String = String::from(id.id_name) + "_" + &attribute.parts.join("_");
+    fn codegen_envoy_property(&mut self, id: &Identifier, attribute: AttributeDef<'a>) -> String {
+        let property_var_id: String =
+            String::from(id.id_name) + "_" + &attribute.parts.join("_") + "_str";
 
         let mut parts = String::from("{");
         parts.push_str(
@@ -242,25 +243,24 @@ if (node_ptr == nullptr || node_ptr->properties.find({parts}) == node_ptr->prope
 std::string {cpp_var_id} = node_ptr->properties.at({parts});",
             node_id = id.id_name,
             parts = parts,
-            cpp_var_id = property_var_id + "_str",
+            cpp_var_id = property_var_id,
         );
         self.blocks.push(block);
 
-        let property_var_id: String = String::from(id.id_name) + "_" + &attribute.parts.join("_");
         self.result = CppResult::Return {
             typ: attribute.cpp_type,
-            id: property_var_id + "_str",
+            id: property_var_id.clone(),
         };
         self.node_attributes_to_fetch.insert(attribute);
+
+        property_var_id
     }
 
-    fn codegen_get_property(&mut self, id: &Identifier, p: &Identifier) {
+    fn codegen_get_property(&mut self, id: &Identifier, p: &Identifier) -> String {
         let attribute = self.get_attribute_def(p.id_name).clone();
 
         match attribute.attribute_type {
-            AttributeType::Envoy => {
-                self.codegen_envoy_property(id, attribute);
-            }
+            AttributeType::Envoy => self.codegen_envoy_property(id, attribute),
             AttributeType::Custom => match p.id_name {
                 "height" => {
                     let cpp_var_id = String::from(id.id_name) + "_height";
@@ -272,8 +272,10 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                     self.blocks.push(block);
                     self.result = CppResult::Return {
                         typ: attribute.cpp_type,
-                        id: cpp_var_id,
-                    }
+                        id: cpp_var_id.clone(),
+                    };
+
+                    cpp_var_id
                 }
                 _ => unreachable!(),
             },
@@ -378,30 +380,31 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                 self.codegen_call_func(id.id_name, "target");
             }
             Action::GroupBy(id, p, fid) => {
-                self.codegen_get_property(id, p);
+                let property_var_id = self.codegen_get_property(id, p);
 
                 let attribute = self.get_attribute_def(p.id_name);
 
-                // Generate C++ code for getting property
-                let property_var_id: String =
-                    String::from(id.id_name) + "_" + &attribute.parts.join("_");
-
+                let converted_id = property_var_id.clone() + "_conv";
                 // C++ code for type conversion for the property
                 let conv = match &attribute.cpp_type {
                     CppType::Float => format!(
-                        "float {cpp_var_id} = std::atof({cpp_var_id}_str.c_str());",
+                        "float {converted_id} = std::atof({cpp_var_id}.c_str());",
+                        converted_id = converted_id,
                         cpp_var_id = property_var_id
                     ),
                     CppType::Int => format!(
-                        "int {cpp_var_id} = std::atoi({cpp_var_id}_str.c_str());",
+                        "int {converted_id} = std::atoi({cpp_var_id}.c_str());",
+                        converted_id = converted_id,
                         cpp_var_id = property_var_id
                     ),
                     CppType::Int64T => format!(
-                        "int64_t {cpp_var_id} = std::atoll({cpp_var_id}_str.c_str());",
+                        "int64_t {converted_id} = std::atoll({cpp_var_id}.c_str());",
+                        converted_id = converted_id,
                         cpp_var_id = property_var_id
                     ),
                     CppType::String => format!(
-                        "std::string {cpp_var_id} = {cpp_var_id}_str;",
+                        "std::string {converted_id} = {cpp_var_id};",
+                        converted_id = converted_id,
                         cpp_var_id = property_var_id
                     ),
                 };
@@ -410,7 +413,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
 
                 // Now generate code for calling user function specified with the value retrieved
                 // above.
-                self.codegen_call_func(fid.id_name, &property_var_id);
+                self.codegen_call_func(fid.id_name, &converted_id);
             }
         }
     }
