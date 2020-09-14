@@ -393,3 +393,11 @@ TEST(GraphPropertiesTest, Height) {
   graph = generate_trace_graph_from_headers("a", "");
   EXPECT_EQ(get_tree_height(graph), 0);
 }
+
+TEST(GraphUtilsTest, GetOutDegree) {
+  auto graph = generate_trace_graph_from_headers("a-b-c,a-d", "");
+  EXPECT_EQ(get_out_degree(graph, "a"), 2);
+  EXPECT_EQ(get_out_degree(graph, "f"), -1);
+  EXPECT_EQ(get_out_degree(graph, "b"), 1);
+  EXPECT_EQ(get_out_degree(graph, "d"), 0);
+}
