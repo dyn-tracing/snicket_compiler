@@ -171,6 +171,15 @@ impl<'a> Default for CodeGenConfig<'a> {
             },
         );
 
+        attributes_to_property_parts.insert(
+            "breadth",
+            AttributeDef {
+                cpp_type: CppType::Int,
+                attribute_type: AttributeType::Custom,
+                parts: vec![],
+            },
+        );
+
         CodeGenConfig {
             attributes_to_property_parts,
             udf_table: HashMap::new(),
@@ -269,6 +278,22 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                             cpp_var_id = cpp_var_id,
                             node_id = id.id_name,
                         );
+                    self.blocks.push(block);
+                    self.result = CppResult::Return {
+                        typ: attribute.cpp_type,
+                        id: cpp_var_id.clone(),
+                    };
+
+                    cpp_var_id
+                }
+                "breadth" => {
+                    let cpp_var_id = String::from(id.id_name) + "_height";
+                    let block = format!(
+                        "std::string {cpp_var_id} = std::to_string(get_out_degree(target, mapping->at(\"{node_id}\")));",
+                        cpp_var_id = cpp_var_id,
+                        node_id = id.id_name,
+                    );
+
                     self.blocks.push(block);
                     self.result = CppResult::Return {
                         typ: attribute.cpp_type,
