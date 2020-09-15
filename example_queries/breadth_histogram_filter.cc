@@ -1,3 +1,6 @@
+// Auto generated Envoy WASM filter from following command:
+// target/debug/dyntracing -q example_queries/breadth_histogram.cql -u example_udfs/histogram.cc
+
 // NOLINT(namespace-envoy)
 #include <map>
 #include <numeric>
@@ -233,8 +236,8 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-        "x",
         "y",
+        "x",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
