@@ -1,3 +1,6 @@
+// Auto generated Envoy WASM filter from following command:
+// target/debug/dyntracing -q example_queries/height_histogram.cql -u example_udfs/histogram.cc
+
 // NOLINT(namespace-envoy)
 #include <map>
 #include <numeric>
@@ -39,6 +42,22 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
+// udf_type: Aggregation
+// id: histogram
+// return_type: int
+
+class histogram {
+public:
+  std::pair<std::string, int> operator()(int height) {
+
+    buckets_[height] += 1;
+
+    return std::make_pair(std::to_string(height), buckets_[height]);
+  }
+
+  std::map<int, int> buckets_;
+};
+
 class BidiRootContext : public RootContext {
 public:
   explicit BidiRootContext(uint32_t id, StringView root_id)
@@ -54,6 +73,8 @@ public:
   bool onConfigure(size_t /* configuration_size */) override;
 
   StringView getWorkloadName() { return workload_name_; }
+
+  histogram histogram_udf_;
 
 private:
   std::string workload_name_;
@@ -252,6 +273,11 @@ void BidiContext::onResponseHeadersInbound() {
 
     std::string x_height =
         std::to_string(get_tree_height(target, mapping->at("x")));
+    int x_height_conv = std::atoi(x_height.c_str());
+    auto histogram_udf_result = root_->histogram_udf_(x_height_conv);
+    std::tie(key, value) =
+        std::make_pair(histogram_udf_result.first,
+                       std::to_string(histogram_udf_result.second));
 
     value = x_height;
 

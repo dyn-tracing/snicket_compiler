@@ -1,5 +1,6 @@
 // Auto generated Envoy WASM filter from following command:
-// target/debug/dyntracing -q example_queries/breadth_histogram.cql -u example_udfs/histogram.cc
+// target/debug/dyntracing -q example_queries/height_histogram.cql -u
+// example_udfs/histogram.cc
 
 // NOLINT(namespace-envoy)
 #include <map>
@@ -253,7 +254,7 @@ void BidiContext::onResponseHeadersInbound() {
         "node",
         "metadata",
         "WORKLOAD_NAME",
-    }] = "frontend";
+    }] = "productpagev1";
 
     trace_graph_t pattern =
         generate_trace_graph(vertices, edges, ids_to_properties);
@@ -272,7 +273,7 @@ void BidiContext::onResponseHeadersInbound() {
     std::string value;
 
     std::string x_height =
-        std::to_string(get_out_degree(target, mapping->at("x")));
+        std::to_string(get_tree_height(target, mapping->at("x")));
     int x_height_conv = std::atoi(x_height.c_str());
     auto histogram_udf_result = root_->histogram_udf_(x_height_conv);
     std::tie(key, value) =
