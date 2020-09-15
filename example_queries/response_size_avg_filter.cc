@@ -1,3 +1,6 @@
+// Auto generated Envoy WASM filter from following command:
+// target/debug/dyntracing -q example_queries/response_size_avg.cql -u example_udfs/avg.cc
+
 // NOLINT(namespace-envoy)
 #include <map>
 #include <numeric>
@@ -40,19 +43,20 @@ std::string trafficDirectionToString(TrafficDirection dir) {
 }
 
 // udf_type: Aggregation
-// id: histogram
-// return_type: int
+// id: avg
+// return_type: float
 
-class histogram {
+class avg {
 public:
-  std::pair<std::string, int> operator()(int height) {
+  std::pair<std::string, float> operator()(int value) {
+    avg_ = avg_ + ((float)value - avg_) / (count_ + 1);
+    count_ += 1;
 
-    buckets_[height] += 1;
-
-    return std::make_pair(std::to_string(height), buckets_[height]);
+    return std::make_pair("moving_avg", avg_);
   }
 
-  std::map<int, int> buckets_;
+  int count_ = 0;
+  float avg_ = 0.0;
 };
 
 class BidiRootContext : public RootContext {
@@ -71,7 +75,7 @@ public:
 
   StringView getWorkloadName() { return workload_name_; }
 
-  histogram histogram_udf_;
+  avg avg_udf_;
 
 private:
   std::string workload_name_;
@@ -179,6 +183,29 @@ void BidiContext::onResponseHeadersInbound() {
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
   {
+    int64_t value;
+    if (getValue(
+            {
+                "response",
+                "total_size",
+            },
+            &value)) {
+      std::string result = std::string(root_->getWorkloadName());
+      for (auto p : {
+               "response",
+               "total_size",
+           }) {
+        result += "." + std::string(p);
+      }
+      result += "==";
+      result += std::to_string(value);
+
+      properties.push_back(result);
+    } else {
+      LOG_WARN("failed to get property");
+    }
+  }
+  {
     std::string value;
     if (getValue(
             {
@@ -197,29 +224,6 @@ void BidiContext::onResponseHeadersInbound() {
       }
       result += "==";
       result += value;
-
-      properties.push_back(result);
-    } else {
-      LOG_WARN("failed to get property");
-    }
-  }
-  {
-    int64_t value;
-    if (getValue(
-            {
-                "response",
-                "total_size",
-            },
-            &value)) {
-      std::string result = std::string(root_->getWorkloadName());
-      for (auto p : {
-               "response",
-               "total_size",
-           }) {
-        result += "." + std::string(p);
-      }
-      result += "==";
-      result += std::to_string(value);
 
       properties.push_back(result);
     } else {
@@ -257,8 +261,8 @@ void BidiContext::onResponseHeadersInbound() {
 
     std::set<std::string> vertices = {
         "a",
-        "c",
         "b",
+        "c",
         "d",
     };
 
@@ -325,12 +329,13 @@ void BidiContext::onResponseHeadersInbound() {
     }
     std::string a_response_total_size_str =
         node_ptr->properties.at({"response", "total_size"});
-    int64_t a_response_total_size =
+    int64_t a_response_total_size_str_conv =
         std::atoll(a_response_total_size_str.c_str());
-    auto histogram_udf_result = root_->histogram_udf_(a_response_total_size);
-    std::tie(key, value) =
-        std::make_pair(histogram_udf_result.first,
-                       std::to_string(histogram_udf_result.second));
+    auto avg_udf_result = root_->avg_udf_(a_response_total_size_str_conv);
+    std::tie(key, value) = std::make_pair(
+        avg_udf_result.first, std::to_string(avg_udf_result.second));
+
+    value = a_response_total_size_str;
 
     LOG_WARN("Value to store: " + value);
 

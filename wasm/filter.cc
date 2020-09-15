@@ -1,5 +1,5 @@
 // Auto generated Envoy WASM filter from following command:
-// target/debug/dyntracing -q example_queries/count.cql -u example_udfs/count.cc
+// target/debug/dyntracing -q example_queries/response_size_avg.cql -u example_udfs/avg.cc
 
 // NOLINT(namespace-envoy)
 #include <map>
@@ -42,19 +42,21 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
-// udf_type: Scalar
-// id: count
-// return_type: int
+// udf_type: Aggregation
+// id: avg
+// return_type: float
 
-class count : public user_func<int> {
+class avg {
 public:
-  int operator()(const trace_graph_t &graph) {
-    counter_ += 1;
-    return counter_;
+  std::pair<std::string, float> operator()(int value) {
+    avg_  = avg_ + ((float)value - avg_ ) / (count_ + 1);
+    count_ += 1;
+
+    return std::make_pair("moving_avg", avg_);
   }
 
-private:
-  int counter_ = 0;
+  int count_ =  0;
+  float avg_ = 0.0;
 };
 
 class BidiRootContext : public RootContext {
@@ -73,7 +75,8 @@ public:
 
   StringView getWorkloadName() { return workload_name_; }
 
-  count count_udf_;
+avg avg_udf_;
+
 
 private:
   std::string workload_name_;
@@ -181,29 +184,41 @@ void BidiContext::onResponseHeadersInbound() {
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
   {
-    std::string value;
-    if (getValue(
-            {
-                "node",
-                "metadata",
-                "WORKLOAD_NAME",
-            },
-            &value)) {
-      std::string result = std::string(root_->getWorkloadName());
-      for (auto p : {
-               "node",
-               "metadata",
-               "WORKLOAD_NAME",
-           }) {
-        result += "." + std::string(p);
-      }
-      result += "==";
-      result += value;
-
-      properties.push_back(result);
-    } else {
-      LOG_WARN("failed to get property");
+  int64_t value;
+  if (getValue({
+      "response","total_size",
+  }, &value)) {
+    std::string result = std::string(root_->getWorkloadName());
+    for (auto p : {
+        "response","total_size",
+    }) {
+      result += "." + std::string(p);
     }
+    result += "==";
+    result += std::to_string(value);
+
+    properties.push_back(result);
+  } else {
+    LOG_WARN("failed to get property");
+  }
+  }{
+  std::string value;
+  if (getValue({
+      "node","metadata","WORKLOAD_NAME",
+  }, &value)) {
+    std::string result = std::string(root_->getWorkloadName());
+    for (auto p : {
+        "node","metadata","WORKLOAD_NAME",
+    }) {
+      result += "." + std::string(p);
+    }
+    result += "==";
+    result += value;
+
+    properties.push_back(result);
+  } else {
+    LOG_WARN("failed to get property");
+  }
   }
 
   LOG_WARN("number of properties collected " +
@@ -235,24 +250,19 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-        "m",
-        "n",
+      "a", "b", "c", "d", 
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
-        {
-            "n",
-            "m",
-        },
+         { "a", "b",  },  { "b", "c",  },  { "a", "d",  }, 
     };
 
-    std::map<std::string, std::map<std::vector<std::string>, std::string>>
-        ids_to_properties;
-    ids_to_properties["a"][{
-        "node",
-        "metadata",
-        "WORKLOAD_NAME",
-    }] = "productpagev1";
+    std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
+    ids_to_properties["a"][{ "node","metadata","WORKLOAD_NAME", }] = "productpagev1";
+    ids_to_properties["b"][{ "node","metadata","WORKLOAD_NAME", }] = "reviewsv2";
+    ids_to_properties["c"][{ "node","metadata","WORKLOAD_NAME", }] = "ratingsv1";
+    ids_to_properties["d"][{ "node","metadata","WORKLOAD_NAME", }] = "detailsv1";
+    
 
     trace_graph_t pattern =
         generate_trace_graph(vertices, edges, ids_to_properties);
@@ -265,13 +275,23 @@ void BidiContext::onResponseHeadersInbound() {
       return;
     }
 
-    const Node *node_ptr = nullptr;
+    const Node* node_ptr = nullptr;
 
     std::string key = b3_trace_id_;
     std::string value;
 
-    auto count_udf_result = root_->count_udf_(target);
-    value = std::to_string(count_udf_result);
+    node_ptr = get_node_with_id(target, mapping->at("a"));
+if (node_ptr == nullptr || node_ptr->properties.find({"response", "total_size"}) == node_ptr->properties.end()) {
+    LOG_WARN("Node a not found");
+    return;
+}
+std::string a_response_total_size_str = node_ptr->properties.at({"response", "total_size"});int64_t a_response_total_size_str_conv = std::atoll(a_response_total_size_str.c_str());auto avg_udf_result = root_->avg_udf_(a_response_total_size_str_conv);std::tie(key, value) = std::make_pair(avg_udf_result.first, std::to_string(avg_udf_result.second));
+
+    
+    
+    value = a_response_total_size_str;
+    
+    
 
     LOG_WARN("Value to store: " + value);
 
@@ -284,11 +304,11 @@ void BidiContext::onResponseHeadersInbound() {
     };
 
     auto result = root()->httpCall("storage-upstream",
-                                   {{":method", "GET"},
+                                   { {":method", "GET"},
                                     {":path", "/store"},
                                     {":authority", "storage-upstream"},
                                     {"key", key},
-                                    {"value", value}},
+                                    {"value", value} },
                                    "", {}, 1000, callback);
     if (result != WasmResult::Ok) {
       LOG_WARN("Failed to make a call to storage-upstream: " +

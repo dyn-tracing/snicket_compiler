@@ -1,3 +1,6 @@
+// Auto generated Envoy WASM filter from following command:
+// target/debug/dyntracing -q example_queries/response_size_histogram.cql -u example_udfs/histogram.cc
+
 // NOLINT(namespace-envoy)
 #include <map>
 #include <numeric>
@@ -40,20 +43,19 @@ std::string trafficDirectionToString(TrafficDirection dir) {
 }
 
 // udf_type: Aggregation
-// id: avg
-// return_type: float
+// id: histogram
+// return_type: int
 
-class avg {
+class histogram {
 public:
-  std::pair<std::string, float> operator()(int value) {
-    avg_ = avg_ + ((float)value - avg_) / (count_ + 1);
-    count_ += 1;
+  std::pair<std::string, int> operator()(int height) {
 
-    return std::make_pair("moving_avg", avg_);
+    buckets_[height] += 1;
+
+    return std::make_pair(std::to_string(height), buckets_[height]);
   }
 
-  int count_ = 0;
-  float avg_ = 0.0;
+  std::map<int, int> buckets_;
 };
 
 class BidiRootContext : public RootContext {
@@ -72,7 +74,7 @@ public:
 
   StringView getWorkloadName() { return workload_name_; }
 
-  avg avg_udf_;
+  histogram histogram_udf_;
 
 private:
   std::string workload_name_;
@@ -257,10 +259,10 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-        "a",
-        "c",
-        "b",
         "d",
+        "b",
+        "c",
+        "a",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -326,11 +328,15 @@ void BidiContext::onResponseHeadersInbound() {
     }
     std::string a_response_total_size_str =
         node_ptr->properties.at({"response", "total_size"});
-    int64_t a_response_total_size =
+    int64_t a_response_total_size_str_conv =
         std::atoll(a_response_total_size_str.c_str());
-    auto avg_udf_result = root_->avg_udf_(a_response_total_size);
-    std::tie(key, value) = std::make_pair(
-        avg_udf_result.first, std::to_string(avg_udf_result.second));
+    auto histogram_udf_result =
+        root_->histogram_udf_(a_response_total_size_str_conv);
+    std::tie(key, value) =
+        std::make_pair(histogram_udf_result.first,
+                       std::to_string(histogram_udf_result.second));
+
+    value = a_response_total_size_str;
 
     LOG_WARN("Value to store: " + value);
 
