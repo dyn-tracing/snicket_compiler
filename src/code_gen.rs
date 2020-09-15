@@ -187,6 +187,8 @@ impl<'a> Default for CodeGenConfig<'a> {
     }
 }
 
+// TODO: Split this struct into inputs and outputs, for example CodeGenerator, and CodeGenOutput or
+// HBarsInput.
 #[derive(Default, Serialize)]
 pub struct CodeGen<'a> {
     // Graph structures
@@ -203,6 +205,9 @@ pub struct CodeGen<'a> {
     pub udfs: Vec<Udf>,
     // Final computation result
     pub result: CppResult,
+
+    // The original command used to invoke dyn_tracing.
+    pub cmd: String,
 
     #[serde(skip_serializing)]
     pub config: CodeGenConfig<'a>,
