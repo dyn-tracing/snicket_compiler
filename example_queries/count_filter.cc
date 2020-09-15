@@ -1,3 +1,6 @@
+// Auto generated Envoy WASM filter from following command:
+// target/debug/dyntracing -q example_queries/count.cql -u example_udfs/count.cc
+
 // NOLINT(namespace-envoy)
 #include <map>
 #include <numeric>
@@ -39,6 +42,21 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
+// udf_type: Scalar
+// id: count
+// return_type: int
+
+class count : public user_func<int> {
+public:
+  int operator()(const trace_graph_t &graph) {
+    counter_ += 1;
+    return counter_;
+  }
+
+private:
+  int counter_ = 0;
+};
+
 class BidiRootContext : public RootContext {
 public:
   explicit BidiRootContext(uint32_t id, StringView root_id)
@@ -54,6 +72,8 @@ public:
   bool onConfigure(size_t /* configuration_size */) override;
 
   StringView getWorkloadName() { return workload_name_; }
+
+  count count_udf_;
 
 private:
   std::string workload_name_;
@@ -215,20 +235,20 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-        "y",
-        "x",
+        "m",
+        "n",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
         {
-            "x",
-            "y",
+            "n",
+            "m",
         },
     };
 
     std::map<std::string, std::map<std::vector<std::string>, std::string>>
         ids_to_properties;
-    ids_to_properties["x"][{
+    ids_to_properties["a"][{
         "node",
         "metadata",
         "WORKLOAD_NAME",
@@ -250,10 +270,8 @@ void BidiContext::onResponseHeadersInbound() {
     std::string key = b3_trace_id_;
     std::string value;
 
-    std::string x_height =
-        std::to_string(get_tree_height(target, mapping->at("x")));
-
-    value = x_height;
+    auto count_udf_result = root_->count_udf_(target);
+    value = std::to_string(count_udf_result);
 
     LOG_WARN("Value to store: " + value);
 

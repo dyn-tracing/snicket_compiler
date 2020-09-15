@@ -50,6 +50,8 @@ fn main() {
     let parse_tree = parser::parse_prog(&mut token_iter);
 
     let mut code_gen = code_gen::CodeGen::new_with_config(config);
+    // Get the full original command.
+    code_gen.cmd = std::env::args().collect::<Vec<String>>().join(" ");
 
     // TODO(taegyunkim): Specify the root service name from commandline
     code_gen.root_id = "productpagev1";
