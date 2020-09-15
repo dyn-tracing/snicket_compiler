@@ -1,3 +1,6 @@
+// Auto generated Envoy WASM filter from following command:
+// target/debug/dyntracing -q example_queries/count.cql -u example_udfs/count.cc
+
 // NOLINT(namespace-envoy)
 #include <map>
 #include <numeric>
@@ -54,7 +57,6 @@ private:
   int counter_ = 0;
 };
 
-
 class BidiRootContext : public RootContext {
 public:
   explicit BidiRootContext(uint32_t id, StringView root_id)
@@ -71,8 +73,7 @@ public:
 
   StringView getWorkloadName() { return workload_name_; }
 
-count count_udf_;
-
+  count count_udf_;
 
 private:
   std::string workload_name_;
@@ -180,23 +181,29 @@ void BidiContext::onResponseHeadersInbound() {
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
   {
-  std::string value;
-  if (getValue({
-      "node","metadata","WORKLOAD_NAME",
-  }, &value)) {
-    std::string result = std::string(root_->getWorkloadName());
-    for (auto p : {
-        "node","metadata","WORKLOAD_NAME",
-    }) {
-      result += "." + std::string(p);
-    }
-    result += "==";
-    result += value;
+    std::string value;
+    if (getValue(
+            {
+                "node",
+                "metadata",
+                "WORKLOAD_NAME",
+            },
+            &value)) {
+      std::string result = std::string(root_->getWorkloadName());
+      for (auto p : {
+               "node",
+               "metadata",
+               "WORKLOAD_NAME",
+           }) {
+        result += "." + std::string(p);
+      }
+      result += "==";
+      result += value;
 
-    properties.push_back(result);
-  } else {
-    LOG_WARN("failed to get property");
-  }
+      properties.push_back(result);
+    } else {
+      LOG_WARN("failed to get property");
+    }
   }
 
   LOG_WARN("number of properties collected " +
@@ -228,16 +235,24 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-      "m", "n", 
+        "m",
+        "n",
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
-         { "n", "m",  }, 
+        {
+            "n",
+            "m",
+        },
     };
 
-    std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
-    ids_to_properties["a"][{ "node","metadata","WORKLOAD_NAME", }] = "productpagev1";
-    
+    std::map<std::string, std::map<std::vector<std::string>, std::string>>
+        ids_to_properties;
+    ids_to_properties["a"][{
+        "node",
+        "metadata",
+        "WORKLOAD_NAME",
+    }] = "productpagev1";
 
     trace_graph_t pattern =
         generate_trace_graph(vertices, edges, ids_to_properties);
@@ -250,18 +265,13 @@ void BidiContext::onResponseHeadersInbound() {
       return;
     }
 
-    const Node* node_ptr = nullptr;
+    const Node *node_ptr = nullptr;
 
     std::string key = b3_trace_id_;
     std::string value;
 
-    std::string count_result = std::to_string(root_->count_udf_(target));
-
-    
-    
-    value = count_result;
-    
-    
+    auto count_udf_result = root_->count_udf_(target);
+    value = std::to_string(count_udf_result);
 
     LOG_WARN("Value to store: " + value);
 
@@ -274,11 +284,11 @@ void BidiContext::onResponseHeadersInbound() {
     };
 
     auto result = root()->httpCall("storage-upstream",
-                                   { {":method", "GET"},
+                                   {{":method", "GET"},
                                     {":path", "/store"},
                                     {":authority", "storage-upstream"},
                                     {"key", key},
-                                    {"value", value} },
+                                    {"value", value}},
                                    "", {}, 1000, callback);
     if (result != WasmResult::Ok) {
       LOG_WARN("Failed to make a call to storage-upstream: " +
