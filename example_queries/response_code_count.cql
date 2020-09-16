@@ -1,0 +1,1 @@
+MATCH x-->y: z, WHERE y.response_code == 500, RETURN count,

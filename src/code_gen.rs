@@ -163,6 +163,15 @@ impl<'a> Default for CodeGenConfig<'a> {
         );
 
         attributes_to_property_parts.insert(
+            "response_code",
+            AttributeDef {
+                cpp_type: CppType::Int64T,
+                attribute_type: AttributeType::Envoy,
+                parts: vec!["response", "code"],
+            },
+        );
+
+        attributes_to_property_parts.insert(
             "height",
             AttributeDef {
                 cpp_type: CppType::Int,
