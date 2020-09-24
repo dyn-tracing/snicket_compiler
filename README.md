@@ -48,7 +48,7 @@ kubectl label namespace default istio-injection=enabled
 4. Deploy patched bookinfo application.
 
 ```
-git clone -b bookinfo-headers git@github.com:taegyunkim/istio.git
+git clone -b bookinfo-headers https://github.com/taegyunkim/istio.git
 
 cd istio
 
@@ -112,7 +112,7 @@ However, it only supports deploying filters [`EnvoyFilter_SIDECAR_INBOUND`](http
 I have modified WASME code to deploy using `EnvoyFilter_ANY` and it's at [taegyunkim/wasme:patch-context](https://github.com/taegyunkim/wasme/tree/patch-context)
 
 ```
-git clone -b patch-context git@github.com:taegyunkim/wasme.git
+git clone -b patch-context https://github.com/taegyunkim/wasme.git
 cd wasme
 make wasme
 cd _output
