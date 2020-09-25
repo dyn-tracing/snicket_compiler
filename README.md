@@ -8,7 +8,7 @@ Use cypher patterns as a basis for specifying desired trace attributes: https://
 - [Bazel](https://docs.bazel.build/versions/master/install.html)
 - [Google Cloud SDK](https://cloud.google.com/sdk/install)
 - [Docker](https://www.docker.com/products/docker-desktop)
-- [Wasme CLI] (https://docs.solo.io/web-assembly-hub/latest/tutorial_code/getting_started/#install-the-wasme-cli)
+- [Wasme CLI](https://docs.solo.io/web-assembly-hub/latest/tutorial_code/getting_started/#install-the-wasme-cli)
 
 # Demo
 
