@@ -10,6 +10,8 @@ Use cypher patterns as a basis for specifying desired trace attributes: https://
 - [Docker](https://www.docker.com/products/docker-desktop)
 - [Wasme CLI](https://docs.solo.io/web-assembly-hub/latest/tutorial_code/getting_started/#install-the-wasme-cli)
 
+# git clone this repository
+
 # Demo
 
 1. Setup GKE cluster
@@ -88,7 +90,7 @@ export GATEWAY_URL=$INGRESS_HOST:$INGRESS_PORT
 curl -s http://${GATEWAY_URL}/productpage | grep -o "<title>.*</title>"
 ```
 
-6. Deploy storage-suptream
+6. Deploy storage-upstream (the wasm folder here refers to the wasm folder within the current repository)
 
 ```
 kubectl apply -f wasm/storage_upstream.yaml
