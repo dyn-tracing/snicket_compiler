@@ -154,6 +154,7 @@ wasme deploy istio webassemblyhub.io/<your_username>/<filter_name>:<tag> --id=<s
 ```
 
 11. Make few requests and check contents in storage-upstream
+(TODO: Which portion of item 11 is making the requests and checking contents in storage-upstream?)
 
 ```
 kubectl exec -it $(kubectl get pod -l app=ratings -o jsonpath='{.items[0].metadata.name}') -c ratings -- curl -v storage-upstream:8080/list
