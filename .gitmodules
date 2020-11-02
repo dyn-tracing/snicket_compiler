@@ -1,0 +1,6 @@
+[submodule "deps/microservices-demo"]
+    url = https://github.com/fruffy/microservices-demo
+    path = deps/microservices-demo
+[submodule "deps/wasm"]
+    url = https://github.com/solo-io/wasm
+    path = deps/wasm
