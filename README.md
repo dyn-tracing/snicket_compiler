@@ -153,7 +153,7 @@ Deploy the filter
 wasme deploy istio webassemblyhub.io/<your_username>/<filter_name>:<tag> --id=<set an appropriate id> --namespace=default
 ```
 
-11. Make few requests (using ste 5 above or accessing the productpage via a browser) and check contents in storage-upstream using the command below.
+11. Make few requests (using step 5 above or accessing the productpage via a browser) and check contents in storage-upstream using the command below.
 
 
 ```
