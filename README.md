@@ -124,7 +124,8 @@ export PATH=$PWD:$PATH
 ```
 
 10. Build and deploy Filter
-    Install bazel https://docs.bazel.build/versions/master/install.html#installing-bazel
+    
+    If needed, install bazel https://docs.bazel.build/versions/master/install.html#installing-bazel
 
 ```
 cd wasm
