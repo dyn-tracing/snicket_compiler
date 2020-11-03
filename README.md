@@ -103,6 +103,41 @@ kubectl apply -f wasm/storage_upstream.yaml
 kubectl apply -f wasm/productpage-cluster.yaml
 ```
 
+8. To enable Jaeger trace collections, run
+```
+kubectl create namespace observability
+kubectl create -n observability -f https://raw.githubusercontent.com/jaegertracing/jaeger-operator/master/deploy/crds/jaegertracing.io_jaegers_crd.yaml
+kubectl create -n observability -f https://raw.githubusercontent.com/jaegertracing/jaeger-operator/master/deploy/service_account.yaml
+kubectl create -n observability -f https://raw.githubusercontent.com/jaegertracing/jaeger-operator/master/deploy/role.yaml
+kubectl create -n observability -f https://raw.githubusercontent.com/jaegertracing/jaeger-operator/master/deploy/role_binding.yaml
+kubectl create -n observability -f https://raw.githubusercontent.com/jaegertracing/jaeger-operator/master/deploy/operator.yaml
+kubectl create -f https://raw.githubusercontent.com/jaegertracing/jaeger-operator/master/deploy/cluster_role.yaml
+kubectl create -f https://raw.githubusercontent.com/jaegertracing/jaeger-operator/master/deploy/cluster_role_binding.yaml
+```
+
+and then create a file called jaeger.yaml with the following contents:
+```
+apiVersion: jaegertracing.io/v1
+kind: Jaeger
+metadata:
+  name: jaeger
+spec:
+  query:
+    serviceType: NodePort
+  strategy: allInOne # <1>
+  allInOne:
+    image: jaegertracing/all-in-one:latest # <2>
+    options: # <3>
+      query.max-clock-skew-adjustment: 0 # <4>
+```
+
+and finally run
+```
+kubectl apply -n observability jaeger.yaml
+kubectl get ingress -n observability
+```
+The output from the last command will contain an IP address at which you can access the Jaeger UI.
+
 8. Generate `wasm/filter.cc` file by running `cargo run`
 
 For example,
