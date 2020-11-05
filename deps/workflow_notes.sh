@@ -12,7 +12,7 @@ set -gx PATH $HOME/.wasme/bin:$PATH $PATH
 
 # deploy the microservices-demo
 # this command might have to be run multiple times because the demo sucks
-cd microservices-demo; skaffold run; cd -
+cd deps/microservices-demo; skaffold run; cd -
 
 # build our filter, replace this with our custom query stuff later
 wasme build assemblyscript -t test-filter . \
@@ -23,9 +23,14 @@ wasme build assemblyscript -t test-filter . \
 wasme deploy istio webassemblyhub.io/fruffy/test-filter:1 –provider=istio --id test
 
 # launch the frontend
+
 minikube service frontend-external
+export INGRESS_PORT=(kubectl get service frontend-external -o jsonpath='{.spec.ports[*].nodePort}')
+export INGRESS_HOST=(minikube ip)
+export GATEWAY_URL=$INGRESS_HOST:$INGRESS_PORT
 # get the http headers of the front page
-curl -v "DUMMY"
+curl -v "http://$GATEWAY_URL"
+
 
 # The wasm runtime-config should look similiar to this
 # {
