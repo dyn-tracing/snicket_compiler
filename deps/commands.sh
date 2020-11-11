@@ -4,6 +4,7 @@
 minikube start
 #bin/istioctl manifest apply --set profile=demo
 # or for newer versions
+kubectl create namespace bookinfo
 istio-1.7.4/bin/istioctl install --set profile=demo
 kubectl label namespace default istio-injection=enabled
 # these are the istio applications
@@ -50,9 +51,14 @@ kubectl delete service/storage-upstream
 kubectl delete deployment.apps/storage-upstream
 
 
-# deploy Grafana and Prometheus
+# deploy addons
 kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.7/samples/addons/grafana.yaml
 kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.7/samples/addons/prometheus.yaml
 kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.7/samples/addons/kiali.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.7/samples/addons/jaeger.yaml
+
 # access them
 ./istio-1.7.4/bin/istioctl dashboard grafana
+./istio-1.7.4/bin/istioctl dashboard prometheus
+./istio-1.7.4/bin/istioctl dashboard kiali
+./istio-1.7.4/bin/istioctl dashboard jaeger
