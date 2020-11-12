@@ -160,9 +160,9 @@ def main(args):
     if args.full_run or args.setup:
         setup_bookinfo_deployment()
     # test the fault injection on an existing deployment
-    if not args.setup:
+    if not (args.setup or args.clean):
         test_fault_injection()
-    if args.full_run:
+    if args.full_run or args.clean:
         # all done with the test, clean up
         stop_kubernetes()
 
@@ -187,6 +187,9 @@ if __name__ == '__main__':
                         help="Just do a deployment. "
                         "This means installing bookinfo and Kubernetes."
                         " Do not run any experiments.")
+    parser.add_argument("-c", "--clean", dest="clean",
+                        action="store_true",
+                        help="Clean up an existing deployment. ")
     # Parse options and process argv
     arguments = parser.parse_args()
     # configure logging
