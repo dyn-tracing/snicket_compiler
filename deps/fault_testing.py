@@ -3,6 +3,8 @@ import argparse
 import logging
 import sys
 import time
+import os
+import signal
 
 from pathlib import Path
 
@@ -150,7 +152,8 @@ def test_fault_injection():
     remove_failure()
     log.info("Done")
     # terminate fortio
-    fortio_proc.terminate()
+    # send an interrupt
+    os.kill(fortio_proc.pid, signal.SIGINT)
 
 
 def main(args):
