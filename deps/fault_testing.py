@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import argparse
 import logging
-import sys
+import time
+
 from pathlib import Path
 
 import util
@@ -13,33 +14,133 @@ ROOT_DIR = FILE_DIR.parent
 ISTIO_DIR = FILE_DIR.joinpath("istio-1.7.4")
 ISTIO_BIN = ISTIO_DIR.joinpath("bin/istioctl")
 
+# the kubernetes python API sucks
+# from kubernetes import client
+# from kubernetes.client.configuration import Configuration
+# from kubernetes.utils import create_from_yaml
+# from kubernetes.config import kube_config
+# def get_e2e_configuration():
+#     config = Configuration()
+#     config.host = None
+#     kube_config.load_kube_config(client_configuration=config)
+#     print('Running test against : %s' % config.host)
+#     return config
+# conf = get_e2e_configuration()
+# k8s_client = client.api_client.ApiClient(configuration=conf)
+# create_from_yaml(k8s_client, f"{bookinfo_dir}/platform/kube/bookinfo.yaml")
 
-def main(args):
-    # start minikube
-    cmd = "minikube start"
-    result = util.exec_process(cmd)
 
-    # inject istio
+def inject_istio():
     cmd = f"{ISTIO_BIN} install --set profile=demo"
     result = util.exec_process(cmd)
-    cmd = f"kubectl label namespace default istio-injection=enabled"
+    cmd = "kubectl label namespace default istio-injection=enabled"
     result = util.exec_process(cmd)
+    return result
 
+
+def deploy_addons():
+    apply_cmd = f"kubectl apply -f "
+    url = "https://raw.githubusercontent.com/istio/istio/release-1.7"
+    cmd = f"{apply_cmd} {url}/samples/addons/prometheus.yaml && "
+    cmd += f"{apply_cmd} {url}/samples/addons/grafana.yaml && "
+    cmd += f"{apply_cmd} {url}/samples/addons/jaeger.yaml && "
+    cmd += f"{apply_cmd} {url}/samples/addons/kiali.yaml || "
+    cmd += f"{apply_cmd} {url}/samples/addons/kiali.yaml"
+    result = util.exec_process(cmd)
+    return result
+
+
+def deploy_bookinfo():
     # launch bookinfo
-    cmd = f"kubectl apply -f {ISTIO_DIR}/samples/bookinfo/platform/kube/bookinfo.yaml && "
-    cmd += f"kubectl apply -f {ISTIO_DIR}/samples/bookinfo/networking/bookinfo-gateway.yaml && "
-    cmd += f"kubectl apply -f {ISTIO_DIR}/samples/bookinfo/networking/destination-rule-all.yaml && "
-    cmd += f"kubectl apply -f {ISTIO_DIR}/samples/bookinfo/networking/destination-rule-all-mtls.yaml && "
-    cmd += f"kubectl apply -f {ISTIO_DIR}/samples/httpbin/sample-client/fortio-deploy.yaml "
+    samples_dir = f"{ISTIO_DIR}/samples"
+    bookinfo_dir = f"{samples_dir}/bookinfo"
+    apply_cmd = f"kubectl apply -f {bookinfo_dir}"
+    cmd = f"{apply_cmd}/platform/kube/bookinfo.yaml && "
+    cmd += f"{apply_cmd}/networking/bookinfo-gateway.yaml && "
+    cmd += f"{apply_cmd}/networking/destination-rule-all.yaml && "
+    cmd += f"{apply_cmd}/networking/destination-rule-all-mtls.yaml && "
+    cmd += f"{apply_cmd}/../httpbin/sample-client/fortio-deploy.yaml "
     result = util.exec_process(cmd)
 
-    cmd = "/bin/bash -c 'echo $(kubectl get deploy -o name) | { read -d EOF deploy; for i in $deploy; do kubectl rollout status $i -w --timeout=180s; done; }'"
-    result = util.exec_process(cmd)
+    wait_cmd = "/bin/bash -c 'echo $(kubectl get deploy -o name) |"
+    wait_cmd += "{ read -d EOF deploy; for i in $deploy; "
+    wait_cmd += "do kubectl rollout status $i -w --timeout=180s; done; }'"
+    result = util.exec_process(wait_cmd)
+    log.info("Bookinfo is ready.")
+    return result
 
+
+def inject_failure():
+    cmd = "kubectl apply -f fault-injection.yaml "
+    result = util.exec_process(cmd)
+    return result
+
+
+def remove_failure():
+    cmd = "kubectl delete -f fault-injection.yaml "
+    result = util.exec_process(cmd)
+    return result
+
+
+def start_kubernetes():
+    cmd = "minikube start"
+    result = util.exec_process(cmd)
+    return result
+
+
+def stop_kubernetes():
     # delete minikube
     cmd = "minikube delete"
     result = util.exec_process(cmd)
-    sys.exit(result)
+    return result
+
+
+def get_gateway_info():
+    cmd = "minikube ip"
+    ingress_host = util.get_output_from_proc(cmd).decode("utf-8").rstrip()
+    log.info("Ingress Host: %s", ingress_host)
+    cmd = "kubectl -n istio-system get service istio-ingressgateway -o jsonpath={.spec.ports[?(@.name==\"http2\")].nodePort}"
+    ingress_port = util.get_output_from_proc(cmd).decode("utf-8")
+    log.info("Ingress Port: %s", ingress_port)
+    gateway_url = f"{ingress_host}:{ingress_port}"
+    log.info("Gateway: %s", gateway_url)
+
+    return ingress_host, ingress_port, gateway_url
+
+
+def start_fortio(gateway_url):
+    cmd = "kubectl get pods -lapp=fortio -o jsonpath={.items[0].metadata.name}"
+    fortio_pod_name = util.get_output_from_proc(cmd).decode("utf-8")
+    cmd = f"kubectl exec {fortio_pod_name} -c fortio -- /usr/bin/fortio "
+    cmd += "load -c 1 -qps 25 -t 0 -loglevel Warning "
+    cmd += f"http://{gateway_url}/productpage"
+    fortio_proc = util.start_process(cmd)
+    return fortio_proc
+
+
+def main(args):
+    start_kubernetes()
+    inject_istio()
+    deploy_bookinfo()
+    deploy_addons()
+    # once everything has started, retrieve the necessary url info
+    _, _, gateway_url = get_gateway_info()
+    fortio_proc = start_fortio(gateway_url)
+    # let things sink in a little
+    log.info("Running Fortio for 20 seconds...")
+    time.sleep(20)
+    log.info("Injecting latency")
+    inject_failure()
+    time.sleep(20)
+    log.info("Removing latency")
+    remove_failure()
+    log.info("Done")
+    # terminate fortio
+    fortio_proc.terminate()
+
+    # all done with the test, clean up
+    stop_kubernetes()
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

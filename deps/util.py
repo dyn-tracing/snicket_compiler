@@ -6,9 +6,6 @@ from pathlib import Path
 
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
-EXIT_SKIPPED = 10
-EXIT_VIOLATION = 20
-EXIT_UNDEF = 30
 
 
 def is_valid_file(parser, arg):
@@ -55,8 +52,13 @@ def move_file(src, dst):
         shutil.move(src, dst)
 
 
+def get_output_from_proc(cmd, *args, **kwargs):
+    log.info("Executing %s ", cmd)
+    return subprocess.check_output(cmd.split(), *args, **kwargs)
+
+
 def start_process(cmd, *args, out_file=subprocess.PIPE, **kwargs):
-    log.debug("Executing %s ", cmd)
+    log.info("Executing %s ", cmd)
     if out_file is subprocess.STDOUT:
         proc = subprocess.Popen(cmd.split(), *args, **kwargs)
     elif out_file is subprocess.PIPE:
