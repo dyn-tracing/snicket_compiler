@@ -118,12 +118,13 @@ def get_gateway_info():
 
 
 def start_fortio(gateway_url):
-    cmd = "kubectl get pods -lapp=fortio -o jsonpath={.items[0].metadata.name}"
-    fortio_pod_name = util.get_output_from_proc(cmd).decode("utf-8")
-    cmd = f"kubectl exec {fortio_pod_name} -c fortio -- /usr/bin/fortio "
+    # cmd = "kubectl get pods -lapp=fortio -o jsonpath={.items[0].metadata.name}"
+    # fortio_pod_name = util.get_output_from_proc(cmd).decode("utf-8")
+    # cmd = f"kubectl exec {fortio_pod_name} -c fortio -- /usr/bin/fortio "
+    cmd = f"{FILE_DIR}/fortio "
     cmd += "load -c 1 -qps 25 -t 0 -loglevel Warning "
     cmd += f"http://{gateway_url}/productpage"
-    fortio_proc = util.start_process(cmd)
+    fortio_proc = util.start_process(cmd, preexec_fn=os.setsid)
     return fortio_proc
 
 
@@ -151,9 +152,8 @@ def test_fault_injection():
     log.info("Removing latency")
     remove_failure()
     log.info("Done")
-    # terminate fortio
-    # send an interrupt
-    os.kill(fortio_proc.pid, signal.SIGINT)
+    # terminate fortio by sending an interrupt to the process group
+    os.killpg(os.getpgid(fortio_proc.pid), signal.SIGINT)
 
 
 def main(args):
