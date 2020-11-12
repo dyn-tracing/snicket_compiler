@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import logging
+import sys
 import time
 
 from pathlib import Path
@@ -82,6 +83,12 @@ def remove_failure():
     return result
 
 
+def check_kubernetes_status():
+    cmd = "minikube status"
+    result = util.exec_process(cmd)
+    return result
+
+
 def start_kubernetes():
     cmd = "minikube start"
     result = util.exec_process(cmd)
@@ -118,11 +125,18 @@ def start_fortio(gateway_url):
     return fortio_proc
 
 
-def main(args):
+def setup_bookinfo_deployment():
     start_kubernetes()
     inject_istio()
     deploy_bookinfo()
     deploy_addons()
+
+
+def test_fault_injection():
+    if check_kubernetes_status().returncode != util.EXIT_SUCCESS:
+        log.error("Kubernetes is not set up."
+                  " Did you run the deployment script?")
+        sys.exit(util.EXIT_FAILURE)
     # once everything has started, retrieve the necessary url info
     _, _, gateway_url = get_gateway_info()
     fortio_proc = start_fortio(gateway_url)
@@ -138,20 +152,38 @@ def main(args):
     # terminate fortio
     fortio_proc.terminate()
 
-    # all done with the test, clean up
-    stop_kubernetes()
+
+def main(args):
+    if args.full_run or args.setup:
+        setup_bookinfo_deployment()
+    # test the fault injection on an existing deployment
+    if not args.setup:
+        test_fault_injection()
+    if args.full_run:
+        # all done with the test, clean up
+        stop_kubernetes()
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-l", "--log_file", dest="log_file",
+    parser.add_argument("-l", "--log-file", dest="log_file",
                         default="model.log",
                         help="Specifies name of the log file.")
-    parser.add_argument("-ll", "--log_level", dest="log_level",
+    parser.add_argument("-ll", "--log-level", dest="log_level",
                         default="INFO",
                         choices=["CRITICAL", "ERROR", "WARNING",
                                  "INFO", "DEBUG", "NOTSET"],
                         help="The log level to choose.")
+    parser.add_argument("-f", "--full-run", dest="full_run",
+                        action="store_true",
+                        help="Whether to do a full run. "
+                        "This includes setting up bookinfo and Kubernetes"
+                        " and tearing it down again.")
+    parser.add_argument("-s", "--setup", dest="setup",
+                        action="store_true",
+                        help="Just do a deployment. "
+                        "This means installing bookinfo and Kubernetes."
+                        " Do not run any experiments.")
     # Parse options and process argv
     arguments = parser.parse_args()
     # configure logging
