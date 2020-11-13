@@ -42,7 +42,7 @@ def inject_istio():
 
 
 def deploy_addons():
-    apply_cmd = f"kubectl apply -f "
+    apply_cmd = "kubectl apply -f "
     url = "https://raw.githubusercontent.com/istio/istio/release-1.7"
     cmd = f"{apply_cmd} {url}/samples/addons/prometheus.yaml && "
     cmd += f"{apply_cmd} {url}/samples/addons/grafana.yaml && "
@@ -61,8 +61,8 @@ def deploy_bookinfo():
     cmd = f"{apply_cmd}/platform/kube/bookinfo.yaml && "
     cmd += f"{apply_cmd}/networking/bookinfo-gateway.yaml && "
     cmd += f"{apply_cmd}/networking/destination-rule-all.yaml && "
-    cmd += f"{apply_cmd}/networking/destination-rule-all-mtls.yaml && "
-    cmd += f"{apply_cmd}/../httpbin/sample-client/fortio-deploy.yaml "
+    cmd += f"{apply_cmd}/networking/destination-rule-all-mtls.yaml "
+    # cmd += f"{apply_cmd}/../httpbin/sample-client/fortio-deploy.yaml "
     result = util.exec_process(cmd)
 
     wait_cmd = "/bin/bash -c 'echo $(kubectl get deploy -o name) |"
