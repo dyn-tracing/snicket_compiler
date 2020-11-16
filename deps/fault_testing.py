@@ -2,11 +2,15 @@
 import argparse
 import logging
 import sys
+import datetime
 import time
 import os
 import signal
 
+
 from pathlib import Path
+
+from prometheus_api_client import PrometheusConnect
 
 import util
 
@@ -18,6 +22,7 @@ ISTIO_DIR = FILE_DIR.joinpath("istio-1.7.4")
 ISTIO_BIN = ISTIO_DIR.joinpath("bin/istioctl")
 
 # the kubernetes python API sucks
+
 # from kubernetes import client
 # from kubernetes.client.configuration import Configuration
 # from kubernetes.utils import create_from_yaml
@@ -50,6 +55,14 @@ def deploy_addons():
     cmd += f"{apply_cmd} {url}/samples/addons/kiali.yaml || "
     cmd += f"{apply_cmd} {url}/samples/addons/kiali.yaml"
     result = util.exec_process(cmd)
+
+    wait_cmd = "/bin/bash -c "
+    wait_cmd += "'echo $(kubectl get deploy -n istio-system -o name) |"
+    wait_cmd += "{ read -d EOF deploy; for i in $deploy; "
+    wait_cmd += "do kubectl rollout status -n istio-system "
+    wait_cmd += "$i -w --timeout=180s; done; }'"
+    result = util.exec_process(wait_cmd)
+    log.info("Addons are ready.")
     return result
 
 
@@ -74,13 +87,13 @@ def deploy_bookinfo():
 
 
 def inject_failure():
-    cmd = "kubectl apply -f fault-injection.yaml "
+    cmd = f"kubectl apply -f {FILE_DIR}/fault-injection.yaml "
     result = util.exec_process(cmd)
     return result
 
 
 def remove_failure():
-    cmd = "kubectl delete -f fault-injection.yaml "
+    cmd = f"kubectl delete -f {FILE_DIR}/fault-injection.yaml "
     result = util.exec_process(cmd)
     return result
 
@@ -108,7 +121,8 @@ def get_gateway_info():
     cmd = "minikube ip"
     ingress_host = util.get_output_from_proc(cmd).decode("utf-8").rstrip()
     log.info("Ingress Host: %s", ingress_host)
-    cmd = "kubectl -n istio-system get service istio-ingressgateway -o jsonpath={.spec.ports[?(@.name==\"http2\")].nodePort}"
+    cmd = "kubectl -n istio-system get service istio-ingressgateway"
+    cmd += " -o jsonpath={.spec.ports[?(@.name==\"http2\")].nodePort}"
     ingress_port = util.get_output_from_proc(cmd).decode("utf-8")
     log.info("Ingress Port: %s", ingress_port)
     gateway_url = f"{ingress_host}:{ingress_port}"
@@ -135,7 +149,35 @@ def setup_bookinfo_deployment():
     deploy_addons()
 
 
-def test_fault_injection():
+def launch_prometheus():
+    cmd = "kubectl get pods -n istio-system -lapp=prometheus "
+    cmd += " -o jsonpath={.items[0].metadata.name}"
+    prom_pod_name = util.get_output_from_proc(cmd).decode("utf-8")
+    cmd = f"kubectl port-forward -n istio-system {prom_pod_name} 9090"
+    prom_proc = util.start_process(cmd, preexec_fn=os.setsid)
+    time.sleep(2)
+    prom_api = PrometheusConnect(url="http://localhost:9090", disable_ssl=True)
+
+    return prom_proc, prom_api
+
+
+def query_prometheus(prom_api):
+    query = prom_api.custom_query(
+        query="(histogram_quantile(0.50, sum(irate(istio_request_duration_milliseconds_bucket{reporter=\"source\",destination_service=~\"ratings.default.svc.cluster.local\"}[1m])) by (le)) / 1000) or histogram_quantile(0.50, sum(irate(istio_request_duration_seconds_bucket{reporter=\"source\",destination_service=~\"ratings.default.svc.cluster.local\"}[1m])) by (le))")
+    for q in query:
+        val = q["value"]
+        query_time = datetime.datetime.fromtimestamp(val[0])
+        latency = float(val[1]) * 1000
+        log.info("Time: %s Latency (ms) %s", query_time, latency)
+
+
+def query_loop(prom_api, seconds):
+    for _ in range(seconds):
+        query_prometheus(prom_api)
+        time.sleep(1)
+
+
+def test_fault_injection(prom_api):
     if check_kubernetes_status().returncode != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
@@ -145,12 +187,13 @@ def test_fault_injection():
     fortio_proc = start_fortio(gateway_url)
     # let things sink in a little
     log.info("Running Fortio for 20 seconds...")
-    time.sleep(20)
+    query_loop(prom_api, 60)
     log.info("Injecting latency")
     inject_failure()
-    time.sleep(20)
+    query_loop(prom_api, 60)
     log.info("Removing latency")
     remove_failure()
+    query_loop(prom_api, 60)
     log.info("Done")
     # terminate fortio by sending an interrupt to the process group
     os.killpg(os.getpgid(fortio_proc.pid), signal.SIGINT)
@@ -161,7 +204,10 @@ def main(args):
         setup_bookinfo_deployment()
     # test the fault injection on an existing deployment
     if not (args.setup or args.clean):
-        test_fault_injection()
+        prom_proc, prom_api = launch_prometheus()
+        test_fault_injection(prom_api)
+        os.killpg(os.getpgid(prom_proc.pid), signal.SIGINT)
+
     if args.full_run or args.clean:
         # all done with the test, clean up
         stop_kubernetes()
