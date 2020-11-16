@@ -2,7 +2,7 @@
 import argparse
 import logging
 import sys
-import datetime
+from datetime import datetime
 import time
 import os
 import signal
@@ -166,7 +166,7 @@ def query_prometheus(prom_api):
         query="(histogram_quantile(0.50, sum(irate(istio_request_duration_milliseconds_bucket{reporter=\"source\",destination_service=~\"ratings.default.svc.cluster.local\"}[1m])) by (le)) / 1000) or histogram_quantile(0.50, sum(irate(istio_request_duration_seconds_bucket{reporter=\"source\",destination_service=~\"ratings.default.svc.cluster.local\"}[1m])) by (le))")
     for q in query:
         val = q["value"]
-        query_time = datetime.datetime.fromtimestamp(val[0])
+        query_time = datetime.fromtimestamp(val[0])
         latency = float(val[1]) * 1000
         log.info("Time: %s Latency (ms) %s", query_time, latency)
 
@@ -186,15 +186,15 @@ def test_fault_injection(prom_api):
     _, _, gateway_url = get_gateway_info()
     fortio_proc = start_fortio(gateway_url)
     # let things sink in a little
-    log.info("Running Fortio for 20 seconds...")
+    log.info("Running Fortio at time %s", datetime.now())
     query_loop(prom_api, 60)
-    log.info("Injecting latency")
+    log.info("Injecting latency at time %s", datetime.now())
     inject_failure()
     query_loop(prom_api, 60)
-    log.info("Removing latency")
+    log.info("Removing latency at time %s", datetime.now())
     remove_failure()
     query_loop(prom_api, 60)
-    log.info("Done")
+    log.info("Done at time %s", datetime.now())
     # terminate fortio by sending an interrupt to the process group
     os.killpg(os.getpgid(fortio_proc.pid), signal.SIGINT)
 
