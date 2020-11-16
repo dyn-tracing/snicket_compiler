@@ -19,7 +19,7 @@ wasme build assemblyscript -t test-filter . \
                                    --tag webassemblyhub.io/fruffy/test-filter:1  \
                                    --config runtime-config.json
 
-
+wasme push webassemblyhub.io/fruffy/test-filter:1
 wasme deploy istio webassemblyhub.io/fruffy/test-filter:1 –provider=istio --id test
 
 # launch the frontend

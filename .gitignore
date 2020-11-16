@@ -2,3 +2,5 @@ Cargo.lock
 target
 src/proto/treenode.rs
 .vscode/settings.json
+
+deps/__pycache__/
