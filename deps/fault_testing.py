@@ -21,6 +21,14 @@ ROOT_DIR = FILE_DIR.parent
 ISTIO_DIR = FILE_DIR.joinpath("istio-1.7.4")
 ISTIO_DIR = FILE_DIR.joinpath("istio-1.8.0-rc")
 ISTIO_BIN = ISTIO_DIR.joinpath("bin/istioctl")
+WASME_BIN = FILE_DIR.joinpath("wasme")
+PATCHED_WASME_BIN = FILE_DIR.joinpath("wasme_patched")
+FILTER_DIR = FILE_DIR.joinpath("latency_monitor")
+
+FILTER_NAME = "webassemblyhub.io/fruffy/test-filter"
+FILTER_TAG = "1"
+FILTER_ID = "test"
+
 
 # the kubernetes python API sucks
 
@@ -68,6 +76,15 @@ def deploy_addons():
     return result
 
 
+def bookinfo_wait():
+    wait_cmd = "/bin/bash -c 'echo $(kubectl get deploy -o name) |"
+    wait_cmd += "{ read -d EOF deploy; for i in $deploy; "
+    wait_cmd += "do kubectl rollout status $i -w --timeout=180s; done; }'"
+    result = util.exec_process(wait_cmd)
+    log.info("Bookinfo is ready.")
+    return result
+
+
 def deploy_bookinfo():
     # launch bookinfo
     samples_dir = f"{ISTIO_DIR}/samples"
@@ -79,12 +96,7 @@ def deploy_bookinfo():
     cmd += f"{apply_cmd}/networking/destination-rule-all-mtls.yaml "
     # cmd += f"{apply_cmd}/../httpbin/sample-client/fortio-deploy.yaml "
     result = util.exec_process(cmd)
-
-    wait_cmd = "/bin/bash -c 'echo $(kubectl get deploy -o name) |"
-    wait_cmd += "{ read -d EOF deploy; for i in $deploy; "
-    wait_cmd += "do kubectl rollout status $i -w --timeout=180s; done; }'"
-    result = util.exec_process(wait_cmd)
-    log.info("Bookinfo is ready.")
+    bookinfo_wait()
     return result
 
 
@@ -161,6 +173,10 @@ def setup_bookinfo_deployment():
 
 
 def launch_prometheus():
+    if check_kubernetes_status().returncode != util.EXIT_SUCCESS:
+        log.error("Kubernetes is not set up."
+                  " Did you run the deployment script?")
+        sys.exit(util.EXIT_FAILURE)
     cmd = "kubectl get pods -n istio-system -lapp=prometheus "
     cmd += " -o jsonpath={.items[0].metadata.name}"
     prom_pod_name = util.get_output_from_proc(cmd).decode("utf-8")
@@ -210,6 +226,44 @@ def test_fault_injection(prom_api):
     os.killpg(os.getpgid(fortio_proc.pid), signal.SIGINT)
 
 
+def build_filter():
+    # Bazel is obnoxious, need to explicitly change dirs
+    cmd = f"cd {FILTER_DIR}; bazel build //:filter.wasm; cd - "
+    result = util.exec_process(cmd)
+
+    cmd = f"{PATCHED_WASME_BIN} build precompiled"
+    cmd += f" {FILTER_DIR}/bazel-bin/filter.wasm "
+    cmd += f"--tag {FILTER_NAME}:{FILTER_TAG}"
+    cmd += f" --config {FILTER_DIR}/runtime-config.json"
+    result = util.exec_process(cmd)
+    return result
+
+
+def remove_filter():
+    cmd = f"{WASME_BIN} undeploy istio {FILTER_NAME}:{FILTER_TAG} "
+    cmd += f"–provider=istio --id {FILTER_ID} "
+    result = util.exec_process(cmd)
+    bookinfo_wait()
+    return result
+
+
+def deploy_filter():
+    # first deploy with the unidirectional wasme binary
+    cmd = f"{WASME_BIN} deploy istio {FILTER_NAME}:{FILTER_TAG} "
+    cmd += f"–provider=istio --id {FILTER_ID} "
+    result = util.exec_process(cmd)
+    bookinfo_wait()
+    # after we have deployed with the working wasme, remove the deployment
+    remove_filter()
+    # now redeploy with the patched bidirectional wasme
+    cmd = f"{PATCHED_WASME_BIN} deploy istio {FILTER_NAME}:{FILTER_TAG} "
+    cmd += f"–provider=istio --id {FILTER_ID} "
+    result = util.exec_process(cmd)
+    bookinfo_wait()
+
+    return result
+
+
 def main(args):
     if args.setup:
         return setup_bookinfo_deployment()
@@ -219,7 +273,12 @@ def main(args):
         return remove_bookinfo()
     if args.clean:
         return stop_kubernetes()
-
+    if args.build_filter:
+        return build_filter()
+    if args.deploy_filter:
+        return deploy_filter()
+    if args.remove_filter:
+        return remove_filter()
     if args.full_run:
         setup_bookinfo_deployment()
     # test the fault injection on an existing deployment
@@ -262,6 +321,15 @@ if __name__ == '__main__':
     parser.add_argument("-rb", "--remove-bookinfo", dest="remove_bookinfo",
                         action="store_true",
                         help="Remove the bookinfo app. ")
+    parser.add_argument("-bf", "--build-filter", dest="build_filter",
+                        action="store_true",
+                        help="Build the WASME filter. ")
+    parser.add_argument("-df", "--deploy-filter", dest="deploy_filter",
+                        action="store_true",
+                        help="Deploy the WASME filter. ")
+    parser.add_argument("-rf", "--remove-filter", dest="remove_filter",
+                        action="store_true",
+                        help="Remove the WASME filter. ")
     # Parse options and process argv
     arguments = parser.parse_args()
     # configure logging
