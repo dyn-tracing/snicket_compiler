@@ -6,6 +6,23 @@
 #include "google/protobuf/util/json_util.h"
 #include "proxy_wasm_intrinsics.h"
 
+// TrafficDirection is a mirror of envoy xDS traffic direction.
+// As defined in istio/proxy/extensions/common/context.h
+enum class TrafficDirection : int64_t {
+  Unspecified = 0,
+  Inbound = 1,
+  Outbound = 2,
+};
+
+// Retrieves the traffic direction from the configuration context.
+TrafficDirection getTrafficDirection() {
+  int64_t direction;
+  if (getValue({"listener_direction"}, &direction)) {
+    return static_cast<TrafficDirection>(direction);
+  }
+  return TrafficDirection::Unspecified;
+}
+
 class AddHeaderRootContext : public RootContext {
 public:
   explicit AddHeaderRootContext(uint32_t id, std::string_view root_id)
@@ -60,21 +77,46 @@ void AddHeaderContext::onCreate() {
 }
 
 FilterHeadersStatus AddHeaderContext::onRequestHeaders(uint32_t, bool) {
-  LOG_DEBUG(std::string("onRequestHeaders ") + std::to_string(id()));
-  return FilterHeadersStatus::Continue;
-}
-
-FilterHeadersStatus AddHeaderContext::onResponseHeaders(uint32_t, bool) {
-  std::string workload_name;
-  if (getValue({"node", "metadata", "WORKLOAD_NAME"}, &workload_name)) {
-    LOG_WARN("Initialized workload_name: " + workload_name);
-    addResponseHeader("WORKLOAD:", workload_name);
+  TrafficDirection direction = getTrafficDirection();
+  if (direction == TrafficDirection::Inbound) {
+    WasmDataPtr hdr = getRequestHeader("test_key");
+    LOG_WARN("INCOMING REQUEST FROM  " + hdr->toString());
+    removeRequestHeader("test_key");
+  } else if (direction == TrafficDirection::Outbound) {
+    LOG_WARN("OUTGOING REQUEST");
+    std::string workload_name;
+    if (getValue({"node", "metadata", "WORKLOAD_NAME"}, &workload_name)) {
+      LOG_WARN("Initialized workload_name: " + workload_name);
+      addRequestHeader("test_key", workload_name);
+    } else {
+      LOG_WARN("Failed to set workload name");
+    }
   } else {
-    LOG_WARN("Failed to set workload name");
+    LOG_WARN("Weird direction.");
   }
   return FilterHeadersStatus::Continue;
 }
 
+FilterHeadersStatus AddHeaderContext::onResponseHeaders(uint32_t, bool) {
+  TrafficDirection direction = getTrafficDirection();
+  if (direction == TrafficDirection::Inbound) {
+    WasmDataPtr hdr = getResponseHeader("test_key");
+    LOG_WARN("INCOMING RESPONSE FROM  " + hdr->toString());
+    removeResponseHeader("test_key");
+  } else if (direction == TrafficDirection::Outbound) {
+    LOG_WARN("OUTGOING RESPONSE");
+    std::string workload_name;
+    if (getValue({"node", "metadata", "WORKLOAD_NAME"}, &workload_name)) {
+      LOG_WARN("Initialized workload_name: " + workload_name);
+      addResponseHeader("test_key", workload_name);
+    } else {
+      LOG_WARN("Failed to set workload name");
+    }
+  } else {
+    LOG_WARN("Weird direction.");
+  }
+  return FilterHeadersStatus::Continue;
+}
 FilterDataStatus AddHeaderContext::onRequestBody(size_t body_buffer_length,
                                                  bool end_of_stream) {
   return FilterDataStatus::Continue;

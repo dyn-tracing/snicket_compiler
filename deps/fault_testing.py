@@ -19,6 +19,7 @@ log = logging.getLogger(__name__)
 FILE_DIR = Path(__file__).parent.resolve()
 ROOT_DIR = FILE_DIR.parent
 ISTIO_DIR = FILE_DIR.joinpath("istio-1.7.4")
+ISTIO_DIR = FILE_DIR.joinpath("istio-1.8.0-rc")
 ISTIO_BIN = ISTIO_DIR.joinpath("bin/istioctl")
 
 # the kubernetes python API sucks
@@ -39,9 +40,10 @@ ISTIO_BIN = ISTIO_DIR.joinpath("bin/istioctl")
 
 
 def inject_istio():
-    cmd = f"{ISTIO_BIN} install --set profile=demo"
+    cmd = f"{ISTIO_BIN} install --set profile=demo "
+    cmd += "--set meshConfig.enableTracing=true --skip-confirmation "
     result = util.exec_process(cmd)
-    cmd = "kubectl label namespace default istio-injection=enabled"
+    cmd = "kubectl label namespace default istio-injection=enabled "
     result = util.exec_process(cmd)
     return result
 
@@ -83,6 +85,15 @@ def deploy_bookinfo():
     wait_cmd += "do kubectl rollout status $i -w --timeout=180s; done; }'"
     result = util.exec_process(wait_cmd)
     log.info("Bookinfo is ready.")
+    return result
+
+
+def remove_bookinfo():
+    # launch bookinfo
+    samples_dir = f"{ISTIO_DIR}/samples"
+    bookinfo_dir = f"{samples_dir}/bookinfo"
+    cmd = f"{bookinfo_dir}/platform/kube/cleanup.sh "
+    result = util.exec_process(cmd)
     return result
 
 
@@ -200,17 +211,26 @@ def test_fault_injection(prom_api):
 
 
 def main(args):
-    if args.full_run or args.setup:
+    if args.setup:
+        return setup_bookinfo_deployment()
+    if args.deploy_bookinfo:
+        return deploy_bookinfo()
+    if args.remove_bookinfo:
+        return remove_bookinfo()
+    if args.clean:
+        return stop_kubernetes()
+
+    if args.full_run:
         setup_bookinfo_deployment()
     # test the fault injection on an existing deployment
-    if not (args.setup or args.clean):
-        prom_proc, prom_api = launch_prometheus()
-        test_fault_injection(prom_api)
-        os.killpg(os.getpgid(prom_proc.pid), signal.SIGINT)
+    prom_proc, prom_api = launch_prometheus()
+    test_fault_injection(prom_api)
+    os.killpg(os.getpgid(prom_proc.pid), signal.SIGINT)
 
-    if args.full_run or args.clean:
+    if args.full_run:
         # all done with the test, clean up
         stop_kubernetes()
+    return util.EXIT_SUCCESS
 
 
 if __name__ == '__main__':
@@ -236,6 +256,12 @@ if __name__ == '__main__':
     parser.add_argument("-c", "--clean", dest="clean",
                         action="store_true",
                         help="Clean up an existing deployment. ")
+    parser.add_argument("-db", "--deploy-bookinfo", dest="deploy_bookinfo",
+                        action="store_true",
+                        help="Deploy the bookinfo app. ")
+    parser.add_argument("-rb", "--remove-bookinfo", dest="remove_bookinfo",
+                        action="store_true",
+                        help="Remove the bookinfo app. ")
     # Parse options and process argv
     arguments = parser.parse_args()
     # configure logging
