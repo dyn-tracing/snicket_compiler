@@ -2,12 +2,10 @@
 import argparse
 import logging
 import sys
-from datetime import datetime
 import time
 import os
 import signal
-
-
+from datetime import datetime
 from pathlib import Path
 
 from prometheus_api_client import PrometheusConnect
@@ -19,12 +17,12 @@ log = logging.getLogger(__name__)
 FILE_DIR = Path(__file__).parent.resolve()
 ROOT_DIR = FILE_DIR.parent
 ISTIO_DIR = FILE_DIR.joinpath("istio-1.7.4")
-ISTIO_DIR = FILE_DIR.joinpath("istio-1.8.0-rc")
+ISTIO_DIR = FILE_DIR.joinpath("istio-1.8.0-rc.0")
 ISTIO_BIN = ISTIO_DIR.joinpath("bin/istioctl")
-WASME_BIN = FILE_DIR.joinpath("wasme")
-PATCHED_WASME_BIN = FILE_DIR.joinpath("wasme_patched")
-FILTER_DIR = FILE_DIR.joinpath("latency_monitor")
+WASME_BIN = FILE_DIR.joinpath("bin/wasme")
+PATCHED_WASME_BIN = FILE_DIR.joinpath("bin/wasme_patched")
 
+FILTER_DIR = FILE_DIR.joinpath("latency_monitor")
 FILTER_NAME = "webassemblyhub.io/fruffy/test-filter"
 FILTER_TAG = "1"
 FILTER_ID = "test"
@@ -158,7 +156,7 @@ def start_fortio(gateway_url):
     # cmd = "kubectl get pods -lapp=fortio -o jsonpath={.items[0].metadata.name}"
     # fortio_pod_name = util.get_output_from_proc(cmd).decode("utf-8")
     # cmd = f"kubectl exec {fortio_pod_name} -c fortio -- /usr/bin/fortio "
-    cmd = f"{FILE_DIR}/fortio "
+    cmd = f"{FILE_DIR}/bin/fortio "
     cmd += "load -c 1 -qps 25 -t 0 -loglevel Warning "
     cmd += f"http://{gateway_url}/productpage"
     fortio_proc = util.start_process(cmd, preexec_fn=os.setsid)
