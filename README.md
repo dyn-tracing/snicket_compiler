@@ -29,7 +29,7 @@ However, it only supports deploying filters EnvoyFilter_SIDECAR_INBOUND. This WA
 ```
 cd deps
 git clone -b patch-context https://github.com/taegyunkim/wasme.git
-mv -r wasme patched_wasme
+mv wasme patched_wasme
 cd patched_wasme
 make wasme
 cd _output
