@@ -51,7 +51,7 @@ python3 fault_testing.py -df
 ```
 7. You can print out the $GATEWAY_URL environment variable, and do 
 ```
-curl $GATEWAY_URL/productpage
+curl -v $GATEWAY_URL/productpage
 ```
 to see your running application's information.  In the headers, there should be some extra headers from your filter.
 
