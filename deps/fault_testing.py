@@ -16,8 +16,7 @@ log = logging.getLogger(__name__)
 
 FILE_DIR = Path(__file__).parent.resolve()
 ROOT_DIR = FILE_DIR.parent
-ISTIO_DIR = FILE_DIR.joinpath("istio-1.7.4")
-ISTIO_DIR = FILE_DIR.joinpath("istio-1.8.0-rc.0")
+ISTIO_DIR = FILE_DIR.joinpath("istio-1.8.0")
 ISTIO_BIN = ISTIO_DIR.joinpath("bin/istioctl")
 WASME_BIN = FILE_DIR.joinpath("bin/wasme")
 PATCHED_WASME_BIN = FILE_DIR.joinpath("bin/wasme_patched")

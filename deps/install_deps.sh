@@ -39,7 +39,7 @@ sudo apt update && sudo apt install bazel
 pip3 install --user prometheus-api-client
 
 # download and unpack istio
-curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.8.0-rc.0 TARGET_ARCH=x86_64 sh -
+curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.8.0 TARGET_ARCH=x86_64 sh -
 
 
 ###### These are currently not needed
