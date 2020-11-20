@@ -21,18 +21,30 @@ cd deps
 2. Install the latest version of istio
 curl -L https://istio.io/downloadIstio | sh -
 
-3. Use the script below to set up a cluster, enable istio, and deploy the bookinfo application
+3. Build WASME We use wasme to build, push and deploy our WASM filter.
+However, it only supports deploying filters EnvoyFilter_SIDECAR_INBOUND. This WASME code deploys using EnvoyFilter_ANY and it's at taegyunkim/wasme:patch-context
+
+cd deps
+git clone -b patch-context https://github.com/taegyunkim/wasme.git
+mv -r wasme patched_wasme
+cd patched_wasme
+make wasme
+cd _output
+export PATH=$PWD:$PATH
+
+
+4. Use the script below to set up a cluster, enable istio, and deploy the bookinfo application
 
 python3 deps/fault_testing.py -s
 
 Note:  make sure you have logged into your webassemblyhub.io account by doing "wasme login" before the following step, or it won't work properly
-4. Build and push the filter in the messsage_counter directory through
+5. Build and push the filter in the messsage_counter directory through
 python3 fault_testing.py -bf
 
-5. Deploy the filter you just built through
+6. Deploy the filter you just built through
 python3 fault_testing.py -df
 
-6. You can print out the $GATEWAY_URL environment variable, and do 
+7. You can print out the $GATEWAY_URL environment variable, and do 
 curl $GATEWAY_URL/productpage
 to see your running application's information.  In the headers, there should be some extra headers from your filter.
 
