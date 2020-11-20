@@ -15,95 +15,53 @@ Use cypher patterns as a basis for specifying desired trace attributes: https://
 
 # Demo
 
-1. Setup GKE cluster
-
-First create a GCP project if you don't have one.
-
+1. Change your directory to deps
 ```
-gcloud config set project <PROJECT_ID>
-
-gcloud services enable container.googleapis.com
-
-gcloud container clusters create demo --enable-autoupgrade \
-    --enable-autoscaling --min-nodes=3 --max-nodes=10 \
-		--num-nodes=5 --zone=us-central1-a
-
-# Retrieve your credentials for `kubectl`
-gcloud container clusters get-credentials $CLUSTER_NAME \
-    --zone $ZONE
+cd deps
+```
+2. Install the latest version of istio
+```
+curl -L https://istio.io/downloadIstio | sh -
 ```
 
-2. Install Istio
-
+3. Build WASME We use wasme to build, push and deploy our WASM filter.
+However, it only supports deploying filters EnvoyFilter_SIDECAR_INBOUND. This WASME code deploys using EnvoyFilter_ANY and it's at taegyunkim/wasme:patch-context
 ```
-curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.5.4 sh -
-
-cd istio-1.5.4
-
-bin/istioctl manifest apply --set profile=demo
-```
-
-3. Enable istio injection for the default namespace
-
-```
-kubectl label namespace default istio-injection=enabled
+cd deps
+git clone -b patch-context https://github.com/taegyunkim/wasme.git
+mv -r wasme patched_wasme
+cd patched_wasme
+make wasme
+cd _output
+export PATH=$PWD:$PATH
 ```
 
-4. Deploy patched bookinfo application.
-
+4. Use the script below to set up a cluster, enable istio, and deploy the bookinfo application
 ```
-git clone -b bookinfo-headers https://github.com/taegyunkim/istio.git
-
-cd istio
-
-kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
+python3 deps/fault_testing.py -s
 ```
-
-Confirm the bookinfo application is running.
-
+Note:  make sure you have logged into your webassemblyhub.io account by doing "wasme login" before the following step, or it won't work properly
+5. Build and push the filter in the messsage_counter directory through
 ```
-kubectl exec -it $(kubectl get pod -l app=ratings -o jsonpath='{.items[0].metadata.name}') -c ratings -- curl productpage:9080/productpage | grep -o "<title>.*</title>"
+python3 fault_testing.py -bf
 ```
-
-Define the ingress IP and port
-
+6. Deploy the filter you just built through
 ```
-kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml
+python3 fault_testing.py -df
 ```
-
-Set the ingress IP and ports
-
+7. You can print out the $GATEWAY_URL environment variable, and do 
 ```
-export INGRESS_HOST=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-export INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="http2")].port}')
-export SECURE_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="https")].port}')
+curl $GATEWAY_URL/productpage
+```
+to see your running application's information.  In the headers, there should be some extra headers from your filter.
+
+8. Delete the cluster through
+```
+gcloud container clusters delete demo --zone us-central1-a
 ```
 
-Set the `GATEWAY_URL`
-
-```
-export GATEWAY_URL=$INGRESS_HOST:$INGRESS_PORT
-```
-
-5. Confirm the app is accessible from outside the cluster
-
-```
-curl -s http://${GATEWAY_URL}/productpage | grep -o "<title>.*</title>"
-```
-
-6. Deploy storage-upstream (the wasm folder here refers to the wasm folder within the current repository)
-
-```
-kubectl apply -f wasm/storage_upstream.yaml
-```
-
-7. Configure storage upstream cluster in productpage service
-
-```
-kubectl apply -f wasm/productpage-cluster.yaml
-```
-
-8. To enable Jaeger trace collections, run
+# To enable Jaeger trace collections
+After you have gone through steps 1-3, run
 ```
 kubectl create namespace observability
 kubectl create -n observability -f https://raw.githubusercontent.com/jaegertracing/jaeger-operator/master/deploy/crds/jaegertracing.io_jaegers_crd.yaml
@@ -138,60 +96,3 @@ kubectl get ingress -n observability
 ```
 The output from the last command will contain an IP address at which you can access the Jaeger UI.
 
-8. Generate `wasm/filter.cc` file by running `cargo run`
-
-For example,
-`cargo run -- -q ./example_queries/return/query.cql`
-
-9. Build WASME
-   We use [wasme](https://github.com/solo-io/wasme) to build, push and deploy
-   our WASM filter.
-
-However, it only supports deploying filters [`EnvoyFilter_SIDECAR_INBOUND`](https://pkg.go.dev/istio.io/api@v0.0.0-20191109011911-e51134872853/networking/v1alpha3?tab=doc#EnvoyFilter_PatchContext).
-I have modified WASME code to deploy using `EnvoyFilter_ANY` and it's at [taegyunkim/wasme:patch-context](https://github.com/taegyunkim/wasme/tree/patch-context)
-
-```
-git clone -b patch-context https://github.com/taegyunkim/wasme.git
-cd wasme
-make wasme
-cd _output
-export PATH=$PWD:$PATH
-```
-
-10. Build and deploy Filter
-    
-    If needed, install bazel https://docs.bazel.build/versions/master/install.html#installing-bazel
-
-```
-cd wasm
-bazel build :filter.wasm
-```
-
-Tag the filter and set the config.
-
-```
-wasme build precompiled ./bazel-bin/filter.wasm \
-  --tag webassemblyhub.io/<your_username>/<filter_name>:<tag>  \
-  --config runtime-config.json
-```
-
-Push the filter to WebAssembly Hub
-
-```
-wasme login
-
-wasme push webassemblyhub.io/<your_username>/<filter_name>:<tag>
-```
-
-Deploy the filter
-
-```
-wasme deploy istio webassemblyhub.io/<your_username>/<filter_name>:<tag> --id=<set an appropriate id> --namespace=default
-```
-
-11. Make few requests (using step 5 above or accessing the productpage via a browser) and check contents in storage-upstream using the command below.
-
-
-```
-kubectl exec -it $(kubectl get pod -l app=ratings -o jsonpath='{.items[0].metadata.name}') -c ratings -- curl -v storage-upstream:8080/list
-```
