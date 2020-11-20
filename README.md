@@ -58,7 +58,7 @@ to see your running application's information.  In the headers, there should be 
 8. Delete the cluster through
 ```
 gcloud container clusters delete demo --zone us-central1-a
-
+```
 
 # To enable Jaeger trace collections
 After you have gone through steps 1-3, run
