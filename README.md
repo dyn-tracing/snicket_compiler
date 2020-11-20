@@ -25,7 +25,20 @@ curl -L https://istio.io/downloadIstio | sh -
 
 python3 deps/fault_testing.py -s
 
-4. To enable Jaeger trace collections, run
+Note:  make sure you have logged into your webassemblyhub.io account by doing "wasme login" before the following step, or it won't work properly
+4. Build and push the filter in the messsage_counter directory through
+python3 fault_testing.py -bf
+
+5. Deploy the filter you just built through
+python3 fault_testing.py -df
+
+6. You can print out the $GATEWAY_URL environment variable, and do 
+curl $GATEWAY_URL/productpage
+to see your running application's information.  In the headers, there should be some extra headers from your filter.
+
+
+# To enable Jaeger trace collections
+After you have gone through steps 1-3, run
 ```
 kubectl create namespace observability
 kubectl create -n observability -f https://raw.githubusercontent.com/jaegertracing/jaeger-operator/master/deploy/crds/jaegertracing.io_jaegers_crd.yaml
@@ -60,13 +73,3 @@ kubectl get ingress -n observability
 ```
 The output from the last command will contain an IP address at which you can access the Jaeger UI.
 
-Note:  make sure you have logged into your webassemblyhub.io account by doing "wasme login" before the following step, or it won't work properly
-8. Build and push the filter in the messsage_counter directory through
-python3 fault_testing.py -bf
-
-9. Deploy the filter you just built through
-python3 fault_testing.py -df
-
-10. You can print out the $GATEWAY_URL environment variable, and do 
-curl $GATEWAY_URL/productpage
-to see your running application's information.  In the headers, there should be some extra headers from your filter.
