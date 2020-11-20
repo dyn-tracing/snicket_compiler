@@ -236,7 +236,7 @@ def build_filter():
     return result
 
 
-def remove_filter():
+def undeploy_filter():
     cmd = f"{WASME_BIN} undeploy istio {FILTER_NAME}:{FILTER_TAG} "
     cmd += f"–provider=istio --id {FILTER_ID} "
     result = util.exec_process(cmd)
@@ -251,7 +251,7 @@ def deploy_filter():
     result = util.exec_process(cmd)
     bookinfo_wait()
     # after we have deployed with the working wasme, remove the deployment
-    remove_filter()
+    undeploy_filter()
     # now redeploy with the patched bidirectional wasme
     cmd = f"{PATCHED_WASME_BIN} deploy istio {FILTER_NAME}:{FILTER_TAG} "
     cmd += f"–provider=istio --id {FILTER_ID} "
@@ -260,6 +260,10 @@ def deploy_filter():
 
     return result
 
+def refresh_filter():
+    build_filter()
+    undeploy_filter()
+    deploy_filter()
 
 def main(args):
     if args.setup:
@@ -274,8 +278,10 @@ def main(args):
         return build_filter()
     if args.deploy_filter:
         return deploy_filter()
-    if args.remove_filter:
-        return remove_filter()
+    if args.undeploy_filter:
+        return undeploy_filter()
+    if args.refresh_filter:
+        return refresh_filter()
     if args.full_run:
         setup_bookinfo_deployment()
     # test the fault injection on an existing deployment
@@ -324,9 +330,12 @@ if __name__ == '__main__':
     parser.add_argument("-df", "--deploy-filter", dest="deploy_filter",
                         action="store_true",
                         help="Deploy the WASME filter. ")
-    parser.add_argument("-rf", "--remove-filter", dest="remove_filter",
+    parser.add_argument("-uf", "--undeploy-filter", dest="undeploy_filter",
                         action="store_true",
                         help="Remove the WASME filter. ")
+    parser.add_argument("-rf", "--refresh-filter", dest="refresh_filter",
+                        action="store_true",
+                        help="Refresh the WASME filter. ")
     # Parse options and process argv
     arguments = parser.parse_args()
     # configure logging
