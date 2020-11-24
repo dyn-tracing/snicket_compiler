@@ -70,10 +70,12 @@ public:
 
   void onCreate() override;
   FilterHeadersStatus onRequestHeaders(uint32_t headers, bool end_of_stream) override;
+  FilterHeadersStatus onRequestHeadersInbound();
+  FilterHeadersStatus onRequestHeadersOutbound();
   FilterDataStatus onRequestBody(size_t body_buffer_length, bool end_of_stream) override;
   FilterHeadersStatus onResponseHeaders(uint32_t headers, bool end_of_stream) override;
-  void onResponseHeadersInbound();
-  void onResponseHeadersOutbound();
+  FilterHeadersStatus onResponseHeadersInbound();
+  FilterHeadersStatus onResponseHeadersOutbound();
   void onDone() override;
   void onLog() override;
   void onDelete() override;
@@ -103,31 +105,74 @@ void BidiContext::onCreate() { LOG_DEBUG(std::string("onCreate " + std::to_strin
 
 FilterHeadersStatus BidiContext::onRequestHeaders(uint32_t, bool) {
   LOG_DEBUG(std::string("onRequestHeaders ") + std::to_string(id()));
+
+  // Print all request headers
+  auto result = getRequestHeaderPairs();
+  auto pairs = result->pairs();
+  LOG_WARN(std::string("request headers: ") + std::to_string(pairs.size()));
+  for (auto &p : pairs) {
+      LOG_WARN(std::string(p.first) + std::string(" -> ") +
+               std::string(p.second));
+  }
+
+  replaceRequestHeader("x-envoy-force-trace", "true");
+  if (direction_ == TrafficDirection::Inbound) {
+    return onRequestHeadersInbound();
+  } else if (direction_ == TrafficDirection::Outbound) {
+    return onRequestHeadersOutbound();
+  }
+}
+
+FilterHeadersStatus BidiContext::onRequestHeadersInbound() {
+  LOG_DEBUG("in on request headers inbound");
+  addResponseHeader("requestheaderINbound", "hi");
   return FilterHeadersStatus::Continue;
 }
 
-void BidiContext::onResponseHeadersInbound() {
-  LOG_DEBUG("in on response headers inbound");
-  addResponseHeader("responseheaderINbound", "hi");
+FilterHeadersStatus BidiContext::onRequestHeadersOutbound() {
+  int THRESHOLD = 10;
+  LOG_DEBUG("in on request headers outbound");
+  addResponseHeader("requestheaderOUTbound", "hi");
+  root_->incrementCount();
+  if (root_->getCount() > THRESHOLD) {
+    LOG_DEBUG("above threshold");
+  }
+  return FilterHeadersStatus::Continue;
 }
 
-void BidiContext::onResponseHeadersOutbound() {
+
+FilterHeadersStatus BidiContext::onResponseHeadersInbound() {
+  LOG_DEBUG("in on response headers inbound");
+  addResponseHeader("responseheaderINbound", "hi");
+  root_->decrementCount();
+  return FilterHeadersStatus::Continue;
+}
+
+FilterHeadersStatus BidiContext::onResponseHeadersOutbound() {
   LOG_DEBUG("in on response headers outbound");
   addResponseHeader("responseheaderOUTbound", "hi");
+  return FilterHeadersStatus::Continue;
 }
 
 
 FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t, bool) {
   LOG_DEBUG(std::string("onResponseHeaders ") + std::to_string(id()));
-  addResponseHeader("newheader", root_->header_value_);
-  replaceResponseHeader("location", "envoy-wasm");
+  // Print all headers
+    auto result = getResponseHeaderPairs();
+    auto pairs = result->pairs();
+    LOG_WARN(std::string("response headers: ") + std::to_string(pairs.size()));
+    for (auto &p : pairs) {
+        LOG_WARN(std::string(p.first) + std::string(" -> ") +
+                 std::string(p.second));
+    }
 
+  replaceResponseHeader("location", "envoy-wasm");
+  replaceResponseHeader("x-envoy-force-trace", "true");
   if (direction_ == TrafficDirection::Inbound) {
-    onResponseHeadersInbound();
+    return onResponseHeadersInbound();
   } else if (direction_ == TrafficDirection::Outbound) {
-    onResponseHeadersOutbound();
+    return onResponseHeadersOutbound();
   }
-  return FilterHeadersStatus::Continue;
 }
 
 FilterDataStatus BidiContext::onRequestBody(size_t body_buffer_length, bool end_of_stream) {
