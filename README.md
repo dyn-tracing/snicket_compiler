@@ -29,7 +29,7 @@ However, it only supports deploying filters EnvoyFilter_SIDECAR_INBOUND. This WA
 ```
 cd deps
 git clone -b patch-context https://github.com/taegyunkim/wasme.git
-mv -r wasme patched_wasme
+mv wasme patched_wasme
 cd patched_wasme
 make wasme
 cd _output
@@ -51,7 +51,7 @@ python3 fault_testing.py -df
 ```
 7. You can print out the $GATEWAY_URL environment variable, and do 
 ```
-curl $GATEWAY_URL/productpage
+curl -v $GATEWAY_URL/productpage
 ```
 to see your running application's information.  In the headers, there should be some extra headers from your filter.
 
