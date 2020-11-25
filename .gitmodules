@@ -1,6 +1,6 @@
-[submodule "deps/microservices-demo"]
+[submodule "latency_monitoring/microservices-demo"]
     url = https://github.com/fruffy/microservices-demo
-    path = deps/microservices-demo
-[submodule "deps/wasm"]
+    path = latency_monitoring/microservices-demo
+[submodule "latency_monitoring/wasm"]
     url = https://github.com/solo-io/wasm
-    path = deps/wasm
+    path = latency_monitoring/wasm
