@@ -124,15 +124,23 @@ def check_kubernetes_status():
     return result
 
 
-def start_kubernetes():
-    cmd = "minikube start"
+def start_kubernetes(platform):
+    if platform == "GCP":
+        cmd = "gcloud container clusters create demo --enable-autoupgrade "
+        cmd += "--enable-autoscaling --min-nodes=3 --max-nodes=10 "
+        cmd += "--num-nodes=5 --zone=us-central1-a"
+    else:
+        cmd = "minikube start"
     result = util.exec_process(cmd)
     return result
 
 
-def stop_kubernetes():
-    # delete minikube
-    cmd = "minikube delete"
+def stop_kubernetes(platform):
+    if platform == "GCP":
+        cmd = "gcloud container clusters delete demo --zone us-central1-a"
+    else:
+        # delete minikube
+        cmd = "minikube delete"
     result = util.exec_process(cmd)
     return result
 
@@ -162,8 +170,8 @@ def start_fortio(gateway_url):
     return fortio_proc
 
 
-def setup_bookinfo_deployment():
-    start_kubernetes()
+def setup_bookinfo_deployment(platform):
+    start_kubernetes(platform)
     inject_istio()
     deploy_bookinfo()
     deploy_addons()
@@ -225,6 +233,7 @@ def test_fault_injection(prom_api):
 
 def build_filter():
     # Bazel is obnoxious, need to explicitly change dirs
+    log.info("Building filter...")
     cmd = f"cd {FILTER_DIR}; bazel build //:filter.wasm; cd - "
     result = util.exec_process(cmd)
 
@@ -232,6 +241,11 @@ def build_filter():
     cmd += f" {FILTER_DIR}/bazel-bin/filter.wasm "
     cmd += f"--tag {FILTER_NAME}:{FILTER_TAG}"
     cmd += f" --config {FILTER_DIR}/runtime-config.json"
+    result = util.exec_process(cmd)
+    log.info("Done with building filter...")
+    log.info("Pushing filter...")
+
+    cmd = f"{PATCHED_WASME_BIN} push {FILTER_NAME}:{FILTER_TAG}"
     result = util.exec_process(cmd)
     return result
 
@@ -260,20 +274,22 @@ def deploy_filter():
 
     return result
 
+
 def refresh_filter():
     build_filter()
     undeploy_filter()
     deploy_filter()
 
+
 def main(args):
     if args.setup:
-        return setup_bookinfo_deployment()
+        return setup_bookinfo_deployment(args.platform)
     if args.deploy_bookinfo:
         return deploy_bookinfo()
     if args.remove_bookinfo:
         return remove_bookinfo()
     if args.clean:
-        return stop_kubernetes()
+        return stop_kubernetes(args.platform)
     if args.build_filter:
         return build_filter()
     if args.deploy_filter:
@@ -283,7 +299,7 @@ def main(args):
     if args.refresh_filter:
         return refresh_filter()
     if args.full_run:
-        setup_bookinfo_deployment()
+        setup_bookinfo_deployment(args.platform)
     # test the fault injection on an existing deployment
     prom_proc, prom_api = launch_prometheus()
     test_fault_injection(prom_api)
@@ -291,7 +307,7 @@ def main(args):
 
     if args.full_run:
         # all done with the test, clean up
-        stop_kubernetes()
+        stop_kubernetes(args.platform)
     return util.EXIT_SUCCESS
 
 
@@ -305,6 +321,11 @@ if __name__ == '__main__':
                         choices=["CRITICAL", "ERROR", "WARNING",
                                  "INFO", "DEBUG", "NOTSET"],
                         help="The log level to choose.")
+    parser.add_argument("-p", "--platform", dest="platform",
+                        default="KB",
+                        choices=["MK", "GCP"],
+                        help="Which platform to run the scripts on."
+                             "MK is minikube, GCP is Google Cloud Compute")
     parser.add_argument("-f", "--full-run", dest="full_run",
                         action="store_true",
                         help="Whether to do a full run. "
