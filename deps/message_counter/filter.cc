@@ -114,6 +114,14 @@ FilterHeadersStatus BidiContext::onRequestHeaders(uint32_t, bool) {
       LOG_WARN(std::string(p.first) + std::string(" -> ") +
                std::string(p.second));
   }
+  int THRESHOLD = 0;
+  root_->incrementCount();
+  std::string warning = "incrementing count";
+  warning = warning.append(std::to_string(root_->getCount()));
+  LOG_WARN(warning);
+  if (root_->getCount() > THRESHOLD) {
+    LOG_DEBUG("above threshold");
+  }
 
   replaceRequestHeader("x-envoy-force-trace", "true");
   if (direction_ == TrafficDirection::Inbound) {
@@ -121,35 +129,30 @@ FilterHeadersStatus BidiContext::onRequestHeaders(uint32_t, bool) {
   } else if (direction_ == TrafficDirection::Outbound) {
     return onRequestHeadersOutbound();
   }
+  LOG_WARN("didn't get direction in request header");
 }
 
 FilterHeadersStatus BidiContext::onRequestHeadersInbound() {
-  LOG_DEBUG("in on request headers inbound");
+  LOG_WARN("in on request headers inbound");
   addResponseHeader("requestheaderINbound", "hi");
   return FilterHeadersStatus::Continue;
 }
 
 FilterHeadersStatus BidiContext::onRequestHeadersOutbound() {
-  int THRESHOLD = 10;
-  LOG_DEBUG("in on request headers outbound");
+  LOG_WARN("in on request headers outbound");
   addResponseHeader("requestheaderOUTbound", "hi");
-  root_->incrementCount();
-  if (root_->getCount() > THRESHOLD) {
-    LOG_DEBUG("above threshold");
-  }
   return FilterHeadersStatus::Continue;
 }
 
 
 FilterHeadersStatus BidiContext::onResponseHeadersInbound() {
-  LOG_DEBUG("in on response headers inbound");
+  LOG_WARN("in on response headers inbound");
   addResponseHeader("responseheaderINbound", "hi");
-  root_->decrementCount();
   return FilterHeadersStatus::Continue;
 }
 
 FilterHeadersStatus BidiContext::onResponseHeadersOutbound() {
-  LOG_DEBUG("in on response headers outbound");
+  LOG_WARN("in on response headers outbound");
   addResponseHeader("responseheaderOUTbound", "hi");
   return FilterHeadersStatus::Continue;
 }
@@ -165,7 +168,10 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t, bool) {
         LOG_WARN(std::string(p.first) + std::string(" -> ") +
                  std::string(p.second));
     }
-
+  std::string warning = "decrementing count";
+  warning = warning.append(std::to_string(root_->getCount()));
+  LOG_WARN(warning);
+  root_->decrementCount();
   replaceResponseHeader("location", "envoy-wasm");
   replaceResponseHeader("x-envoy-force-trace", "true");
   if (direction_ == TrafficDirection::Inbound) {
@@ -173,6 +179,7 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t, bool) {
   } else if (direction_ == TrafficDirection::Outbound) {
     return onResponseHeadersOutbound();
   }
+  LOG_WARN("in response headers but no direction given");
 }
 
 FilterDataStatus BidiContext::onRequestBody(size_t body_buffer_length, bool end_of_stream) {
