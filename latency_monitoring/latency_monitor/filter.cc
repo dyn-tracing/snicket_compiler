@@ -135,6 +135,28 @@ FilterHeadersStatus BidiContext::onRequestHeaders(uint32_t, bool) {
         LOG_INFO("above threshold");
     }
 
+    std::string key = "HI";
+    std::string value = "BYE";
+
+    auto context_id = id();
+    auto callback = [context_id](uint32_t, size_t body_size, uint32_t) {
+        getContext(context_id)->setEffectiveContext();
+        auto body =
+            getBufferBytes(WasmBufferType::HttpCallResponseBody, 0, body_size);
+        LOG_WARN(std::string(body->view()));
+    };
+    auto result1 = root()->httpCall("storage-upstream",
+                                    {{":method", "GET"},
+                                     {":path", "/store"},
+                                     {":authority", "storage-upstream"},
+                                     {"key", key},
+                                     {"value", value}},
+                                    "", {}, 1000, callback);
+    if (result1 != WasmResult::Ok) {
+        LOG_WARN("Failed to make a call to storage-upstream: " +
+                 result->toString());
+    }
+
     replaceRequestHeader("x-envoy-force-trace", "true");
     if (direction_ == TrafficDirection::Inbound) {
         return onRequestHeadersInbound();
@@ -142,6 +164,8 @@ FilterHeadersStatus BidiContext::onRequestHeaders(uint32_t, bool) {
         return onRequestHeadersOutbound();
     }
     LOG_WARN("didn't get direction in request header");
+
+    return FilterHeadersStatus::Continue;
 }
 
 FilterHeadersStatus BidiContext::onRequestHeadersInbound() {
@@ -190,6 +214,7 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t, bool) {
         return onResponseHeadersOutbound();
     }
     LOG_WARN("in response headers but no direction given");
+    return FilterHeadersStatus::Continue;
 }
 
 FilterDataStatus BidiContext::onRequestBody(size_t body_buffer_length,
