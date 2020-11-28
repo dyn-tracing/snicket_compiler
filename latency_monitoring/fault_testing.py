@@ -55,7 +55,7 @@ def inject_istio():
 
 def deploy_addons():
     apply_cmd = "kubectl apply -f "
-    url = "https://raw.githubusercontent.com/istio/istio/release-1.7"
+    url = "https://raw.githubusercontent.com/istio/istio/release-1.8"
     cmd = f"{apply_cmd} {url}/samples/addons/prometheus.yaml && "
     cmd += f"{apply_cmd} {url}/samples/addons/grafana.yaml && "
     cmd += f"{apply_cmd} {url}/samples/addons/jaeger.yaml && "
@@ -130,7 +130,7 @@ def start_kubernetes(platform):
         cmd += "--enable-autoscaling --min-nodes=3 --max-nodes=10 "
         cmd += "--num-nodes=5 --zone=us-central1-a"
     else:
-        cmd = "minikube start"
+        cmd = "minikube start --memory=8192 --cpus=4 "
     result = util.exec_process(cmd)
     return result
 
@@ -269,6 +269,7 @@ def deploy_filter():
     # now redeploy with the patched bidirectional wasme
     cmd = f"{PATCHED_WASME_BIN} deploy istio {FILTER_NAME}:{FILTER_TAG} "
     cmd += f"–provider=istio --id {FILTER_ID} "
+    # cmd += "--config \'{\"name\": \"always_set_request_id_in_response\",\"value\": \"true\"}\' "
     result = util.exec_process(cmd)
     bookinfo_wait()
 

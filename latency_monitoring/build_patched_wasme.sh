@@ -1,5 +1,8 @@
 #!/bin/bash
 cd wasm/tools/wasme/cli
 make _output/wasme
-cp _output/wasme ../../../../bin/wasme_patched
+if [ $? -eq 0 ]; then
+    mv _output/wasme ../../../../bin/wasme_patched
+fi
+
 cd -
