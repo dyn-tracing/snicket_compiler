@@ -5,6 +5,7 @@ import sys
 import time
 import os
 import signal
+import requests
 from datetime import datetime
 from pathlib import Path
 
@@ -191,6 +192,21 @@ def launch_prometheus():
     prom_api = PrometheusConnect(url="http://localhost:9090", disable_ssl=True)
 
     return prom_proc, prom_api
+
+
+def launch_storage_mon():
+    if check_kubernetes_status().returncode != util.EXIT_SUCCESS:
+        log.error("Kubernetes is not set up."
+                  " Did you run the deployment script?")
+        sys.exit(util.EXIT_FAILURE)
+    cmd = "kubectl get pods -lapp=storage-upstream "
+    cmd += " -o jsonpath={.items[0].metadata.name}"
+    storage_pod_name = util.get_output_from_proc(cmd).decode("utf-8")
+    cmd = f"kubectl port-forward {storage_pod_name} 8080"
+    storage_proc = util.start_process(cmd, preexec_fn=os.setsid)
+    time.sleep(2)
+
+    return storage_proc
 
 
 def query_prometheus(prom_api):

@@ -52,7 +52,6 @@ class BidiRootContext : public RootContext {
     void incrementCount() { count_++; }
     void decrementCount() { count_--; }
     int getCount() { return count_; }
-
     std::string header_value_;
 
  private:
@@ -69,6 +68,7 @@ class BidiContext : public Context {
         std::string warning = "Got traffic direction, is ";
         warning = warning.append(trafficDirectionToString(direction_));
         LOG_WARN(warning);
+        gauge_ = Gauge<int>::New("queue_gauge", "queue_size");
     }
 
     void onCreate() override;
@@ -87,6 +87,7 @@ class BidiContext : public Context {
     void onDelete() override;
 
  private:
+    Gauge<int> *gauge_;
     BidiRootContext *root_;
     std::string b3_trace_id_;
     std::string b3_span_id_;
@@ -130,6 +131,7 @@ FilterHeadersStatus BidiContext::onRequestHeaders(uint32_t, bool) {
     root_->incrementCount();
     std::string warning = "incrementing count ";
     warning = warning.append(std::to_string(root_->getCount()));
+    gauge_->record(root_->getCount(), "queue_size");
     LOG_WARN(warning);
     if (root_->getCount() > THRESHOLD) {
         LOG_INFO("above threshold");
@@ -206,6 +208,8 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t, bool) {
     warning = warning.append(std::to_string(root_->getCount()));
     LOG_WARN(warning);
     root_->decrementCount();
+    gauge_->record(root_->getCount(), "queue_size");
+
     replaceResponseHeader("location", "envoy-wasm");
     replaceResponseHeader("x-envoy-force-trace", "true");
     if (direction_ == TrafficDirection::Inbound) {
