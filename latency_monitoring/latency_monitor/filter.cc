@@ -52,7 +52,6 @@ class BidiRootContext : public RootContext {
     void incrementCount() { count_++; }
     void decrementCount() { count_--; }
     int getCount() { return count_; }
-
     std::string header_value_;
 
  private:
@@ -69,6 +68,7 @@ class BidiContext : public Context {
         std::string warning = "Got traffic direction, is ";
         warning = warning.append(trafficDirectionToString(direction_));
         LOG_WARN(warning);
+        gauge_ = Gauge<int>::New("queue_gauge", "queue_size");
     }
 
     void onCreate() override;
@@ -87,6 +87,7 @@ class BidiContext : public Context {
     void onDelete() override;
 
  private:
+    Gauge<int> *gauge_;
     BidiRootContext *root_;
     std::string b3_trace_id_;
     std::string b3_span_id_;
@@ -130,9 +131,32 @@ FilterHeadersStatus BidiContext::onRequestHeaders(uint32_t, bool) {
     root_->incrementCount();
     std::string warning = "incrementing count ";
     warning = warning.append(std::to_string(root_->getCount()));
+    gauge_->record(root_->getCount(), "queue_size");
     LOG_WARN(warning);
     if (root_->getCount() > THRESHOLD) {
         LOG_INFO("above threshold");
+    }
+
+    std::string key = "HI";
+    std::string value = "BYE";
+
+    auto context_id = id();
+    auto callback = [context_id](uint32_t, size_t body_size, uint32_t) {
+        getContext(context_id)->setEffectiveContext();
+        auto body =
+            getBufferBytes(WasmBufferType::HttpCallResponseBody, 0, body_size);
+        LOG_WARN(std::string(body->view()));
+    };
+    auto result1 = root()->httpCall("storage-upstream",
+                                    {{":method", "GET"},
+                                     {":path", "/store"},
+                                     {":authority", "storage-upstream"},
+                                     {"key", key},
+                                     {"value", value}},
+                                    "", {}, 1000, callback);
+    if (result1 != WasmResult::Ok) {
+        LOG_WARN("Failed to make a call to storage-upstream: " +
+                 result->toString());
     }
 
     replaceRequestHeader("x-envoy-force-trace", "true");
@@ -142,6 +166,8 @@ FilterHeadersStatus BidiContext::onRequestHeaders(uint32_t, bool) {
         return onRequestHeadersOutbound();
     }
     LOG_WARN("didn't get direction in request header");
+
+    return FilterHeadersStatus::Continue;
 }
 
 FilterHeadersStatus BidiContext::onRequestHeadersInbound() {
@@ -182,6 +208,8 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t, bool) {
     warning = warning.append(std::to_string(root_->getCount()));
     LOG_WARN(warning);
     root_->decrementCount();
+    gauge_->record(root_->getCount(), "queue_size");
+
     replaceResponseHeader("location", "envoy-wasm");
     replaceResponseHeader("x-envoy-force-trace", "true");
     if (direction_ == TrafficDirection::Inbound) {
@@ -190,6 +218,7 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t, bool) {
         return onResponseHeadersOutbound();
     }
     LOG_WARN("in response headers but no direction given");
+    return FilterHeadersStatus::Continue;
 }
 
 FilterDataStatus BidiContext::onRequestBody(size_t body_buffer_length,

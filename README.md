@@ -15,9 +15,9 @@ Use cypher patterns as a basis for specifying desired trace attributes: https://
 
 # Demo
 
-1. Change your directory to deps
+1. Change your directory to latency_monitoring
 ```
-cd deps
+cd latency_monitoring
 ```
 2. Install the latest version of istio
 ```
@@ -27,7 +27,7 @@ curl -L https://istio.io/downloadIstio | sh -
 3. Build WASME We use wasme to build, push and deploy our WASM filter.
 However, it only supports deploying filters EnvoyFilter_SIDECAR_INBOUND. This WASME code deploys using EnvoyFilter_ANY and it's at taegyunkim/wasme:patch-context
 ```
-cd deps
+cd latency_monitoring
 git clone -b patch-context https://github.com/taegyunkim/wasme.git
 mv wasme patched_wasme
 cd patched_wasme
@@ -38,7 +38,7 @@ export PATH=$PWD:$PATH
 
 4. Use the script below to set up a cluster, enable istio, and deploy the bookinfo application
 ```
-python3 deps/fault_testing.py -s
+python3 latency_monitoring/fault_testing.py -s
 ```
 Note:  make sure you have logged into your webassemblyhub.io account by doing "wasme login" before the following step, or it won't work properly
 5. Build and push the filter in the messsage_counter directory through
@@ -49,7 +49,7 @@ python3 fault_testing.py -bf
 ```
 python3 fault_testing.py -df
 ```
-7. You can print out the $GATEWAY_URL environment variable, and do 
+7. You can print out the $GATEWAY_URL environment variable, and do
 ```
 curl -v $GATEWAY_URL/productpage
 ```
