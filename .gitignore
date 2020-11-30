@@ -2,6 +2,3 @@ Cargo.lock
 target
 src/proto/treenode.rs
 .vscode/settings.json
-
-
-latency_monitoring/message_counter/

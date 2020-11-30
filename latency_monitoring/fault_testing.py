@@ -268,10 +268,10 @@ def build_filter(filter_dir, filter_name):
     cmd += f" --config {filter_dir}/runtime-config.json"
     result = util.exec_process(cmd)
     log.info("Done with building filter...")
-    log.info("Pushing filter...")
-
-    cmd = f"{PATCHED_WASME_BIN} push {filter_name}:{FILTER_TAG}"
-    result = util.exec_process(cmd)
+    if result == util.EXIT_SUCCESS:
+        log.info("Pushing filter...")
+        cmd = f"{PATCHED_WASME_BIN} push {filter_name}:{FILTER_TAG}"
+        result = util.exec_process(cmd)
     return result
 
 
