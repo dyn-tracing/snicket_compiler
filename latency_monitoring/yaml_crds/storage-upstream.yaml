@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: storage-upstream
+  labels:
+    name: storage-upstream
+spec:
+  selector:
+    matchLabels:
+      app: storage-upstream
+  template:
+    metadata:
+      labels:
+        app: storage-upstream
+    spec:
+      containers:
+      - name: storage-upstream
+        image: docker.io/taegyunk91/storage-upstream:latest
+        ports:
+        - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: storage-upstream
+spec:
+  type: ClusterIP
+  selector:
+    app: storage-upstream
+  ports:
+  - name: storage-upstream
+    port: 8080
+    targetPort: 8080
+
+# kubectl port-forward (kubectl get pods  -lapp=storage-upstream -o jsonpath={.items[0].metadata.name}) 8080
