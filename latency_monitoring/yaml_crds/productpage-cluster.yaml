@@ -24,6 +24,6 @@ spec:
                     socket_address:
                       address: storage-upstream
                       port_value: 8080
-  workloadSelector:
-    labels:
-      app: productpage
+  # workloadSelector:
+  #   labels:
+  #     app: productpage

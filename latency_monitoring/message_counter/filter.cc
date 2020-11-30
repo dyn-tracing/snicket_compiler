@@ -59,7 +59,7 @@ class BidiRootContext : public RootContext {
 
  private:
     std::string workload_name_;
-    int count_;
+    std::atomic<int> count_;
 };
 
 class BidiContext : public Context {
