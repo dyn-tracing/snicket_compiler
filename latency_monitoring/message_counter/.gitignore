@@ -1,0 +1,7 @@
+bazel-bin
+bazel-out
+bazel-testlogs
+bazel-workspace
+bazel-path-based-counter
+bazel-message_counter
+bazel-wasm

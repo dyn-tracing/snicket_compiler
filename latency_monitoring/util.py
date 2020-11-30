@@ -78,10 +78,10 @@ def exec_process(cmd, *args, **kwargs):
     result = subprocess.run(cmd, shell=True, *args, **kwargs)
     if result.stdout:
         log.debug("Process output: %s", result.stdout.decode("utf-8"))
-    if result.returncode != 0:
+    if result.returncode != EXIT_SUCCESS:
         log.error("BEGIN %s", 40 * "#")
         log.error("Failed while executing:\n%s\n", cmd)
         if result.stderr:
             log.error("Output:\n%s", result.stderr.decode("utf-8"))
         log.error("END %s", 40 * "#")
-    return result
+    return result.returncode

@@ -5,9 +5,9 @@ import sys
 import time
 import os
 import signal
-import requests
 from datetime import datetime
 from pathlib import Path
+import requests
 
 from prometheus_api_client import PrometheusConnect
 
@@ -21,9 +21,10 @@ ISTIO_DIR = FILE_DIR.joinpath("istio-1.8.0")
 ISTIO_BIN = ISTIO_DIR.joinpath("bin/istioctl")
 WASME_BIN = FILE_DIR.joinpath("bin/wasme")
 PATCHED_WASME_BIN = FILE_DIR.joinpath("bin/wasme_patched")
+YAML_DIR = FILE_DIR.joinpath("yaml_crds")
 
-FILTER_DIR = FILE_DIR.joinpath("latency_monitor")
-FILTER_NAME = "webassemblyhub.io/fruffy/test-filter"
+FILTER_NAME = ""
+FILTER_DIR = FILE_DIR.joinpath("message_counter")
 FILTER_TAG = "1"
 FILTER_ID = "test"
 
@@ -49,6 +50,8 @@ def inject_istio():
     cmd = f"{ISTIO_BIN} install --set profile=demo "
     cmd += "--set meshConfig.enableTracing=true --skip-confirmation "
     result = util.exec_process(cmd)
+    if result != util.EXIT_SUCCESS:
+        return result
     cmd = "kubectl label namespace default istio-injection=enabled "
     result = util.exec_process(cmd)
     return result
@@ -84,6 +87,10 @@ def bookinfo_wait():
 
 
 def deploy_bookinfo():
+    if check_kubernetes_status().returncode != util.EXIT_SUCCESS:
+        log.error("Kubernetes is not set up."
+                  " Did you run the deployment script?")
+        sys.exit(util.EXIT_FAILURE)
     # launch bookinfo
     samples_dir = f"{ISTIO_DIR}/samples"
     bookinfo_dir = f"{samples_dir}/bookinfo"
@@ -91,7 +98,9 @@ def deploy_bookinfo():
     cmd = f"{apply_cmd}/platform/kube/bookinfo.yaml && "
     cmd += f"{apply_cmd}/networking/bookinfo-gateway.yaml && "
     cmd += f"{apply_cmd}/networking/destination-rule-all.yaml && "
-    cmd += f"{apply_cmd}/networking/destination-rule-all-mtls.yaml "
+    cmd += f"{apply_cmd}/networking/destination-rule-all-mtls.yaml && "
+    cmd += f"kubectl apply -f {YAML_DIR}/storage-upstream.yaml && "
+    cmd += f"kubectl apply -f {YAML_DIR}/productpage-cluster.yaml "
     # cmd += f"{apply_cmd}/../httpbin/sample-client/fortio-deploy.yaml "
     result = util.exec_process(cmd)
     bookinfo_wait()
@@ -102,19 +111,21 @@ def remove_bookinfo():
     # launch bookinfo
     samples_dir = f"{ISTIO_DIR}/samples"
     bookinfo_dir = f"{samples_dir}/bookinfo"
-    cmd = f"{bookinfo_dir}/platform/kube/cleanup.sh "
+    cmd = f"{bookinfo_dir}/platform/kube/cleanup.sh &&"
+    cmd += f"kubectl delete -f {YAML_DIR}/storage-upstream.yaml && "
+    cmd += f"kubectl delete -f {YAML_DIR}/productpage-cluster.yaml "
     result = util.exec_process(cmd)
     return result
 
 
 def inject_failure():
-    cmd = f"kubectl apply -f {FILE_DIR}/fault-injection.yaml "
+    cmd = f"kubectl apply -f {YAML_DIR}/fault-injection.yaml "
     result = util.exec_process(cmd)
     return result
 
 
 def remove_failure():
-    cmd = f"kubectl delete -f {FILE_DIR}/fault-injection.yaml "
+    cmd = f"kubectl delete -f {YAML_DIR}/fault-injection.yaml "
     result = util.exec_process(cmd)
     return result
 
@@ -173,9 +184,14 @@ def start_fortio(gateway_url):
 
 def setup_bookinfo_deployment(platform):
     start_kubernetes(platform)
-    inject_istio()
-    deploy_bookinfo()
-    deploy_addons()
+    result = inject_istio()
+    if result != util.EXIT_SUCCESS:
+        return result
+    result = deploy_bookinfo()
+    if result != util.EXIT_SUCCESS:
+        return result
+    result = deploy_addons()
+    return result
 
 
 def launch_prometheus():
@@ -202,7 +218,7 @@ def launch_storage_mon():
     cmd = "kubectl get pods -lapp=storage-upstream "
     cmd += " -o jsonpath={.items[0].metadata.name}"
     storage_pod_name = util.get_output_from_proc(cmd).decode("utf-8")
-    cmd = f"kubectl port-forward {storage_pod_name} 8080"
+    cmd = f"kubectl port-forward {storage_pod_name} 8090"
     storage_proc = util.start_process(cmd, preexec_fn=os.setsid)
     time.sleep(2)
 
@@ -247,43 +263,49 @@ def test_fault_injection(prom_api):
     os.killpg(os.getpgid(fortio_proc.pid), signal.SIGINT)
 
 
-def build_filter():
+def build_filter(filter_dir, filter_name):
     # Bazel is obnoxious, need to explicitly change dirs
     log.info("Building filter...")
-    cmd = f"cd {FILTER_DIR}; bazel build //:filter.wasm; cd - "
+    cmd = f"cd {filter_dir}; bazel build //:filter.wasm; cd - "
     result = util.exec_process(cmd)
+    if result != util.EXIT_SUCCESS:
+        return result
 
     cmd = f"{PATCHED_WASME_BIN} build precompiled"
-    cmd += f" {FILTER_DIR}/bazel-bin/filter.wasm "
-    cmd += f"--tag {FILTER_NAME}:{FILTER_TAG}"
-    cmd += f" --config {FILTER_DIR}/runtime-config.json"
+    cmd += f" {filter_dir}/bazel-bin/filter.wasm "
+    cmd += f"--tag {filter_name}:{FILTER_TAG}"
+    cmd += f" --config {filter_dir}/runtime-config.json"
     result = util.exec_process(cmd)
     log.info("Done with building filter...")
-    log.info("Pushing filter...")
+    if result != util.EXIT_SUCCESS:
+        return result
 
-    cmd = f"{PATCHED_WASME_BIN} push {FILTER_NAME}:{FILTER_TAG}"
+    log.info("Pushing the filter...")
+    cmd = f"{PATCHED_WASME_BIN} push {filter_name}:{FILTER_TAG}"
     result = util.exec_process(cmd)
     return result
 
 
-def undeploy_filter():
-    cmd = f"{WASME_BIN} undeploy istio {FILTER_NAME}:{FILTER_TAG} "
+def undeploy_filter(filter_name):
+    cmd = f"{WASME_BIN} undeploy istio {filter_name}:{FILTER_TAG} "
     cmd += f"–provider=istio --id {FILTER_ID} "
     result = util.exec_process(cmd)
     bookinfo_wait()
     return result
 
 
-def deploy_filter():
+def deploy_filter(filter_name):
     # first deploy with the unidirectional wasme binary
-    cmd = f"{WASME_BIN} deploy istio {FILTER_NAME}:{FILTER_TAG} "
+    cmd = f"{WASME_BIN} deploy istio {filter_name}:{FILTER_TAG} "
     cmd += f"–provider=istio --id {FILTER_ID} "
     result = util.exec_process(cmd)
+    if result != util.EXIT_SUCCESS:
+        return result
     bookinfo_wait()
     # after we have deployed with the working wasme, remove the deployment
-    undeploy_filter()
+    undeploy_filter(filter_name)
     # now redeploy with the patched bidirectional wasme
-    cmd = f"{PATCHED_WASME_BIN} deploy istio {FILTER_NAME}:{FILTER_TAG} "
+    cmd = f"{PATCHED_WASME_BIN} deploy istio {filter_name}:{FILTER_TAG} "
     cmd += f"–provider=istio --id {FILTER_ID} "
     # cmd += "--config \'{\"name\": \"always_set_request_id_in_response\",\"value\": \"true\"}\' "
     result = util.exec_process(cmd)
@@ -292,10 +314,39 @@ def deploy_filter():
     return result
 
 
-def refresh_filter():
-    build_filter()
-    undeploy_filter()
-    deploy_filter()
+def refresh_filter(filter_dir, filter_name):
+    result = build_filter(filter_dir, filter_name)
+    if result != util.EXIT_SUCCESS:
+        return result
+    result = undeploy_filter(filter_name)
+    if result != util.EXIT_SUCCESS:
+        return result
+    result = deploy_filter(filter_name)
+    return result
+
+
+def handle_filter(args):
+    is_filter_related = args.build_filter or args.deploy_filter
+    is_filter_related = is_filter_related or args.undeploy_filter
+    is_filter_related = is_filter_related or args.refresh_filter
+    if not is_filter_related:
+        return
+    if not args.filter_name:
+        log.error("The filter name is required to deploy filters with wasme. "
+                  "You can set it with the -fn or --filter-name argument.")
+        sys.exit(util.EXIT_FAILURE)
+    if args.build_filter:
+        result = build_filter(args.filter_dir, args.filter_name)
+        sys.exit(result)
+    if args.deploy_filter:
+        result = deploy_filter(args.filter_name)
+        sys.exit(result)
+    if args.undeploy_filter:
+        result = undeploy_filter(args.filter_name)
+        sys.exit(result)
+    if args.refresh_filter:
+        result = refresh_filter(args.filter_dir, args.filter_name)
+        sys.exit(result)
 
 
 def main(args):
@@ -305,16 +356,9 @@ def main(args):
         return deploy_bookinfo()
     if args.remove_bookinfo:
         return remove_bookinfo()
+    handle_filter(args)
     if args.clean:
         return stop_kubernetes(args.platform)
-    if args.build_filter:
-        return build_filter()
-    if args.deploy_filter:
-        return deploy_filter()
-    if args.undeploy_filter:
-        return undeploy_filter()
-    if args.refresh_filter:
-        return refresh_filter()
     if args.full_run:
         setup_bookinfo_deployment(args.platform)
     # test the fault injection on an existing deployment
@@ -356,6 +400,12 @@ if __name__ == '__main__':
     parser.add_argument("-c", "--clean", dest="clean",
                         action="store_true",
                         help="Clean up an existing deployment. ")
+    parser.add_argument("-fn", "--filter-name", dest="filter_name",
+                        default=FILTER_NAME,
+                        help="The name of the filter to push to the Wasm Hub.")
+    parser.add_argument("-fd", "--filter-dir", dest="filter_dir",
+                        default=FILTER_DIR,
+                        help="The directory of the filter")
     parser.add_argument("-db", "--deploy-bookinfo", dest="deploy_bookinfo",
                         action="store_true",
                         help="Deploy the bookinfo app. ")
