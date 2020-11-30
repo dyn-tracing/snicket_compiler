@@ -50,6 +50,8 @@ def inject_istio():
     cmd = f"{ISTIO_BIN} install --set profile=demo "
     cmd += "--set meshConfig.enableTracing=true --skip-confirmation "
     result = util.exec_process(cmd)
+    if result != util.EXIT_SUCCESS:
+        return result
     cmd = "kubectl label namespace default istio-injection=enabled "
     result = util.exec_process(cmd)
     return result
@@ -182,9 +184,14 @@ def start_fortio(gateway_url):
 
 def setup_bookinfo_deployment(platform):
     start_kubernetes(platform)
-    inject_istio()
-    deploy_bookinfo()
-    deploy_addons()
+    result = inject_istio()
+    if result != util.EXIT_SUCCESS:
+        return result
+    result = deploy_bookinfo()
+    if result != util.EXIT_SUCCESS:
+        return result
+    result = deploy_addons()
+    return result
 
 
 def launch_prometheus():
@@ -261,6 +268,8 @@ def build_filter(filter_dir, filter_name):
     log.info("Building filter...")
     cmd = f"cd {filter_dir}; bazel build //:filter.wasm; cd - "
     result = util.exec_process(cmd)
+    if result != util.EXIT_SUCCESS:
+        return result
 
     cmd = f"{PATCHED_WASME_BIN} build precompiled"
     cmd += f" {filter_dir}/bazel-bin/filter.wasm "
@@ -268,10 +277,12 @@ def build_filter(filter_dir, filter_name):
     cmd += f" --config {filter_dir}/runtime-config.json"
     result = util.exec_process(cmd)
     log.info("Done with building filter...")
-    if result == util.EXIT_SUCCESS:
-        log.info("Pushing filter...")
-        cmd = f"{PATCHED_WASME_BIN} push {filter_name}:{FILTER_TAG}"
-        result = util.exec_process(cmd)
+    if result != util.EXIT_SUCCESS:
+        return result
+
+    log.info("Pushing the filter...")
+    cmd = f"{PATCHED_WASME_BIN} push {filter_name}:{FILTER_TAG}"
+    result = util.exec_process(cmd)
     return result
 
 
@@ -288,6 +299,8 @@ def deploy_filter(filter_name):
     cmd = f"{WASME_BIN} deploy istio {filter_name}:{FILTER_TAG} "
     cmd += f"–provider=istio --id {FILTER_ID} "
     result = util.exec_process(cmd)
+    if result != util.EXIT_SUCCESS:
+        return result
     bookinfo_wait()
     # after we have deployed with the working wasme, remove the deployment
     undeploy_filter(filter_name)
@@ -303,7 +316,11 @@ def deploy_filter(filter_name):
 
 def refresh_filter(filter_dir, filter_name):
     result = build_filter(filter_dir, filter_name)
+    if result != util.EXIT_SUCCESS:
+        return result
     result = undeploy_filter(filter_name)
+    if result != util.EXIT_SUCCESS:
+        return result
     result = deploy_filter(filter_name)
     return result
 

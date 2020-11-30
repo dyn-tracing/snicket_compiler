@@ -50,15 +50,11 @@ class BidiRootContext : public RootContext {
     bool onConfigure(size_t /* configuration_size */) override;
 
     bool onStart(size_t) override;
-    std::string_view getWorkloadName() { return workload_name_; }
-    void incrementCount() { count_++; }
-    void decrementCount() { count_--; }
-    int getCount() { return count_; }
+    std::string getWorkloadName() { return workload_name_; }
     std::string header_value_;
 
  private:
-    std::string_view workload_name_;
-    int count_ = 0;
+    std::string workload_name_;
 };
 
 class BidiContext : public Context {
@@ -70,6 +66,7 @@ class BidiContext : public Context {
         LOG_WARN("Got traffic direction, is " +
                  trafficDirectionToString(direction_));
         gauge_ = Gauge<int>::New("queue_gauge", "queue_size");
+        count_ = 0;
     }
 
     void onCreate() override;
@@ -90,6 +87,10 @@ class BidiContext : public Context {
     void onLog() override;
     void onDelete() override;
 
+    void incrementCount() { count_++; }
+    void decrementCount() { count_--; }
+    int getCount() { return count_; }
+
  private:
     BidiRootContext *root_;
     std::string b3_trace_id_;
@@ -97,6 +98,8 @@ class BidiContext : public Context {
     std::string b3_parent_span_id_;
     TrafficDirection direction_;
     Gauge<int> *gauge_;
+    int count_ = 0;
+
     WasmResult store_warning();
     void print_headers(WasmHeaderMapType type);
 };
@@ -107,8 +110,8 @@ static RegisterContextFactory
 
 WasmResult BidiContext::store_warning() {
     std::string key = toString(getCurrentTimeNanoseconds());
-    std::string value = std::string(root_->getWorkloadName());
-
+    std::string value = root_->getWorkloadName();
+    LOG_WARN("Storing timestamp " + key + " as node " + value + ".");
     auto context_id = id();
     auto callback = [context_id](uint32_t, size_t body_size, uint32_t) {
         getContext(context_id)->setEffectiveContext();
@@ -141,7 +144,7 @@ void BidiContext::print_headers(WasmHeaderMapType type) {
     } else if (type == WasmHeaderMapType::ResponseHeaders) {
         auto result = getResponseHeaderPairs();
         auto pairs = result->pairs();
-        LOG_WARN("Reponse headers: " + toString(pairs.size()));
+        LOG_WARN("Response headers: " + toString(pairs.size()));
         for (auto &p : pairs) {
             LOG_WARN(std::string(p.first) + " -> " + std::string(p.second));
         }
@@ -171,13 +174,13 @@ FilterHeadersStatus BidiContext::onRequestHeadersInbound() {
 
 FilterHeadersStatus BidiContext::onRequestHeadersOutbound() {
     LOG_WARN("Incrementing count.");
-    root_->incrementCount();
-    auto curr_count = root_->getCount();
+    incrementCount();
+    auto curr_count = getCount();
     gauge_->record(curr_count, 0);
     LOG_WARN("Current count: " + toString(curr_count));
     if (curr_count > REQUEST_THRESHOLD) {
         LOG_ERROR("Request queue " + toString(curr_count) +
-                  "is above threshold " + toString(REQUEST_THRESHOLD) + ".");
+                  " is above threshold " + toString(REQUEST_THRESHOLD) + ".");
         store_warning();
     }
     return FilterHeadersStatus::Continue;
@@ -202,8 +205,8 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t, bool) {
 
 FilterHeadersStatus BidiContext::onResponseHeadersInbound() {
     LOG_WARN("Decrementing count.");
-    root_->decrementCount();
-    auto curr_count = root_->getCount();
+    decrementCount();
+    auto curr_count = getCount();
     gauge_->record(curr_count, 0);
     LOG_WARN("Current count: " + toString(curr_count));
     return FilterHeadersStatus::Continue;
