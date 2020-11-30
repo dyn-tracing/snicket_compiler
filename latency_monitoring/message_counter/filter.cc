@@ -46,15 +46,20 @@ class BidiRootContext : public RootContext {
         } else {
             LOG_WARN("Failed to set workload name");
         }
+        count_ = 0;
     }
     bool onConfigure(size_t /* configuration_size */) override;
 
     bool onStart(size_t) override;
     std::string getWorkloadName() { return workload_name_; }
+    void incrementCount() { count_++; }
+    void decrementCount() { count_--; }
+    int getCount() { return count_; }
     std::string header_value_;
 
  private:
     std::string workload_name_;
+    int count_;
 };
 
 class BidiContext : public Context {
@@ -66,7 +71,6 @@ class BidiContext : public Context {
         LOG_WARN("Got traffic direction, is " +
                  trafficDirectionToString(direction_));
         gauge_ = Gauge<int>::New("queue_gauge", "queue_size");
-        count_ = 0;
     }
 
     void onCreate() override;
@@ -87,10 +91,6 @@ class BidiContext : public Context {
     void onLog() override;
     void onDelete() override;
 
-    void incrementCount() { count_++; }
-    void decrementCount() { count_--; }
-    int getCount() { return count_; }
-
  private:
     BidiRootContext *root_;
     std::string b3_trace_id_;
@@ -98,8 +98,6 @@ class BidiContext : public Context {
     std::string b3_parent_span_id_;
     TrafficDirection direction_;
     Gauge<int> *gauge_;
-    int count_ = 0;
-
     WasmResult store_warning();
     void print_headers(WasmHeaderMapType type);
 };
@@ -107,6 +105,7 @@ class BidiContext : public Context {
 static RegisterContextFactory
     register_BidiContext(CONTEXT_FACTORY(BidiContext),
                          ROOT_FACTORY(BidiRootContext), "bidi_root_id");
+
 
 WasmResult BidiContext::store_warning() {
     std::string key = toString(getCurrentTimeNanoseconds());
@@ -174,8 +173,8 @@ FilterHeadersStatus BidiContext::onRequestHeadersInbound() {
 
 FilterHeadersStatus BidiContext::onRequestHeadersOutbound() {
     LOG_WARN("Incrementing count.");
-    incrementCount();
-    auto curr_count = getCount();
+    root_->incrementCount();
+    auto curr_count = root_->getCount();
     gauge_->record(curr_count, 0);
     LOG_WARN("Current count: " + toString(curr_count));
     if (curr_count > REQUEST_THRESHOLD) {
@@ -205,8 +204,8 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t, bool) {
 
 FilterHeadersStatus BidiContext::onResponseHeadersInbound() {
     LOG_WARN("Decrementing count.");
-    decrementCount();
-    auto curr_count = getCount();
+    root_->decrementCount();
+    auto curr_count = root_->getCount();
     gauge_->record(curr_count, 0);
     LOG_WARN("Current count: " + toString(curr_count));
     return FilterHeadersStatus::Continue;

@@ -52,7 +52,7 @@ def inject_istio():
     result = util.exec_process(cmd)
     if result != util.EXIT_SUCCESS:
         return result
-    cmd = "kubectl label namespace default istio-injection=enabled "
+    cmd = "kubectl label namespace default istio-injection=enabled --overwrite"
     result = util.exec_process(cmd)
     return result
 
@@ -87,7 +87,7 @@ def bookinfo_wait():
 
 
 def deploy_bookinfo():
-    if check_kubernetes_status().returncode != util.EXIT_SUCCESS:
+    if check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
@@ -195,7 +195,7 @@ def setup_bookinfo_deployment(platform):
 
 
 def launch_prometheus():
-    if check_kubernetes_status().returncode != util.EXIT_SUCCESS:
+    if check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
@@ -211,7 +211,7 @@ def launch_prometheus():
 
 
 def launch_storage_mon():
-    if check_kubernetes_status().returncode != util.EXIT_SUCCESS:
+    if check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
@@ -242,7 +242,7 @@ def query_loop(prom_api, seconds):
 
 
 def test_fault_injection(prom_api):
-    if check_kubernetes_status().returncode != util.EXIT_SUCCESS:
+    if check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
@@ -266,7 +266,7 @@ def test_fault_injection(prom_api):
 def build_filter(filter_dir, filter_name):
     # Bazel is obnoxious, need to explicitly change dirs
     log.info("Building filter...")
-    cmd = f"cd {filter_dir}; bazel build //:filter.wasm; cd - "
+    cmd = f"cd {filter_dir}; bazel build //:filter.wasm"
     result = util.exec_process(cmd)
     if result != util.EXIT_SUCCESS:
         return result
@@ -290,6 +290,8 @@ def undeploy_filter(filter_name):
     cmd = f"{WASME_BIN} undeploy istio {filter_name}:{FILTER_TAG} "
     cmd += f"–provider=istio --id {FILTER_ID} "
     result = util.exec_process(cmd)
+    if result != util.EXIT_SUCCESS:
+        return result
     bookinfo_wait()
     return result
 
@@ -320,7 +322,8 @@ def refresh_filter(filter_dir, filter_name):
         return result
     result = undeploy_filter(filter_name)
     if result != util.EXIT_SUCCESS:
-        return result
+        # A failure here is actually okay
+        log.warning("Undeploying failed.")
     result = deploy_filter(filter_name)
     return result
 
