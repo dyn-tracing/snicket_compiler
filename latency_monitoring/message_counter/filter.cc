@@ -1,3 +1,4 @@
+#include <set>
 #include <string>
 #include <unordered_map>
 
@@ -56,6 +57,7 @@ class BidiRootContext : public RootContext {
     void decrementCount() { count_--; }
     int getCount() { return count_; }
     std::string header_value_;
+    std::set<std::string> pending_requests;
 
  private:
     std::string workload_name_;
@@ -93,7 +95,7 @@ class BidiContext : public Context {
 
  private:
     BidiRootContext *root_;
-    std::string b3_trace_id_;
+    std::string x_request_id_;
     std::string b3_span_id_;
     std::string b3_parent_span_id_;
     TrafficDirection direction_;
@@ -105,7 +107,6 @@ class BidiContext : public Context {
 static RegisterContextFactory
     register_BidiContext(CONTEXT_FACTORY(BidiContext),
                          ROOT_FACTORY(BidiRootContext), "bidi_root_id");
-
 
 WasmResult BidiContext::store_warning() {
     std::string key = toString(getCurrentTimeNanoseconds());
@@ -172,13 +173,20 @@ FilterHeadersStatus BidiContext::onRequestHeadersInbound() {
 }
 
 FilterHeadersStatus BidiContext::onRequestHeadersOutbound() {
-    LOG_WARN("Incrementing count.");
-    root_->incrementCount();
-    auto curr_count = root_->getCount();
-    gauge_->record(curr_count, 0);
-    LOG_WARN("Current count: " + toString(curr_count));
-    if (curr_count > REQUEST_THRESHOLD) {
-        LOG_ERROR("Request queue " + toString(curr_count) +
+    auto request_id = getRequestHeader("x-request-id");
+    if (request_id->data() == nullptr) {
+        LOG_WARN(trafficDirectionToString(direction_) + " " +
+                 "x-request-id not found!");
+        return FilterHeadersStatus::Continue;
+    }
+    std::string x_request_id_ = request_id->toString();
+    root_->pending_requests.insert(x_request_id_);
+    LOG_WARN("Inserting pending request " + x_request_id_ + ".");
+    auto curr_queue_size = root_->pending_requests.size();
+    gauge_->record(curr_queue_size, 0);
+    LOG_WARN("Current size of request queue: " + toString(curr_queue_size));
+    if (curr_queue_size > REQUEST_THRESHOLD) {
+        LOG_ERROR("Request queue " + toString(curr_queue_size) +
                   " is above threshold " + toString(REQUEST_THRESHOLD) + ".");
         store_warning();
     }
@@ -203,11 +211,18 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t, bool) {
 }
 
 FilterHeadersStatus BidiContext::onResponseHeadersInbound() {
-    LOG_WARN("Decrementing count.");
-    root_->decrementCount();
-    auto curr_count = root_->getCount();
-    gauge_->record(curr_count, 0);
-    LOG_WARN("Current count: " + toString(curr_count));
+    auto request_id = getResponseHeader("x-request-id");
+    if (request_id->data() == nullptr) {
+        LOG_WARN(trafficDirectionToString(direction_) + " " +
+                 "x-request-id not found!");
+        return FilterHeadersStatus::Continue;
+    }
+    std::string x_request_id_ = request_id->toString();
+    root_->pending_requests.erase(x_request_id_);
+    LOG_WARN("Removing pending request " + x_request_id_ + ".");
+    auto curr_queue_size = root_->pending_requests.size();
+    gauge_->record(curr_queue_size, 0);
+    LOG_WARN("Current size of request queue: " + toString(curr_queue_size));
     return FilterHeadersStatus::Continue;
 }
 

@@ -2,7 +2,7 @@
 apiVersion: networking.istio.io/v1alpha3
 kind: EnvoyFilter
 metadata:
-  name: custom-protocol
+  name: custom-network-config
   namespace: default  # as defined in meshConfig resource.
 spec:
   configPatches:
@@ -22,3 +22,26 @@ spec:
           generate_request_id: true
           preserve_external_request_id: true
           always_set_request_id_in_response: true
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: custom-route-config
+  namespace: default  # as defined in meshConfig resource.
+spec:
+  configPatches:
+  - applyTo: ROUTE_CONFIGURATION
+    match:
+      context: ANY
+      # context omitted so that this applies to both sidecars and gateways
+      route:
+        destination:
+          host: "*"
+    patch:
+      operation: MERGE
+      value:
+          response_headers_to_add:
+          - header:
+              key: x-request-id
+              value: "%REQ(x-request-id)%"
+

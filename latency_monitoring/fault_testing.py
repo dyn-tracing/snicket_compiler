@@ -283,10 +283,14 @@ def build_filter(filter_dir, filter_name):
     log.info("Pushing the filter...")
     cmd = f"{PATCHED_WASME_BIN} push {filter_name}:{FILTER_TAG}"
     result = util.exec_process(cmd)
+    # Give it some room to breathe
+    time.sleep(2)
     return result
 
 
 def undeploy_filter(filter_name):
+    cmd = f"kubectl delete -f {YAML_DIR}/istio-config.yaml "
+    util.exec_process(cmd)
     cmd = f"{WASME_BIN} undeploy istio {filter_name}:{FILTER_TAG} "
     cmd += f"–provider=istio --id {FILTER_ID} "
     # cmd += "--labels \"app=reviews\" "
@@ -314,6 +318,9 @@ def deploy_filter(filter_name):
     # cmd += "--labels \"app=reviews\" "
     result = util.exec_process(cmd)
     bookinfo_wait()
+    # apply our customization configuration to the mesh
+    cmd = f"kubectl apply -f {YAML_DIR}/istio-config.yaml "
+    result = util.exec_process(cmd)
 
     return result
 
