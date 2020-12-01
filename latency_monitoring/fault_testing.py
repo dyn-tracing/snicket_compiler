@@ -289,6 +289,7 @@ def build_filter(filter_dir, filter_name):
 def undeploy_filter(filter_name):
     cmd = f"{WASME_BIN} undeploy istio {filter_name}:{FILTER_TAG} "
     cmd += f"–provider=istio --id {FILTER_ID} "
+    # cmd += "--labels \"app=reviews\" "
     result = util.exec_process(cmd)
     if result != util.EXIT_SUCCESS:
         return result
@@ -300,6 +301,7 @@ def deploy_filter(filter_name):
     # first deploy with the unidirectional wasme binary
     cmd = f"{WASME_BIN} deploy istio {filter_name}:{FILTER_TAG} "
     cmd += f"–provider=istio --id {FILTER_ID} "
+    # cmd += "--labels \"app=reviews\" "
     result = util.exec_process(cmd)
     if result != util.EXIT_SUCCESS:
         return result
@@ -309,7 +311,7 @@ def deploy_filter(filter_name):
     # now redeploy with the patched bidirectional wasme
     cmd = f"{PATCHED_WASME_BIN} deploy istio {filter_name}:{FILTER_TAG} "
     cmd += f"–provider=istio --id {FILTER_ID} "
-    # cmd += "--config \'{\"name\": \"always_set_request_id_in_response\",\"value\": \"true\"}\' "
+    # cmd += "--labels \"app=reviews\" "
     result = util.exec_process(cmd)
     bookinfo_wait()
 
