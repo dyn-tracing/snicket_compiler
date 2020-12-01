@@ -6,7 +6,7 @@
 #include "google/protobuf/util/json_util.h"
 #include "proxy_wasm_intrinsics.h"
 
-#define REQUEST_THRESHOLD 2
+#define REQUEST_THRESHOLD 10
 #define STORAGE_NAME "storage-upstream"
 
 enum class TrafficDirection : int64_t {
@@ -70,8 +70,6 @@ class BidiContext : public Context {
         : Context(id, root),
           root_(static_cast<BidiRootContext *>(static_cast<void *>(root))) {
         direction_ = getTrafficDirection();
-        LOG_WARN("Got traffic direction, is " +
-                 trafficDirectionToString(direction_));
         gauge_ = Gauge<int>::New("queue_gauge", "queue_size");
     }
 
@@ -154,25 +152,32 @@ void BidiContext::print_headers(WasmHeaderMapType type) {
 ////////////////// REQUEST HEADERS //////////////////
 
 FilterHeadersStatus BidiContext::onRequestHeaders(uint32_t, bool) {
-    LOG_WARN("############################################");
+    FilterHeadersStatus status;
+
+    LOG_WARN("REQUEST BEGIN ############################################");
     // Print all request headers
     print_headers(WasmHeaderMapType::RequestHeaders);
 
     replaceRequestHeader("x-envoy-force-trace", "true");
     if (direction_ == TrafficDirection::Inbound) {
-        return onRequestHeadersInbound();
+        status = onRequestHeadersInbound();
     } else if (direction_ == TrafficDirection::Outbound) {
-        return onRequestHeadersOutbound();
+        status = onRequestHeadersOutbound();
+    } else {
+        LOG_ERROR("Missing request header direction.");
+        status = FilterHeadersStatus::Continue;
     }
-    LOG_ERROR("Missing request header direction.");
-    return FilterHeadersStatus::Continue;
+    LOG_WARN("REQUEST END ############################################");
+    return status;
 }
 
 FilterHeadersStatus BidiContext::onRequestHeadersInbound() {
+    LOG_WARN("Inbound request.");
     return FilterHeadersStatus::Continue;
 }
 
 FilterHeadersStatus BidiContext::onRequestHeadersOutbound() {
+    LOG_WARN("Outbound request.");
     auto request_id = getRequestHeader("x-request-id");
     if (request_id->data() == nullptr) {
         LOG_WARN(trafficDirectionToString(direction_) + " " +
@@ -196,21 +201,27 @@ FilterHeadersStatus BidiContext::onRequestHeadersOutbound() {
 ////////////////// RESPONSE HEADERS //////////////////
 
 FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t, bool) {
-    LOG_WARN("############################################");
+    FilterHeadersStatus status;
+
+    LOG_WARN("RESPONSE BEGIN ############################################");
     print_headers(WasmHeaderMapType::ResponseHeaders);
 
     replaceResponseHeader("location", "envoy-wasm");
     replaceResponseHeader("x-envoy-force-trace", "true");
     if (direction_ == TrafficDirection::Inbound) {
-        return onResponseHeadersInbound();
+        status = onResponseHeadersInbound();
     } else if (direction_ == TrafficDirection::Outbound) {
-        return onResponseHeadersOutbound();
+        status = onResponseHeadersOutbound();
+    } else {
+        LOG_ERROR("Missing response header direction.");
+        status = FilterHeadersStatus::Continue;
     }
-    LOG_WARN("in response headers but no direction given");
-    return FilterHeadersStatus::Continue;
+    LOG_WARN("RESPONSE END ############################################");
+    return status;
 }
 
 FilterHeadersStatus BidiContext::onResponseHeadersInbound() {
+    LOG_WARN("Inbound response.");
     auto request_id = getResponseHeader("x-request-id");
     if (request_id->data() == nullptr) {
         LOG_WARN(trafficDirectionToString(direction_) + " " +
@@ -227,6 +238,7 @@ FilterHeadersStatus BidiContext::onResponseHeadersInbound() {
 }
 
 FilterHeadersStatus BidiContext::onResponseHeadersOutbound() {
+    LOG_WARN("Outbound response.");
     return FilterHeadersStatus::Continue;
 }
 
