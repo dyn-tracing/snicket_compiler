@@ -29,7 +29,7 @@ FILTER_TAG = "1"
 FILTER_ID = "test"
 
 
-# the kubernetes python API sucks
+# the kubernetes python API sucks, but keep this for later
 
 # from kubernetes import client
 # from kubernetes.client.configuration import Configuration
@@ -94,13 +94,15 @@ def deploy_bookinfo():
     # launch bookinfo
     samples_dir = f"{ISTIO_DIR}/samples"
     bookinfo_dir = f"{samples_dir}/bookinfo"
-    apply_cmd = f"kubectl apply -f {bookinfo_dir}"
-    cmd = f"{apply_cmd}/platform/kube/bookinfo.yaml && "
-    cmd += f"{apply_cmd}/networking/bookinfo-gateway.yaml && "
-    cmd += f"{apply_cmd}/networking/destination-rule-all.yaml && "
-    cmd += f"{apply_cmd}/networking/destination-rule-all-mtls.yaml && "
-    cmd += f"kubectl apply -f {YAML_DIR}/storage-upstream.yaml && "
-    cmd += f"kubectl apply -f {YAML_DIR}/productpage-cluster.yaml "
+    apply_cmd = "kubectl apply -f"
+    book_cmd = f"{apply_cmd} {bookinfo_dir}"
+    cmd = f"{apply_cmd} {YAML_DIR}/bookinfo-mod.yaml && "
+    cmd += f"{book_cmd}/networking/bookinfo-gateway.yaml && "
+    cmd += f"{book_cmd}/networking/destination-rule-all.yaml && "
+    cmd += f"{book_cmd}/networking/destination-rule-all-mtls.yaml && "
+    cmd += f"{apply_cmd} {YAML_DIR}/storage-upstream.yaml && "
+    cmd += f"{apply_cmd} {YAML_DIR}/productpage-cluster.yaml "
+    # disable this and use the non-container version of fortio
     # cmd += f"{apply_cmd}/../httpbin/sample-client/fortio-deploy.yaml "
     result = util.exec_process(cmd)
     bookinfo_wait()
@@ -289,7 +291,8 @@ def build_filter(filter_dir, filter_name):
 
 
 def undeploy_filter(filter_name):
-    cmd = f"kubectl delete -f {YAML_DIR}/istio-config.yaml "
+    cmd = f"kubectl delete -f {YAML_DIR}/istio-config.yaml && "
+    cmd += f"kubectl delete -f {YAML_DIR}/virtual-service-reviews-balance.yaml "
     util.exec_process(cmd)
     cmd = f"{WASME_BIN} undeploy istio {filter_name}:{FILTER_TAG} "
     cmd += f"–provider=istio --id {FILTER_ID} "
@@ -319,7 +322,8 @@ def deploy_filter(filter_name):
     result = util.exec_process(cmd)
     bookinfo_wait()
     # apply our customization configuration to the mesh
-    cmd = f"kubectl apply -f {YAML_DIR}/istio-config.yaml "
+    cmd = f"kubectl apply -f {YAML_DIR}/istio-config.yaml && "
+    cmd += f"kubectl apply -f {YAML_DIR}/virtual-service-reviews-balance.yaml "
     result = util.exec_process(cmd)
 
     return result

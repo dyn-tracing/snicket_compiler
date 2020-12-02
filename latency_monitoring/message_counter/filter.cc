@@ -8,12 +8,16 @@
 
 #define REQUEST_THRESHOLD 10
 #define STORAGE_NAME "storage-upstream"
+// toggle to enable counter over queue tracking
+// #DEFINE COUNTER
+
 
 enum class TrafficDirection : int64_t {
     Unspecified = 0,
     Inbound = 1,
     Outbound = 2,
 };
+
 
 // Retrieves the traffic direction from the configuration context.
 TrafficDirection getTrafficDirection() {
@@ -63,14 +67,15 @@ class BidiRootContext : public RootContext {
 
         std::string count_key = "count";
         result = proxy_get_shared_data(count_key.c_str(), count_key.size(),
-                              (const char **)&tmp_count, size, 0);
+                                       (const char **)&tmp_count, size, 0);
         if (result != WasmResult::Ok) {
             LOG_ERROR("Failed to get shared data " + count_key + ".");
             return;
         }
         (*tmp_count)++;
         result = proxy_set_shared_data(count_key.c_str(), count_key.size(),
-                              (const char *)tmp_count, sizeof(*tmp_count), 0);
+                                       (const char *)tmp_count,
+                                       sizeof(*tmp_count), 0);
         if (result != WasmResult::Ok) {
             LOG_ERROR("Failed to set shared data " + count_key + ".");
         }
@@ -81,14 +86,15 @@ class BidiRootContext : public RootContext {
         size_t *size;
         std::string count_key = "count";
         result = proxy_get_shared_data(count_key.c_str(), count_key.size(),
-                              (const char **)&tmp_count, size, 0);
+                                       (const char **)&tmp_count, size, 0);
         if (result != WasmResult::Ok) {
             LOG_ERROR("Failed to get shared data " + count_key + ".");
             return;
         }
         (*tmp_count)--;
         result = proxy_set_shared_data(count_key.c_str(), count_key.size(),
-                              (const char *)tmp_count, sizeof(*tmp_count), 0);
+                                       (const char *)tmp_count,
+                                       sizeof(*tmp_count), 0);
         if (result != WasmResult::Ok) {
             LOG_ERROR("Failed to set shared data " + count_key + ".");
         }
@@ -99,7 +105,7 @@ class BidiRootContext : public RootContext {
         size_t *size;
         std::string count_key = "count";
         result = proxy_get_shared_data(count_key.c_str(), count_key.size(),
-                              (const char **)&tmp_count, size, 0);
+                                       (const char **)&tmp_count, size, 0);
         if (result != WasmResult::Ok) {
             LOG_ERROR("Failed to get shared data " + count_key + ".");
             return -1;
@@ -220,30 +226,34 @@ FilterHeadersStatus BidiContext::onRequestHeaders(uint32_t, bool) {
 
 FilterHeadersStatus BidiContext::onRequestHeadersInbound() {
     LOG_WARN("Inbound request.");
-    return FilterHeadersStatus::Continue;
-}
-
-FilterHeadersStatus BidiContext::onRequestHeadersOutbound() {
-    LOG_WARN("Outbound request.");
+    int curr_queue_size;
+#ifdef COUNTER
+    root_->incrementCount();
+    curr_queue_size = root_->getCount();
+#else
     auto request_id = getRequestHeader("x-request-id");
     if (request_id->data() == nullptr) {
         LOG_WARN(trafficDirectionToString(direction_) + " " +
                  "x-request-id not found!");
         return FilterHeadersStatus::Continue;
     }
-    // std::string x_request_id_ = request_id->toString();
-    // LOG_WARN("Inserting pending request " + x_request_id_ + ".");
-    // root_->pending_requests.insert(x_request_id_);
-    // auto curr_queue_size = root_->pending_requests.size();
+    std::string x_request_id_ = request_id->toString();
+    LOG_WARN("Inserting pending request " + x_request_id_ + ".");
+    root_->pending_requests.insert(x_request_id_);
+    curr_queue_size = root_->pending_requests.size();
+#endif
     // gauge_->record(curr_queue_size, 0);
-    root_->incrementCount();
-    auto curr_queue_size = root_->getCount();
     LOG_WARN("Current size of request queue: " + toString(curr_queue_size));
     if (curr_queue_size > REQUEST_THRESHOLD) {
         LOG_ERROR("Request queue " + toString(curr_queue_size) +
                   " is above threshold " + toString(REQUEST_THRESHOLD) + ".");
         store_warning();
     }
+    return FilterHeadersStatus::Continue;
+}
+
+FilterHeadersStatus BidiContext::onRequestHeadersOutbound() {
+    LOG_WARN("Outbound request.");
     return FilterHeadersStatus::Continue;
 }
 
@@ -270,25 +280,29 @@ FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t, bool) {
 
 FilterHeadersStatus BidiContext::onResponseHeadersInbound() {
     LOG_WARN("Inbound response.");
-    return FilterHeadersStatus::Continue;
-}
-
-FilterHeadersStatus BidiContext::onResponseHeadersOutbound() {
-    LOG_WARN("Outbound response.");
+    int curr_queue_size;
+#ifdef COUNTER
+    root_->decrementCount();
+    curr_queue_size = root_->getCount();
+#else
     auto request_id = getResponseHeader("x-request-id");
     if (request_id->data() == nullptr) {
         LOG_WARN(trafficDirectionToString(direction_) + " " +
                  "x-request-id not found!");
         return FilterHeadersStatus::Continue;
     }
-    // std::string x_request_id_ = request_id->toString();
-    // root_->pending_requests.erase(x_request_id_);
-    // auto curr_queue_size = root_->pending_requests.size();
-    // LOG_WARN("Removing pending request " + x_request_id_ + ".");
-    root_->decrementCount();
-    auto curr_queue_size = root_->getCount();
+    std::string x_request_id_ = request_id->toString();
+    root_->pending_requests.erase(x_request_id_);
+    curr_queue_size = root_->pending_requests.size();
+    LOG_WARN("Removing pending request " + x_request_id_ + ".");
+#endif
     gauge_->record(curr_queue_size, 0);
     LOG_WARN("Current size of request queue: " + toString(curr_queue_size));
+    return FilterHeadersStatus::Continue;
+}
+
+FilterHeadersStatus BidiContext::onResponseHeadersOutbound() {
+    LOG_WARN("Outbound response.");
     return FilterHeadersStatus::Continue;
 }
 
