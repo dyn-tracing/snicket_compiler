@@ -3,6 +3,7 @@ import argparse
 import logging
 import sys
 import time
+import calendar
 import os
 import signal
 from datetime import datetime
@@ -22,11 +23,13 @@ ISTIO_BIN = ISTIO_DIR.joinpath("bin/istioctl")
 WASME_BIN = FILE_DIR.joinpath("bin/wasme")
 PATCHED_WASME_BIN = FILE_DIR.joinpath("bin/wasme_patched")
 YAML_DIR = FILE_DIR.joinpath("yaml_crds")
+TOOLS_DIR = FILE_DIR.joinpath("tools")
 
 FILTER_NAME = ""
 FILTER_DIR = FILE_DIR.joinpath("message_counter")
 FILTER_TAG = "1"
 FILTER_ID = "test"
+CONGESTION_PERIOD = 10000000
 
 
 # the kubernetes python API sucks
@@ -62,9 +65,10 @@ def deploy_addons():
     url = "https://raw.githubusercontent.com/istio/istio/release-1.8"
     cmd = f"{apply_cmd} {url}/samples/addons/prometheus.yaml && "
     cmd += f"{apply_cmd} {url}/samples/addons/grafana.yaml && "
-    cmd += f"{apply_cmd} {url}/samples/addons/jaeger.yaml && "
-    cmd += f"{apply_cmd} {url}/samples/addons/kiali.yaml || "
-    cmd += f"{apply_cmd} {url}/samples/addons/kiali.yaml"
+    cmd += f"{apply_cmd} {url}/samples/addons/jaeger.yaml"
+    #cmd += f"{apply_cmd} {url}/samples/addons/jaeger.yaml && "
+    #cmd += f"{apply_cmd} {url}/samples/addons/kiali.yaml || "
+    #cmd += f"{apply_cmd} {url}/samples/addons/kiali.yaml"
     result = util.exec_process(cmd)
 
     wait_cmd = "/bin/bash -c "
@@ -86,8 +90,8 @@ def bookinfo_wait():
     return result
 
 
-def deploy_bookinfo():
-    if check_kubernetes_status() != util.EXIT_SUCCESS:
+def deploy_bookinfo(platform):
+    if platform != "GCP" and check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
@@ -187,15 +191,71 @@ def setup_bookinfo_deployment(platform):
     result = inject_istio()
     if result != util.EXIT_SUCCESS:
         return result
-    result = deploy_bookinfo()
+    result = deploy_bookinfo(platform)
     if result != util.EXIT_SUCCESS:
         return result
     result = deploy_addons()
     return result
 
+def cause_congestion():
+    cur_time = calendar.timegm(time.gmtime())
+    print("causing congestion at " + str(cur_time))
+    cmd = f"{TOOLS_DIR}/parallel_curl/pc $GATEWAY_URL/productpage"
+    curls = util.get_output_from_proc(cmd)
 
-def launch_prometheus():
-    if check_kubernetes_status() != util.EXIT_SUCCESS:
+
+def find_congestion():
+    cmd = f"kubectl get pods -lapp=storage-upstream -o "
+    cmd += "jsonpath={.items[0].metadata.name}"
+    storage_name = util.get_output_from_proc(cmd).decode("utf-8")
+    cmd = f"kubectl port-forward " + storage_name + f" 8080 &"
+    util.start_process(cmd, preexec_fn=os.setsid)
+    cmd = f"curl localhost:8080/list"
+    output = util.get_output_from_proc(cmd).decode("utf-8")
+    output = output.split("\n")
+    logs = []
+    for line in output:
+        if "->" in line and ":" in line:
+            time, namecount = line.split("->")
+            name, count = namecount.split(":")
+            logs.append([time, name, count])
+    if logs == []:
+        print("No congestion found")
+        return
+    logs = sorted(logs)
+    # these variables represent the index of the log where we find congestion
+    reviews2congested = -1
+    reviews3congested = -1
+    if "1" in logs[0][1]:
+        reviews2congested = 0
+    if "2" in logs[0][1]:
+        reviews3congested = 0
+
+    foundCongestion = False
+    start = 0
+    while start < len(logs)-1:
+        i = start+1
+        while int(logs[start][0]) + CONGESTION_PERIOD > int(logs[i][0]):
+            if "2" in logs[i][0]:
+                reviews2congested = i
+            if "3" in logs[i][0]:
+                reviews3congested = i
+            if reviews2congested != -1 and reviews3congested != -1:
+                print("congestion at 2 and 3 between times " + logs[reviews2congested][0] + " and " + logs[reviews3congested][0])
+                foundCongestion = True
+                break
+            i += 1
+        reviews2congested = -1
+        reviews3congested = -1
+        start += 1
+    if not foundCongestion:
+        print("no congestion found")
+
+        
+
+
+def launch_prometheus(platform):
+    if platform != "GCP" and check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
@@ -210,8 +270,8 @@ def launch_prometheus():
     return prom_proc, prom_api
 
 
-def launch_storage_mon():
-    if check_kubernetes_status() != util.EXIT_SUCCESS:
+def launch_storage_mon(platform):
+    if platform != "GCP" and check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
@@ -241,8 +301,8 @@ def query_loop(prom_api, seconds):
         time.sleep(1)
 
 
-def test_fault_injection(prom_api):
-    if check_kubernetes_status() != util.EXIT_SUCCESS:
+def test_fault_injection(prom_api, platform):
+    if platform != "GCP" and check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
@@ -289,7 +349,7 @@ def build_filter(filter_dir, filter_name):
 
 
 def undeploy_filter(filter_name):
-    cmd = f"kubectl delete -f {YAML_DIR}/istio-config.yaml "
+    cmd = f"kubectl delete -f {YAML_DIR}/istio-config-gcp.yaml "
     util.exec_process(cmd)
     cmd = f"{WASME_BIN} undeploy istio {filter_name}:{FILTER_TAG} "
     cmd += f"–provider=istio --id {FILTER_ID} "
@@ -365,7 +425,7 @@ def main(args):
     if args.setup:
         return setup_bookinfo_deployment(args.platform)
     if args.deploy_bookinfo:
-        return deploy_bookinfo()
+        return deploy_bookinfo(platform)
     if args.remove_bookinfo:
         return remove_bookinfo()
     handle_filter(args)
@@ -373,9 +433,13 @@ def main(args):
         return stop_kubernetes(args.platform)
     if args.full_run:
         setup_bookinfo_deployment(args.platform)
+    if args.find_congestion:
+        return find_congestion()
+    if args.cause_congestion:
+        return cause_congestion()
     # test the fault injection on an existing deployment
-    prom_proc, prom_api = launch_prometheus()
-    test_fault_injection(prom_api)
+    prom_proc, prom_api = launch_prometheus(platform)
+    test_fault_injection(prom_api, platform)
     os.killpg(os.getpgid(prom_proc.pid), signal.SIGINT)
 
     if args.full_run:
@@ -436,6 +500,12 @@ if __name__ == '__main__':
     parser.add_argument("-rf", "--refresh-filter", dest="refresh_filter",
                         action="store_true",
                         help="Refresh the WASME filter. ")
+    parser.add_argument("-fc", "--find-congestion", dest="find_congestion",
+                        action="store_true",
+                        help="Find congestion in the logs. ")
+    parser.add_argument("-cc", "--cause-congestion", dest="cause_congestion",
+                        action="store_true",
+                        help="Cause congestion/queue buildup. ")
     # Parse options and process argv
     arguments = parser.parse_args()
     # configure logging
