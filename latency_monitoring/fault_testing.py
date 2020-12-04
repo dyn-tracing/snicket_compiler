@@ -29,7 +29,7 @@ FILTER_NAME = ""
 FILTER_DIR = FILE_DIR.joinpath("message_counter")
 FILTER_TAG = "1"
 FILTER_ID = "test"
-CONGESTION_PERIOD = 10000000
+CONGESTION_PERIOD = 1607016396875512000
 
 
 # the kubernetes python API sucks, but keep this for later
@@ -141,11 +141,16 @@ def check_kubernetes_status():
     return result
 
 
-def start_kubernetes(platform):
+def start_kubernetes(platform, multizonal):
     if platform == "GCP":
-        cmd = "gcloud container clusters create demo --enable-autoupgrade "
-        cmd += "--enable-autoscaling --min-nodes=3 --max-nodes=10 "
-        cmd += "--num-nodes=5 --zone=us-central1-a"
+        if multizonal:
+            emd = "gcloud container clusters create demo --enable-autoupgrade "
+            cmd += "--enable-autoscaling --min-nodes=3 --max-nodes=10 "
+            cmd += "--num-nodes=5 --region us-central1-a --node-locations us-central1-b us-central1-c us-central1-a"
+        else:
+            cmd = "gcloud container clusters create demo --enable-autoupgrade "
+            cmd += "--enable-autoscaling --min-nodes=3 --max-nodes=10 "
+            cmd += "--num-nodes=5 --zone=us-central1-a"
     else:
         cmd = "minikube start --memory=8192 --cpus=4 "
     result = util.exec_process(cmd)
@@ -162,13 +167,25 @@ def stop_kubernetes(platform):
     return result
 
 
-def get_gateway_info():
-    cmd = "minikube ip"
-    ingress_host = util.get_output_from_proc(cmd).decode("utf-8").rstrip()
+def get_gateway_info(platform):
+    ingress_host = ""
+    ingress_port = ""
+    if platform == "GCP":
+        cmd = f"kubectl -n istio-system get service istio-ingressgateway -o jsonpath=" + "'"
+        cmd += "{.status.loadBalancer.ingress[0].ip}" +  "'"
+        ingress_host = util.get_output_from_proc(cmd).decode("utf-8").replace("'", "")
+        
+        cmd = "kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="
+        cmd += '"' + "http2" + '"' + ")].port}'"
+        ingress_port = util.get_output_from_proc(cmd).decode("utf-8").replace("'", "")
+    else:
+        cmd = "minikube ip"
+        ingress_host = util.get_output_from_proc(cmd).decode("utf-8").rstrip()
+        cmd = "kubectl -n istio-system get service istio-ingressgateway"
+        cmd += " -o jsonpath={.spec.ports[?(@.name==\"http2\")].nodePort}"
+        ingress_port = util.get_output_from_proc(cmd).decode("utf-8")
+
     log.info("Ingress Host: %s", ingress_host)
-    cmd = "kubectl -n istio-system get service istio-ingressgateway"
-    cmd += " -o jsonpath={.spec.ports[?(@.name==\"http2\")].nodePort}"
-    ingress_port = util.get_output_from_proc(cmd).decode("utf-8")
     log.info("Ingress Port: %s", ingress_port)
     gateway_url = f"{ingress_host}:{ingress_port}"
     log.info("Gateway: %s", gateway_url)
@@ -181,14 +198,14 @@ def start_fortio(gateway_url):
     # fortio_pod_name = util.get_output_from_proc(cmd).decode("utf-8")
     # cmd = f"kubectl exec {fortio_pod_name} -c fortio -- /usr/bin/fortio "
     cmd = f"{FILE_DIR}/bin/fortio "
-    cmd += "load -c 1 -qps 25 -t 0 -loglevel Warning "
+    cmd += "load -c 1 -qps 50 -t 0 -loglevel Warning "
     cmd += f"http://{gateway_url}/productpage"
     fortio_proc = util.start_process(cmd, preexec_fn=os.setsid)
     return fortio_proc
 
 
-def setup_bookinfo_deployment(platform):
-    start_kubernetes(platform)
+def setup_bookinfo_deployment(platform, multizonal):
+    start_kubernetes(platform, multizonal)
     result = inject_istio()
     if result != util.EXIT_SUCCESS:
         return result
@@ -200,10 +217,11 @@ def setup_bookinfo_deployment(platform):
 
 
 def cause_congestion():
-    cur_time = calendar.timegm(time.gmtime())
-    log.info("causing congestion at " + str(cur_time))
+    cur_time = time.time()/0.000000001 # everything is in nanoseconds
+    log.info("causing congestion at " + '%f' % (cur_time))
     cmd = f"{TOOLS_DIR}/parallel_curl/pc $GATEWAY_URL/productpage"
     curls = util.get_output_from_proc(cmd)
+    print(curls)
 
 
 def find_congestion():
@@ -217,10 +235,9 @@ def find_congestion():
     output = output.split("\n")
     logs = []
     for line in output:
-        if "->" in line and ":" in line:
-            time, namecount = line.split("->")
-            name, count = namecount.split(":")
-            logs.append([time, name, count])
+        if "->" in line:
+            time, name = line.split("->")
+            logs.append([time, name])
     if logs == []:
         log.info("No congestion found")
         return
@@ -235,9 +252,10 @@ def find_congestion():
 
     foundCongestion = False
     start = 0
+    fromNanosecondsToSeconds = 1000000000
     while start < len(logs) - 1:
         i = start + 1
-        while int(logs[start][0]) + CONGESTION_PERIOD > int(logs[i][0]):
+        while i<len(logs) and int(logs[start][0]) + CONGESTION_PERIOD > int(logs[i][0]):
             if "2" in logs[i][0]:
                 reviews2congested = i
             if "3" in logs[i][0]:
@@ -304,24 +322,28 @@ def query_loop(prom_api, seconds):
         time.sleep(1)
 
 
-def test_fault_injection(prom_api):
+def test_fault_injection(prom_api, platform):
     if check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
     # once everything has started, retrieve the necessary url info
-    _, _, gateway_url = get_gateway_info()
+    _, _, gateway_url = get_gateway_info(platform)
     fortio_proc = start_fortio(gateway_url)
     # let things sink in a little
-    log.info("Running Fortio at time %s", datetime.now())
-    query_loop(prom_api, 60)
-    log.info("Injecting latency at time %s", datetime.now())
+    cur_time = time.time()/0.000000001 # everything is in nanoseconds
+    log.info("Running Fortio at time %s", cur_time)
+    #query_loop(prom_api, 60)
+    cur_time = time.time()/0.000000001 # everything is in nanoseconds
+    log.info("Injecting latency at time %s", cur_time)
     inject_failure()
-    query_loop(prom_api, 60)
-    log.info("Removing latency at time %s", datetime.now())
+    query_loop(prom_api, 10)
+    cur_time = time.time()/0.000000001 # everything is in nanoseconds
+    log.info("Removing latency at time %s", cur_time)
     remove_failure()
-    query_loop(prom_api, 60)
-    log.info("Done at time %s", datetime.now())
+    #query_loop(prom_api, 60)
+    cur_time = time.time()/0.000000001 # everything is in nanoseconds
+    log.info("Done at time %s", cur_time)
     # terminate fortio by sending an interrupt to the process group
     os.killpg(os.getpgid(fortio_proc.pid), signal.SIGINT)
 
@@ -428,7 +450,7 @@ def handle_filter(args):
 
 def main(args):
     if args.setup:
-        return setup_bookinfo_deployment(args.platform)
+        return setup_bookinfo_deployment(args.platform, args.multizonal)
     if args.deploy_bookinfo:
         return deploy_bookinfo()
     if args.remove_bookinfo:
@@ -437,14 +459,14 @@ def main(args):
     if args.clean:
         return stop_kubernetes(args.platform)
     if args.full_run:
-        setup_bookinfo_deployment(args.platform)
+        setup_bookinfo_deployment(args.platform, args.multizonal)
     if args.find_congestion:
         return find_congestion()
     if args.cause_congestion:
         return cause_congestion()
     # test the fault injection on an existing deployment
     prom_proc, prom_api = launch_prometheus()
-    test_fault_injection(prom_api)
+    test_fault_injection(prom_api, args.platform)
     os.killpg(os.getpgid(prom_proc.pid), signal.SIGINT)
 
     if args.full_run:
@@ -468,6 +490,9 @@ if __name__ == '__main__':
                         choices=["MK", "GCP"],
                         help="Which platform to run the scripts on."
                              "MK is minikube, GCP is Google Cloud Compute")
+    parser.add_argument("-m", "--multi-zonal", dest="multizonal",
+                        action="store_true",
+                        help="If you are running on GCP, do you want a multi-zone cluster?")
     parser.add_argument("-f", "--full-run", dest="full_run",
                         action="store_true",
                         help="Whether to do a full run. "
