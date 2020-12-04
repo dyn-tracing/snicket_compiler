@@ -30,7 +30,7 @@ FILTER_DIR = FILE_DIR.joinpath("message_counter")
 FILTER_TAG = "1"
 FILTER_ID = "test"
 CONGESTION_PERIOD = 1607016396875512000
-
+TO_NANOSECONDS = 0.000000001 # everything is in nanoseconds
 
 # the kubernetes python API sucks, but keep this for later
 
@@ -198,7 +198,7 @@ def start_fortio(gateway_url):
     # fortio_pod_name = util.get_output_from_proc(cmd).decode("utf-8")
     # cmd = f"kubectl exec {fortio_pod_name} -c fortio -- /usr/bin/fortio "
     cmd = f"{FILE_DIR}/bin/fortio "
-    cmd += "load -c 1 -qps 50 -t 0 -loglevel Warning "
+    cmd += "load -c 50 -qps 500 -jitter -t 10s -loglevel Warning "
     cmd += f"http://{gateway_url}/productpage"
     fortio_proc = util.start_process(cmd, preexec_fn=os.setsid)
     return fortio_proc
@@ -217,7 +217,7 @@ def setup_bookinfo_deployment(platform, multizonal):
 
 
 def cause_congestion():
-    cur_time = time.time()/0.000000001 # everything is in nanoseconds
+    cur_time = time.time()/TO_NANOSECONDS # everything is in nanoseconds
     log.info("causing congestion at " + '%f' % (cur_time))
     cmd = f"{TOOLS_DIR}/parallel_curl/pc $GATEWAY_URL/productpage"
     curls = util.get_output_from_proc(cmd)
@@ -252,7 +252,6 @@ def find_congestion():
 
     foundCongestion = False
     start = 0
-    fromNanosecondsToSeconds = 1000000000
     while start < len(logs) - 1:
         i = start + 1
         while i<len(logs) and int(logs[start][0]) + CONGESTION_PERIOD > int(logs[i][0]):
@@ -331,18 +330,18 @@ def test_fault_injection(prom_api, platform):
     _, _, gateway_url = get_gateway_info(platform)
     fortio_proc = start_fortio(gateway_url)
     # let things sink in a little
-    cur_time = time.time()/0.000000001 # everything is in nanoseconds
+    cur_time = time.time()/TO_NANOSECONDS
     log.info("Running Fortio at time %s", cur_time)
     #query_loop(prom_api, 60)
-    cur_time = time.time()/0.000000001 # everything is in nanoseconds
+    cur_time = time.time()/TO_NANOSECONDS
     log.info("Injecting latency at time %s", cur_time)
     inject_failure()
     query_loop(prom_api, 10)
-    cur_time = time.time()/0.000000001 # everything is in nanoseconds
+    cur_time = time.time()/TO_NANOSECONDS
     log.info("Removing latency at time %s", cur_time)
     remove_failure()
     #query_loop(prom_api, 60)
-    cur_time = time.time()/0.000000001 # everything is in nanoseconds
+    cur_time = time.time()/TO_NANOSECONDS
     log.info("Done at time %s", cur_time)
     # terminate fortio by sending an interrupt to the process group
     os.killpg(os.getpgid(fortio_proc.pid), signal.SIGINT)
