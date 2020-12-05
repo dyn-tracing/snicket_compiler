@@ -9,6 +9,7 @@ import signal
 from datetime import datetime
 from pathlib import Path
 import requests
+import csv
 
 from prometheus_api_client import PrometheusConnect
 
@@ -31,6 +32,8 @@ FILTER_TAG = "1"
 FILTER_ID = "test"
 CONGESTION_PERIOD = 1607016396875512000
 TO_NANOSECONDS = 0.000000001 # everything is in nanoseconds
+NUM_RUNS = 10
+OUTPUT_FILE = "output.csv"
 
 # the kubernetes python API sucks, but keep this for later
 
@@ -204,6 +207,19 @@ def start_fortio(gateway_url):
     return fortio_proc
 
 
+def wait_until_pods_ready(platform):
+    if platform == "GCP":
+        cmd = "kubectl get pods --field-selector status.phase!=Running --all-namespaces"
+        output = util.get_output_from_proc(cmd).decode("utf-8")
+        try:
+            while "No resources found" not in str(output) and output != "" and output != b'':
+                print("waiting for resources to run")
+                time.sleep(2)
+                cmd = "kubectl get pods --field-selector status.phase!=Running --all-namespaces"
+                output = util.get_output_from_proc(cmd)
+        except:
+            import pdb; pdb.set_trace()
+
 def setup_bookinfo_deployment(platform, multizonal):
     start_kubernetes(platform, multizonal)
     result = inject_istio()
@@ -213,6 +229,7 @@ def setup_bookinfo_deployment(platform, multizonal):
     if result != util.EXIT_SUCCESS:
         return result
     result = deploy_addons()
+    wait_until_pods_ready(platform)
     return result
 
 
@@ -220,24 +237,35 @@ def cause_congestion():
     cur_time = time.time()/TO_NANOSECONDS # everything is in nanoseconds
     log.info("causing congestion at " + '%f' % (cur_time))
     cmd = f"{TOOLS_DIR}/parallel_curl/pc $GATEWAY_URL/productpage"
-    curls = util.get_output_from_proc(cmd)
-    print(curls)
+    curls = str(util.get_output_from_proc(cmd))
+    curls = curls[curls.find("sending burst at"):]
+    curls = curls[curls.find(":")+1:]
+    curls = curls.split()
+    return int(curls[0])
 
 
-def find_congestion():
+def find_congestion(time_to_start_looking=0):
     cmd = "kubectl get pods -lapp=storage-upstream -o "
     cmd += "jsonpath={.items[0].metadata.name}"
     storage_name = util.get_output_from_proc(cmd).decode("utf-8")
-    cmd = f"kubectl port-forward {storage_name} 8080 &"
-    util.start_process(cmd, preexec_fn=os.setsid)
-    cmd = "curl localhost:8080/list"
-    output = util.get_output_from_proc(cmd).decode("utf-8")
-    output = output.split("\n")
+    # don't ask me why but port forwarding wasn't working when
+    # executing with util commands.  Instead there is now a short
+    # script in tools that does it
+    try:
+        cmd = f"{TOOLS_DIR}/forward_storage_port.sh {storage_name}"
+        util.start_process(cmd, preexec_fn=os.setsid)
+        time.sleep(10)
+        cmd = "curl localhost:8080/list"
+        output = util.get_output_from_proc(cmd).decode("utf-8")
+        output = output.split("\n")
+    except:
+        import pdb; pdb.set_trace()
     logs = []
     for line in output:
         if "->" in line:
-            time, name = line.split("->")
-            logs.append([time, name])
+            time_in_line, name = line.split("->")
+            if int(time_in_line) > time_to_start_looking:
+                logs.append([time_in_line, name])
     if logs == []:
         log.info("No congestion found")
         return
@@ -245,6 +273,7 @@ def find_congestion():
     # these variables represent the index of the log where we find congestion
     reviews2congested = -1
     reviews3congested = -1
+    log.info("killed fortio")
     if "1" in logs[0][1]:
         reviews2congested = 0
     if "2" in logs[0][1]:
@@ -320,7 +349,6 @@ def query_loop(prom_api, seconds):
         query_prometheus(prom_api)
         time.sleep(1)
 
-
 def test_fault_injection(prom_api, platform):
     if check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
@@ -328,15 +356,15 @@ def test_fault_injection(prom_api, platform):
         sys.exit(util.EXIT_FAILURE)
     # once everything has started, retrieve the necessary url info
     _, _, gateway_url = get_gateway_info(platform)
-    fortio_proc = start_fortio(gateway_url)
-    # let things sink in a little
     cur_time = time.time()/TO_NANOSECONDS
     log.info("Running Fortio at time %s", cur_time)
-    #query_loop(prom_api, 60)
+    fortio_proc = start_fortio(gateway_url)
+    # let things sink in a little
+    query_loop(prom_api, 30)
     cur_time = time.time()/TO_NANOSECONDS
     log.info("Injecting latency at time %s", cur_time)
     inject_failure()
-    query_loop(prom_api, 10)
+    query_loop(prom_api, 30)
     cur_time = time.time()/TO_NANOSECONDS
     log.info("Removing latency at time %s", cur_time)
     remove_failure()
@@ -345,6 +373,65 @@ def test_fault_injection(prom_api, platform):
     log.info("Done at time %s", cur_time)
     # terminate fortio by sending an interrupt to the process group
     os.killpg(os.getpgid(fortio_proc.pid), signal.SIGINT)
+
+def kill_cluster():
+    cmd = f"gcloud container clusters delete demo --zone us-central1-a --quiet"
+    util.get_output_from_proc(cmd)
+    log.info("Cluster killed")
+
+def do_multiple_runs(platform, num_runs, output_file, prom_api):
+    _, _, gateway_url = get_gateway_info(platform)
+    with open(output_file, 'w') as csvfile:
+        writer = csv.writer(csvfile, delimiter=' ')
+        writer.writerow(["found congestion?", "congestion started", "congested detected", "difference in nanoseconds", "difference in milliseconds"])
+        for i in range(num_runs):
+            # once everything has started, retrieve the necessary url info
+            cur_time = time.time()/TO_NANOSECONDS
+            log.info("Running Fortio at time %s", cur_time)
+            fortio_proc = start_fortio(gateway_url)
+            # let things sink in a little
+            query_loop(prom_api, 30)
+            cur_time = time.time()/TO_NANOSECONDS
+            log.info("Injecting latency at time %s", cur_time)
+            inject_failure()
+            log.info("Sending burst")
+            time_of_congestion = cause_congestion()
+            query_loop(prom_api, 30)
+            cur_time = time.time()/TO_NANOSECONDS
+            log.info("Removing latency at time %s", cur_time)
+            remove_failure()
+            query_loop(prom_api, 5)
+            cur_time = time.time()/TO_NANOSECONDS
+            log.info("Done at time %s", cur_time)
+            # terminate fortio by sending an interrupt to the process group
+            os.killpg(os.getpgid(fortio_proc.pid), signal.SIGINT)
+            log.info("killed fortio")
+            time_of_congestion = 0
+            first_recorded_congestion = find_congestion(time_of_congestion)
+            if first_recorded_congestion != None:
+                print("Sent burst at " + str(time_of_congestion) + " and recorded it at " + str(first_recorded_congestion))
+                latency = int(first_recorded_congestion) - int(time_of_congestion)
+                print("This means the latency between sending and recording in storage is " + float(latency*TO_NANOSECONDS) + " seconds")
+                writer.writerow(["yes", time_of_congestion, first_recorded_congestion, latency, latency*TO_NANOSECONDS])
+            else:
+                writer.writerow(["no", "." * 4])
+                print("no congestion caused")
+
+
+def do_experiment(platform, multizonal, filter_name, num_runs, output_file):
+    setup_bookinfo_deployment(platform, multizonal)
+    prom_proc, prom_api = launch_prometheus()
+    deploy_filter(filter_name)
+    wait_until_pods_ready(platform)
+    if check_kubernetes_status() != util.EXIT_SUCCESS:
+        log.error("Kubernetes is not set up."
+                  " Did you run the deployment script?")
+        sys.exit(util.EXIT_FAILURE)
+    do_multiple_runs(platform, num_runs, output_file, prom_api)
+    if platform == "GCP":
+        kill_cluster()
+    # kill prometheus
+    os.killpg(os.getpgid(prom_proc.pid), signal.SIGINT)
 
 
 def build_filter(filter_dir, filter_name):
@@ -463,10 +550,11 @@ def main(args):
         return find_congestion()
     if args.cause_congestion:
         return cause_congestion()
+    if args.kill_cluster:
+        print("helo")
+        return kill_cluster()
     # test the fault injection on an existing deployment
-    prom_proc, prom_api = launch_prometheus()
-    test_fault_injection(prom_api, args.platform)
-    os.killpg(os.getpgid(prom_proc.pid), signal.SIGINT)
+    do_experiment(args.platform, args.multizonal, args.filter_name, args.num_runs, args.output_file) 
 
     if args.full_run:
         # all done with the test, clean up
@@ -535,6 +623,15 @@ if __name__ == '__main__':
     parser.add_argument("-cc", "--cause-congestion", dest="cause_congestion",
                         action="store_true",
                         help="Cause congestion/queue buildup. ")
+    parser.add_argument("-kc", "--kill-cluster", dest="kill_cluster",
+                        action="store_true",
+                        help="Kill the cluster. ")
+    parser.add_argument("-nr", "--num_runs", dest="num_runs",
+                        default=NUM_RUNS,
+                        help="Number of times to cause congestion as a part of an experiment. ")
+    parser.add_argument("-o", "--output_file", dest="output_file",
+                        default=OUTPUT_FILE,
+                        help="Where to write the results of an experiment ")
     # Parse options and process argv
     arguments = parser.parse_args()
     # configure logging
