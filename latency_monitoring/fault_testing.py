@@ -30,7 +30,7 @@ FILTER_DIR = FILE_DIR.joinpath("message_counter")
 FILTER_TAG = "1"
 FILTER_ID = "test"
 CONGESTION_PERIOD = 1607016396875512000
-TO_NANOSECONDS = 0.000000001 # everything is in nanoseconds
+TO_NANOSECONDS = 0.000000001  # everything is in nanoseconds
 
 # the kubernetes python API sucks, but keep this for later
 
@@ -144,13 +144,14 @@ def check_kubernetes_status():
 def start_kubernetes(platform, multizonal):
     if platform == "GCP":
         if multizonal:
-            emd = "gcloud container clusters create demo --enable-autoupgrade "
+            cmd = "gcloud container clusters create demo --enable-autoupgrade "
             cmd += "--enable-autoscaling --min-nodes=3 --max-nodes=10 "
-            cmd += "--num-nodes=5 --region us-central1-a --node-locations us-central1-b us-central1-c us-central1-a"
+            cmd += "--num-nodes=5 --region us-central1-a --node-locations "
+            cmd += "us-central1-b us-central1-c us-central1-a "
         else:
             cmd = "gcloud container clusters create demo --enable-autoupgrade "
             cmd += "--enable-autoscaling --min-nodes=3 --max-nodes=10 "
-            cmd += "--num-nodes=5 --zone=us-central1-a"
+            cmd += "--num-nodes=5 --zone=us-central1-a "
     else:
         cmd = "minikube start --memory=8192 --cpus=4 "
     result = util.exec_process(cmd)
@@ -172,12 +173,14 @@ def get_gateway_info(platform):
     ingress_port = ""
     if platform == "GCP":
         cmd = f"kubectl -n istio-system get service istio-ingressgateway -o jsonpath=" + "'"
-        cmd += "{.status.loadBalancer.ingress[0].ip}" +  "'"
-        ingress_host = util.get_output_from_proc(cmd).decode("utf-8").replace("'", "")
-        
+        cmd += "{.status.loadBalancer.ingress[0].ip}" + "'"
+        ingress_host = util.get_output_from_proc(
+            cmd).decode("utf-8").replace("'", "")
+
         cmd = "kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="
         cmd += '"' + "http2" + '"' + ")].port}'"
-        ingress_port = util.get_output_from_proc(cmd).decode("utf-8").replace("'", "")
+        ingress_port = util.get_output_from_proc(
+            cmd).decode("utf-8").replace("'", "")
     else:
         cmd = "minikube ip"
         ingress_host = util.get_output_from_proc(cmd).decode("utf-8").rstrip()
@@ -216,32 +219,48 @@ def setup_bookinfo_deployment(platform, multizonal):
     return result
 
 
-def cause_congestion():
-    cur_time = time.time()/TO_NANOSECONDS # everything is in nanoseconds
-    log.info("causing congestion at " + '%f' % (cur_time))
-    cmd = f"{TOOLS_DIR}/parallel_curl/pc $GATEWAY_URL/productpage"
-    curls = util.get_output_from_proc(cmd)
-    print(curls)
+def cause_congestion(platform):
+    if check_kubernetes_status() != util.EXIT_SUCCESS:
+        log.error("Kubernetes is not set up."
+                  " Did you run the deployment script?")
+        sys.exit(util.EXIT_FAILURE)
+    _, _, gateway_url = get_gateway_info(platform)
+    cur_time = time.time() / TO_NANOSECONDS  # everything is in nanoseconds
+    log.info("Causing congestion at %s", cur_time)
+    cmd = f"{TOOLS_DIR}/parallel_curl/pc {gateway_url}/productpage"
+    _ = util.exec_process(cmd)
+    log.info("Done with congestion burst")
 
 
-def find_congestion():
-    cmd = "kubectl get pods -lapp=storage-upstream -o "
-    cmd += "jsonpath={.items[0].metadata.name}"
-    storage_name = util.get_output_from_proc(cmd).decode("utf-8")
-    cmd = f"kubectl port-forward {storage_name} 8080 &"
-    util.start_process(cmd, preexec_fn=os.setsid)
-    cmd = "curl localhost:8080/list"
-    output = util.get_output_from_proc(cmd).decode("utf-8")
-    output = output.split("\n")
+def query_storage():
+    storage_content = requests.get("http://localhost:8080/list")
+    output = storage_content.text.split("\n")
     logs = []
     for line in output:
         if "->" in line:
-            time, name = line.split("->")
-            logs.append([time, name])
-    if logs == []:
+            line_time, line_name = line.split("->")
+            logs.append([line_time, line_name])
+    return sorted(logs)
+
+
+def ns_to_timestamp(str_ns):
+    ns = int(str_ns)
+    dt = datetime.fromtimestamp(ns / 1e9)
+    return f"{dt.strftime('%H:%M:%S.%f')}.{(ns % 1e3):03.0f}"
+
+
+def find_congestion():
+    if check_kubernetes_status() != util.EXIT_SUCCESS:
+        log.error("Kubernetes is not set up."
+                  " Did you run the deployment script?")
+        sys.exit(util.EXIT_FAILURE)
+    storage_proc = launch_storage_mon()
+    logs = query_storage()
+    # kill the storage proc after the query
+    os.killpg(os.getpgid(storage_proc.pid), signal.SIGINT)
+    if not logs:
         log.info("No congestion found")
         return
-    logs = sorted(logs)
     # these variables represent the index of the log where we find congestion
     reviews2congested = -1
     reviews3congested = -1
@@ -249,20 +268,25 @@ def find_congestion():
         reviews2congested = 0
     if "2" in logs[0][1]:
         reviews3congested = 0
-
+    log_len = len(logs)
     foundCongestion = False
     start = 0
-    while start < len(logs) - 1:
+    # for timestamp, service in logs:
+    #     print(timestamp)
+    #     print(service)
+    while start < log_len - 1:
         i = start + 1
-        while i<len(logs) and int(logs[start][0]) + CONGESTION_PERIOD > int(logs[i][0]):
+        while i < log_len and int(logs[start][0]) + CONGESTION_PERIOD > int(logs[i][0]):
             if "2" in logs[i][0]:
                 reviews2congested = i
             if "3" in logs[i][0]:
                 reviews3congested = i
             if reviews2congested != -1 and reviews3congested != -1:
-                log_str = ("congestion at 2 and 3 between times "
-                           f"{logs[reviews2congested][0]} and "
-                           f"{logs[reviews3congested][0]}.")
+                ts_reviews_1 = ns_to_timestamp(int(logs[reviews2congested][0]))
+                ts_reviews_2 = ns_to_timestamp(int(logs[reviews3congested][0]))
+                log_str = ("Congestion at 2 and 3 between times "
+                           f"{ts_reviews_1} and "
+                           f"{ts_reviews_2}.")
                 log.info(log_str)
                 foundCongestion = True
                 break
@@ -271,7 +295,7 @@ def find_congestion():
         reviews3congested = -1
         start += 1
     if not foundCongestion:
-        log.info("no congestion found")
+        log.info("No congestion found")
 
 
 def launch_prometheus():
@@ -298,8 +322,9 @@ def launch_storage_mon():
     cmd = "kubectl get pods -lapp=storage-upstream "
     cmd += " -o jsonpath={.items[0].metadata.name}"
     storage_pod_name = util.get_output_from_proc(cmd).decode("utf-8")
-    cmd = f"kubectl port-forward {storage_pod_name} 8090"
+    cmd = f"kubectl port-forward {storage_pod_name} 8080"
     storage_proc = util.start_process(cmd, preexec_fn=os.setsid)
+    # Let settle things in a bit
     time.sleep(2)
 
     return storage_proc
@@ -330,18 +355,18 @@ def test_fault_injection(prom_api, platform):
     _, _, gateway_url = get_gateway_info(platform)
     fortio_proc = start_fortio(gateway_url)
     # let things sink in a little
-    cur_time = time.time()/TO_NANOSECONDS
+    cur_time = time.time() / TO_NANOSECONDS
     log.info("Running Fortio at time %s", cur_time)
-    #query_loop(prom_api, 60)
-    cur_time = time.time()/TO_NANOSECONDS
+    # query_loop(prom_api, 60)
+    cur_time = time.time() / TO_NANOSECONDS
     log.info("Injecting latency at time %s", cur_time)
     inject_failure()
     query_loop(prom_api, 10)
-    cur_time = time.time()/TO_NANOSECONDS
+    cur_time = time.time() / TO_NANOSECONDS
     log.info("Removing latency at time %s", cur_time)
     remove_failure()
-    #query_loop(prom_api, 60)
-    cur_time = time.time()/TO_NANOSECONDS
+    # query_loop(prom_api, 60)
+    cur_time = time.time() / TO_NANOSECONDS
     log.info("Done at time %s", cur_time)
     # terminate fortio by sending an interrupt to the process group
     os.killpg(os.getpgid(fortio_proc.pid), signal.SIGINT)
@@ -462,7 +487,7 @@ def main(args):
     if args.find_congestion:
         return find_congestion()
     if args.cause_congestion:
-        return cause_congestion()
+        return cause_congestion(args.platform)
     # test the fault injection on an existing deployment
     prom_proc, prom_api = launch_prometheus()
     test_fault_injection(prom_api, args.platform)
