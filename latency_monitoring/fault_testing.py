@@ -271,7 +271,7 @@ def find_congestion(time_to_start_looking=0):
             if int(time_in_line) > time_to_start_looking:
                 logs.append([time_in_line, name])
     if logs == []:
-=======
+        return
     wait_until_pods_ready()
     return result
 
@@ -316,7 +316,6 @@ def find_congestion():
     # kill the storage proc after the query
     os.killpg(os.getpgid(storage_proc.pid), signal.SIGINT)
     if not logs:
->>>>>>> 7eb58f8a64aa279c00525a3f6c89c45300146f53
         log.info("No congestion found")
         return
     # these variables represent the index of the log where we find congestion
@@ -473,12 +472,6 @@ def do_multiple_runs(platform, num_runs, output_file, prom_api):
                 print("no congestion caused")
 
 
-def do_experiment(platform, multizonal, filter_name, num_runs, output_file):
-    setup_bookinfo_deployment(platform, multizonal)
-    prom_proc, prom_api = launch_prometheus()
-    deploy_filter(filter_name)
-    wait_until_pods_ready(platform)
-=======
 def do_experiment_loop(output_file, num_experiments):
     for i in range(num_experiments):
 	    # once everything has started, retrieve the necessary url info
@@ -640,8 +633,6 @@ def main(args):
         print("helo")
         return kill_cluster()
     # test the fault injection on an existing deployment
-    do_experiment(args.platform, args.multizonal, args.filter_name, args.num_runs, args.output_file) 
-    # test the fault injection on an existing deployment
     prom_proc, prom_api = launch_prometheus()
     do_experiment(prom_api, args.platform, args.multizonal, args.filter_name, args.num_experiments, args.output_file)
     test_fault_injection(prom_api, args.platform)
@@ -717,11 +708,8 @@ if __name__ == '__main__':
                         action="store_true",
                         help="Kill the cluster. ")
     parser.add_argument("-nr", "--num_runs", dest="num_runs",
-                        default=NUM_RUNS,
+                        default=NUM_EXPERIMENTS,
                         help="Number of times to cause congestion as a part of an experiment. ")
-    parser.add_argument("-o", "--output_file", dest="output_file",
-                        default=OUTPUT_FILE,
-                        help="Where to write the results of an experiment ")
     parser.add_argument("-mz", "--multizone", dest="multi_zonal",
                         action="store_true",
                         help="Make the cluster in multiple regions. ")
@@ -731,7 +719,6 @@ if __name__ == '__main__':
     parser.add_argument("-o", "--output_file", dest="output_file",
                         default=OUTPUT_FILE,
                         help="Where to store the results of the experiments. ")
->>>>>>> 7eb58f8a64aa279c00525a3f6c89c45300146f53
     # Parse options and process argv
     arguments = parser.parse_args()
     # configure logging
