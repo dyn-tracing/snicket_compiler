@@ -9,6 +9,7 @@ import signal
 from datetime import datetime
 from pathlib import Path
 import requests
+import csv
 
 from prometheus_api_client import PrometheusConnect
 
@@ -31,6 +32,8 @@ FILTER_TAG = "1"
 FILTER_ID = "test"
 CONGESTION_PERIOD = 1607016396875512000
 TO_NANOSECONDS = 0.000000001  # everything is in nanoseconds
+OUTPUT_FILE = "output.csv"
+NUM_EXPERIMENTS = 10
 
 # the kubernetes python API sucks, but keep this for later
 
@@ -207,6 +210,16 @@ def start_fortio(gateway_url):
     return fortio_proc
 
 
+def wait_until_pods_ready():
+    cmd = "kubectl get pods --field-selector status.phase!=Running --all-namespaces"
+    output = util.get_output_from_proc(cmd).decode("utf-8")
+    while "No resources found" not in output and output != b"" and output != '':
+        import pdb; pdb.set_trace()
+        time.sleep(2)
+        cmd = "kubectl get pods --field-selector status.phase=Running --all-namespaces"
+        output = util.get_output_from_proc(cmd).decode("utf-8")
+
+
 def setup_bookinfo_deployment(platform, multizonal):
     start_kubernetes(platform, multizonal)
     result = inject_istio()
@@ -216,6 +229,7 @@ def setup_bookinfo_deployment(platform, multizonal):
     if result != util.EXIT_SUCCESS:
         return result
     result = deploy_addons()
+    wait_until_pods_ready()
     return result
 
 
@@ -371,6 +385,42 @@ def test_fault_injection(prom_api, platform):
     # terminate fortio by sending an interrupt to the process group
     os.killpg(os.getpgid(fortio_proc.pid), signal.SIGINT)
 
+def do_experiment_loop(output_file, num_experiments):
+    for i in range(num_experiments):
+	    # once everything has started, retrieve the necessary url info
+	    _, _, gateway_url = get_gateway_info(platform)
+	    fortio_proc = start_fortio(gateway_url)
+	    # let things sink in a little
+	    cur_time = time.time() / TO_NANOSECONDS
+	    log.info("Running Fortio at time %s", cur_time)
+	    # query_loop(prom_api, 60)
+	    cur_time = time.time() / TO_NANOSECONDS
+	    log.info("Injecting latency at time %s", cur_time)
+	    inject_failure()
+	    query_loop(prom_api, 10)
+	    cur_time = time.time() / TO_NANOSECONDS
+	    log.info("Removing latency at time %s", cur_time)
+	    remove_failure()
+	    # query_loop(prom_api, 60)
+	    cur_time = time.time() / TO_NANOSECONDS
+	    log.info("Done at time %s", cur_time)
+	    # terminate fortio by sending an interrupt to the process group
+	    os.killpg(os.getpgid(fortio_proc.pid), signal.SIGINT)
+
+def do_experiment(prom_api, platform, multicluster, filter_name, num_experiments, output_file):
+    #setup_bookinfo_deployment(platform)
+    wait_until_pods_ready()
+    log.info("deploying filter")
+    deploy_filter(filter_name)
+    wait_until_pods_ready()
+    if check_kubernetes_status() != util.EXIT_SUCCESS:
+        log.error("Kubernetes is not set up."
+                  " Did you run the deployment script?")
+        sys.exit(util.EXIT_FAILURE)
+
+
+
+
 
 def build_filter(filter_dir, filter_name):
     # Bazel is obnoxious, need to explicitly change dirs
@@ -490,6 +540,7 @@ def main(args):
         return cause_congestion(args.platform)
     # test the fault injection on an existing deployment
     prom_proc, prom_api = launch_prometheus()
+    do_experiment(prom_api, args.platform, args.multizonal, args.filter_name, args.num_experiments, args.output_file)
     test_fault_injection(prom_api, args.platform)
     os.killpg(os.getpgid(prom_proc.pid), signal.SIGINT)
 
@@ -560,6 +611,15 @@ if __name__ == '__main__':
     parser.add_argument("-cc", "--cause-congestion", dest="cause_congestion",
                         action="store_true",
                         help="Cause congestion/queue buildup. ")
+    parser.add_argument("-mz", "--multizone", dest="multi_zonal",
+                        action="store_true",
+                        help="Make the cluster in multiple regions. ")
+    parser.add_argument("-ne", "--num-experiments", dest="num_experiments",
+                        default=NUM_EXPERIMENTS,
+                        help="Number of times to run an experiment. ")
+    parser.add_argument("-o", "--output_file", dest="output_file",
+                        default=OUTPUT_FILE,
+                        help="Where to store the results of the experiments. ")
     # Parse options and process argv
     arguments = parser.parse_args()
     # configure logging
