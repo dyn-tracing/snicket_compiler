@@ -8,7 +8,7 @@
 #include <inttypes.h>
 #define BILLION  1000000000L
 
-#define NUM_THREADS 20
+#define NUM_THREADS 80
  
 /* create thread argument struct for thr_func() */
 typedef struct _thread_data_t {
@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
   }
   // set up curl command
   printf("url %s\n", argv[1]);
-  sequential_curls(argv[1]);
+  //sequential_curls(argv[1]);
   printf("sending burst at ");
   print_time();
   send_burst(argv[1]);
