@@ -204,7 +204,7 @@ def start_fortio(gateway_url):
     # fortio_pod_name = util.get_output_from_proc(cmd).decode("utf-8")
     # cmd = f"kubectl exec {fortio_pod_name} -c fortio -- /usr/bin/fortio "
     cmd = f"{FILE_DIR}/bin/fortio "
-    cmd += "load -c 50 -qps 500 -jitter -t 10s -loglevel Warning "
+    cmd += "load -c 50 -qps 1000 -jitter -t 10s -loglevel Warning "
     cmd += f"http://{gateway_url}/productpage"
     fortio_proc = util.start_process(cmd, preexec_fn=os.setsid)
     return fortio_proc
@@ -214,14 +214,11 @@ def wait_until_pods_ready(platform):
     if platform == "GCP":
         cmd = "kubectl get pods --field-selector status.phase!=Running --all-namespaces"
         output = util.get_output_from_proc(cmd).decode("utf-8")
-        try:
-            while "No resources found" not in str(output) and output != "" and output != b'':
-                print("waiting for resources to run")
-                time.sleep(2)
-                cmd = "kubectl get pods --field-selector status.phase!=Running --all-namespaces"
-                output = util.get_output_from_proc(cmd)
-        except:
-            import pdb; pdb.set_trace()
+        while "No resources found" not in str(output) and output != "" and output != b'':
+            print("waiting for resources to run")
+            time.sleep(2)
+            cmd = "kubectl get pods --field-selector status.phase!=Running --all-namespaces"
+            output = util.get_output_from_proc(cmd)
 
 
 def setup_bookinfo_deployment(platform, multizonal):
@@ -238,14 +235,16 @@ def setup_bookinfo_deployment(platform, multizonal):
     return result
 
 
-def cause_congestion():
+def cause_congestion(platform):
+    _, _, gateway_url = get_gateway_info(platform)
     cur_time = time.time()/TO_NANOSECONDS # everything is in nanoseconds
     log.info("causing congestion at " + '%f' % (cur_time))
-    cmd = f"{TOOLS_DIR}/parallel_curl/pc $GATEWAY_URL/productpage"
+    cmd = f"{TOOLS_DIR}/parallel_curl/pc {gateway_url}/productpage"
     curls = str(util.get_output_from_proc(cmd))
     curls = curls[curls.find("sending burst at"):]
-    curls = curls[curls.find(":")+1:]
+    curls = curls[curls.find("at")+3:]
     curls = curls.split()
+    assert curls != None
     return int(curls[0])
 
 def find_congestion(output_file, starting_time):
@@ -254,8 +253,10 @@ def find_congestion(output_file, starting_time):
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
     logs = query_storage()
+    if logs == []:
+        return None
     # kill the storage proc after the query
-    os.killpg(os.getpgid(storage_proc.pid), signal.SIGINT)
+    # os.killpg(os.getpgid(storage_proc.pid), signal.SIGINT)
     if not logs:
         log.info("No congestion found")
         return
@@ -269,8 +270,11 @@ def find_congestion(output_file, starting_time):
     log_len = len(logs)
     foundCongestion = False
     start = 0
-    while logs[start][0] < starting_time:
+    while start < len(logs) and int(logs[start][0]) > starting_time:
         start += 1
+    if start == len(logs):
+        return None
+
     # for timestamp, service in logs:
     #     print(timestamp)
     #     print(service)
@@ -284,15 +288,17 @@ def find_congestion(output_file, starting_time):
                 if "3" in logs[i][0]:
                     reviews3congested = i
                 if reviews2congested != -1 and reviews3congested != -1:
-                    ts_reviews_1 = ns_to_timestamp(int(logs[reviews2congested][0]))
-                    ts_reviews_2 = ns_to_timestamp(int(logs[reviews3congested][0]))
+                    time_reviews_1 = int(logs[reviews2congested][0])
+                    time_reviews_2 = int(logs[reviews3congested][0])
+                    ts_reviews_1 = ns_to_timestamp(time_reviews_1)
+                    ts_reviews_2 = ns_to_timestamp(time_reviews_2)
                     log_str = ("Congestion at 2 and 3 between times "
                                f"{ts_reviews_1} and "
                                f"{ts_reviews_2}.")
                     log.info(log_str)
-                    writer.writerow([ts_reviews_1, ts_reviews_2])
+                    writer.writerow([time_reviews_1, time_reviews_2])
                     foundCongestion = True
-                    return ts_reviews_1
+                    return time_reviews_2
                 i += 1
             reviews2congested = -1
             reviews3congested = -1
@@ -301,20 +307,20 @@ def find_congestion(output_file, starting_time):
             log.info("No congestion found")
 
 
-def cause_congestion(platform):
-    if check_kubernetes_status() != util.EXIT_SUCCESS:
-        log.error("Kubernetes is not set up."
-                  " Did you run the deployment script?")
-        sys.exit(util.EXIT_FAILURE)
-    _, _, gateway_url = get_gateway_info(platform)
-    cur_time = time.time() / TO_NANOSECONDS  # everything is in nanoseconds
-    log.info("Causing congestion at %s", cur_time)
-    cmd = f"{TOOLS_DIR}/parallel_curl/pc {gateway_url}/productpage"
-    _ = util.exec_process(cmd)
-    log.info("Done with congestion burst")
-
-
 def query_storage():
+    quotation = '"'
+    cmd = f"gcloud logging read textPayload:Storing --limit 100"
+    output = util.get_output_from_proc(cmd).decode("utf-8").split("\n")
+    logs = []
+    for line in output:
+        if "Storing" in line:
+            line = line[line.find("timestamp")+9:] # get right after timestamp
+            line = line.split()
+            time = line[0]
+            name = line[-1]
+            logs.append([time, name])
+
+    """
     storage_content = requests.get("http://localhost:8080/list")
     output = storage_content.text.split("\n")
     logs = []
@@ -322,8 +328,9 @@ def query_storage():
         if "->" in line:
             line_time, line_name = line.split("->")
             logs.append([line_time, line_name])
+    """
     return sorted(logs)
-
+    
 
 def ns_to_timestamp(str_ns):
     ns = int(str_ns)
@@ -414,9 +421,9 @@ def do_multiple_runs(platform, num_runs, output_file, prom_api=None):
     with open(output_file, 'w') as csvfile:
         writer = csv.writer(csvfile, delimiter=' ')
         writer.writerow(["found congestion?", "congestion started", "congested detected", "difference in nanoseconds", "difference in milliseconds"])
-    # set up storage to query later
-        storage_proc = launch_storage_mon()
-        for i in range(num_runs):
+        # set up storage to query later
+        #storage_proc = launch_storage_mon()
+        for i in range(int(num_runs)):
             # once everything has started, retrieve the necessary url info
             cur_time = time.time()/TO_NANOSECONDS
             log.info("Running Fortio at time %s", cur_time)
@@ -441,35 +448,31 @@ def do_multiple_runs(platform, num_runs, output_file, prom_api=None):
             first_recorded_congestion = find_congestion(output_file, time_of_congestion)
             if first_recorded_congestion != None:
                 print("Sent burst at " + str(time_of_congestion) + " and recorded it at " + str(first_recorded_congestion))
-                latency = int(first_recorded_congestion) - int(time_of_congestion)
-                print("This means the latency between sending and recording in storage is " + float(latency*TO_NANOSECONDS) + " seconds")
+                latency = int(time_of_congestion) - int(first_recorded_congestion)
+                print("This means the latency between sending and recording in storage is %d seconds", float(latency*TO_NANOSECONDS))
                 writer.writerow(["yes", time_of_congestion, first_recorded_congestion, latency, latency*TO_NANOSECONDS])
             else:
                 writer.writerow(["no", "." * 4])
                 print("no congestion caused")
-            time.sleep(20) # sleep long enough that the congestion times will not be mixed up
+            time.sleep(5) # sleep long enough that the congestion times will not be mixed up
 
 
 def do_experiment(platform, multizonal, filter_name, num_experiments, output_file):
-    """
-    setup_bookinfo_deployment(platform, multizonal)
+    #setup_bookinfo_deployment(platform, multizonal)
     wait_until_pods_ready(platform)
-    prom_proc, prom_api = launch_prometheus()
-    log.info("deploying filter")
-    deploy_filter(filter_name)
-    wait_until_pods_ready(platform)
+    #prom_proc, prom_api = launch_prometheus()
+    #log.info("deploying filter")
+    #deploy_filter(filter_name)
+    #wait_until_pods_ready(platform)
     if check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
-    """
     do_multiple_runs(platform, num_experiments, output_file)
     if platform == "GCP":
         kill_cluster()
     # kill prometheus
-    os.killpg(os.getpgid(prom_proc.pid), signal.SIGINT)
-
-
+    #os.killpg(os.getpgid(prom_proc.pid), signal.SIGINT)
 
 
 def build_filter(filter_dir, filter_name):
