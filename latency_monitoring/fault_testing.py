@@ -402,7 +402,7 @@ def do_multiple_runs(platform, num_runs, output_file):
                          "difference in seconds"])
         # set up storage to query later
         storage_proc = launch_storage_mon()
-        for i in range(int(1)):
+        for _ in range(int(num_runs)):
             # once everything has started, retrieve the necessary url info
             cur_time = time.time() / TO_NANOSECONDS
             log.info("Running Fortio at time %s", cur_time)
