@@ -270,14 +270,13 @@ def find_congestion(output_file, starting_time):
     log_len = len(logs)
     foundCongestion = False
     start = 0
-    while start < len(logs) and int(logs[start][0]) > starting_time:
+    # we want to make sure we aren't recording anything earlier than our starting time
+    # that wouldn't make sense
+    while start < log_len and int(logs[start][0]) < starting_time:
         start += 1
     if start == len(logs):
         return None
 
-    # for timestamp, service in logs:
-    #     print(timestamp)
-    #     print(service)
     while start < log_len - 1:
         i = start + 1
         while i < log_len and int(logs[start][0]) + CONGESTION_PERIOD > int(logs[i][0]):
@@ -295,7 +294,7 @@ def find_congestion(output_file, starting_time):
                            f"{ts_reviews_2}.")
                 log.info(log_str)
                 foundCongestion = True
-                return time_reviews_2
+                return min(time_reviews_1, time_reviews_2)
             i += 1
         reviews2congested = -1
         reviews3congested = -1
@@ -306,16 +305,17 @@ def find_congestion(output_file, starting_time):
 
 def query_storage():
     quotation = '"'
-    cmd = f"gcloud logging read textPayload:Storing --limit 100"
+    time.sleep(10) # wait for logs to come in
+    cmd = f"gcloud logging read textPayload:Stored --limit 300"
     output = util.get_output_from_proc(cmd).decode("utf-8").split("\n")
     logs = []
     for line in output:
-        if "Storing" in line:
-            line = line[line.find("timestamp")+9:] # get right after timestamp
+        if "Stored" in line:
+            line = line[line.find("Stored")+7:] # get right after timestamp
             line = line.split()
-            time = line[0]
+            timestamp = line[0]
             name = line[-1]
-            logs.append([time, name])
+            logs.append([timestamp, name])
 
     """
     storage_content = requests.get("http://localhost:8080/list")
@@ -431,7 +431,8 @@ def do_multiple_runs(platform, num_runs, output_file, prom_api=None):
             log.info("Injecting latency at time %s", cur_time)
             inject_failure()
             log.info("Sending burst")
-            time_of_congestion = cause_congestion(platform)
+            time_of_congestion = time.time()/TO_NANOSECONDS
+            cause_congestion(platform)
             #query_loop(prom_api, 30)
             cur_time = time.time()/TO_NANOSECONDS
             log.info("Removing latency at time %s", cur_time)
@@ -444,8 +445,8 @@ def do_multiple_runs(platform, num_runs, output_file, prom_api=None):
             log.info("killed fortio")
             first_recorded_congestion = find_congestion(output_file, time_of_congestion)
             if first_recorded_congestion != None:
-                print("Sent burst at " + str(time_of_congestion) + " and recorded it at " + str(first_recorded_congestion))
-                latency = int(time_of_congestion) - int(first_recorded_congestion)
+                print("Sent burst at " + ns_to_timestamp(time_of_congestion) + " and recorded it at " + ns_to_timestamp(first_recorded_congestion))
+                latency = int(first_recorded_congestion) - int(time_of_congestion)
                 print("This means the latency between sending and recording in storage is %d seconds", float(latency*TO_NANOSECONDS))
                 writer.writerow(["yes", time_of_congestion, first_recorded_congestion, latency, latency*TO_NANOSECONDS])
             else:
@@ -455,6 +456,7 @@ def do_multiple_runs(platform, num_runs, output_file, prom_api=None):
 
 
 def do_experiment(platform, multizonal, filter_name, num_experiments, output_file):
+    """
     setup_bookinfo_deployment(platform, multizonal)
     wait_until_pods_ready(platform)
     #prom_proc, prom_api = launch_prometheus()
@@ -465,9 +467,11 @@ def do_experiment(platform, multizonal, filter_name, num_experiments, output_fil
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
+    """
     do_multiple_runs(platform, num_experiments, output_file)
-    if platform == "GCP":
-        kill_cluster()
+
+    #if platform == "GCP":
+    #    kill_cluster()
     # kill prometheus
     #os.killpg(os.getpgid(prom_proc.pid), signal.SIGINT)
 

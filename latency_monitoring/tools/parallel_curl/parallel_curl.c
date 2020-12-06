@@ -21,7 +21,7 @@ typedef struct _thread_data_t {
 void *thr_func(void *arg) {
   thread_data_t *data = (thread_data_t *)arg;
   // curl the url
-  char cmd[100] = "curl -v ";
+  char cmd[100] = "curl -s ";
   strcat(cmd, data->url);
   strcat(cmd, " >> out > out2");
   int status = system(cmd);
