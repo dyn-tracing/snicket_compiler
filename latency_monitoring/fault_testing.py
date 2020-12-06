@@ -278,33 +278,30 @@ def find_congestion(output_file, starting_time):
     # for timestamp, service in logs:
     #     print(timestamp)
     #     print(service)
-    with open (output_file, 'w') as output:
-        writer = csv.writer(output)
-        while start < log_len - 1:
-            i = start + 1
-            while i < log_len and int(logs[start][0]) + CONGESTION_PERIOD > int(logs[i][0]):
-                if "2" in logs[i][0]:
-                    reviews2congested = i
-                if "3" in logs[i][0]:
-                    reviews3congested = i
-                if reviews2congested != -1 and reviews3congested != -1:
-                    time_reviews_1 = int(logs[reviews2congested][0])
-                    time_reviews_2 = int(logs[reviews3congested][0])
-                    ts_reviews_1 = ns_to_timestamp(time_reviews_1)
-                    ts_reviews_2 = ns_to_timestamp(time_reviews_2)
-                    log_str = ("Congestion at 2 and 3 between times "
-                               f"{ts_reviews_1} and "
-                               f"{ts_reviews_2}.")
-                    log.info(log_str)
-                    writer.writerow([time_reviews_1, time_reviews_2])
-                    foundCongestion = True
-                    return time_reviews_2
-                i += 1
-            reviews2congested = -1
-            reviews3congested = -1
-            start += 1
-        if not foundCongestion:
-            log.info("No congestion found")
+    while start < log_len - 1:
+        i = start + 1
+        while i < log_len and int(logs[start][0]) + CONGESTION_PERIOD > int(logs[i][0]):
+            if "2" in logs[i][0]:
+                reviews2congested = i
+            if "3" in logs[i][0]:
+                reviews3congested = i
+            if reviews2congested != -1 and reviews3congested != -1:
+                time_reviews_1 = int(logs[reviews2congested][0])
+                time_reviews_2 = int(logs[reviews3congested][0])
+                ts_reviews_1 = ns_to_timestamp(time_reviews_1)
+                ts_reviews_2 = ns_to_timestamp(time_reviews_2)
+                log_str = ("Congestion at 2 and 3 between times "
+                           f"{ts_reviews_1} and "
+                           f"{ts_reviews_2}.")
+                log.info(log_str)
+                foundCongestion = True
+                return time_reviews_2
+            i += 1
+        reviews2congested = -1
+        reviews3congested = -1
+        start += 1
+    if not foundCongestion:
+        log.info("No congestion found")
 
 
 def query_storage():
@@ -420,7 +417,7 @@ def do_multiple_runs(platform, num_runs, output_file, prom_api=None):
     _, _, gateway_url = get_gateway_info(platform)
     with open(output_file, 'w') as csvfile:
         writer = csv.writer(csvfile, delimiter=' ')
-        writer.writerow(["found congestion?", "congestion started", "congested detected", "difference in nanoseconds", "difference in milliseconds"])
+        writer.writerow(["found congestion?", "congestion started", "congested detected", "difference in nanoseconds", "difference in seconds"])
         # set up storage to query later
         #storage_proc = launch_storage_mon()
         for i in range(int(num_runs)):
@@ -458,12 +455,12 @@ def do_multiple_runs(platform, num_runs, output_file, prom_api=None):
 
 
 def do_experiment(platform, multizonal, filter_name, num_experiments, output_file):
-    #setup_bookinfo_deployment(platform, multizonal)
+    setup_bookinfo_deployment(platform, multizonal)
     wait_until_pods_ready(platform)
     #prom_proc, prom_api = launch_prometheus()
-    #log.info("deploying filter")
-    #deploy_filter(filter_name)
-    #wait_until_pods_ready(platform)
+    log.info("deploying filter")
+    deploy_filter(filter_name)
+    wait_until_pods_ready(platform)
     if check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
