@@ -163,7 +163,7 @@ def start_kubernetes(platform, multizonal):
 
 def stop_kubernetes(platform):
     if platform == "GCP":
-        cmd = "gcloud container clusters delete demo --zone us-central1-a"
+        cmd = "gcloud container clusters delete demo --zone us-central1-a --quiet"
     else:
         # delete minikube
         cmd = "minikube delete"
@@ -215,14 +215,13 @@ def wait_until_pods_ready(platform):
         cmd = "kubectl get pods --field-selector status.phase!=Running --all-namespaces"
         output = util.get_output_from_proc(cmd).decode("utf-8")
         while "No resources found" not in str(output) and output != "" and output != b'':
-            print("waiting for resources to run")
+            log.info("waiting for resources to run")
             time.sleep(2)
             cmd = "kubectl get pods --field-selector status.phase!=Running --all-namespaces"
             output = util.get_output_from_proc(cmd)
 
 
 def setup_bookinfo_deployment(platform, multizonal):
-    print("hello")
     start_kubernetes(platform, multizonal)
     result = inject_istio()
     if result != util.EXIT_SUCCESS:
@@ -237,35 +236,37 @@ def setup_bookinfo_deployment(platform, multizonal):
 
 def cause_congestion(platform):
     _, _, gateway_url = get_gateway_info(platform)
-    cur_time = time.time()/TO_NANOSECONDS # everything is in nanoseconds
-    log.info("causing congestion at " + '%f' % (cur_time))
+    cur_time = time.time() / TO_NANOSECONDS  # everything is in nanoseconds
+    log.info("causing congestion at %s", cur_time)
     cmd = f"{TOOLS_DIR}/parallel_curl/pc {gateway_url}/productpage"
     curls = str(util.get_output_from_proc(cmd))
     curls = curls[curls.find("sending burst at"):]
-    curls = curls[curls.find("at")+3:]
+    curls = curls[curls.find("at") + 3:]
     curls = curls.split()
-    assert curls != None
-    return int(curls[0])
+    log.info(curls[0])
+    return util.EXIT_SUCCESS
 
-def find_congestion(output_file, starting_time):
+
+def find_congestion(starting_time):
     if check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
+    storage_proc = launch_storage_mon()
     logs = query_storage()
     if logs == []:
         return None
     # kill the storage proc after the query
-    # os.killpg(os.getpgid(storage_proc.pid), signal.SIGINT)
+    os.killpg(os.getpgid(storage_proc.pid), signal.SIGINT)
     if not logs:
         log.info("No congestion found")
-        return
+        return None
     # these variables represent the index of the log where we find congestion
     reviews2congested = -1
     reviews3congested = -1
-    if "1" in logs[0][1]:
-        reviews2congested = 0
     if "2" in logs[0][1]:
+        reviews2congested = 0
+    if "3" in logs[0][1]:
         reviews3congested = 0
     log_len = len(logs)
     foundCongestion = False
@@ -301,23 +302,22 @@ def find_congestion(output_file, starting_time):
         start += 1
     if not foundCongestion:
         log.info("No congestion found")
+        return None
 
 
 def query_storage():
-    quotation = '"'
-    time.sleep(10) # wait for logs to come in
-    cmd = f"gcloud logging read textPayload:Stored --limit 300"
-    output = util.get_output_from_proc(cmd).decode("utf-8").split("\n")
-    logs = []
-    for line in output:
-        if "Stored" in line:
-            line = line[line.find("Stored")+7:] # get right after timestamp
-            line = line.split()
-            timestamp = line[0]
-            name = line[-1]
-            logs.append([timestamp, name])
+    # time.sleep(10)  # wait for logs to come in
+    # cmd = f"gcloud logging read textPayload:Stored --limit 300"
+    # output = util.get_output_from_proc(cmd).decode("utf-8").split("\n")
+    # logs = []
+    # for line in output:
+    #     if "Stored" in line:
+    #         line = line[line.find("Stored") + 7:]  # get right after timestamp
+    #         line = line.split()
+    #         timestamp = line[0]
+    #         name = line[-1]
+    #         logs.append([timestamp, name])
 
-    """
     storage_content = requests.get("http://localhost:8080/list")
     output = storage_content.text.split("\n")
     logs = []
@@ -325,15 +325,13 @@ def query_storage():
         if "->" in line:
             line_time, line_name = line.split("->")
             logs.append([line_time, line_name])
-    """
     return sorted(logs)
-    
+
 
 def ns_to_timestamp(str_ns):
     ns = int(str_ns)
     dt = datetime.fromtimestamp(ns / 1e9)
     return f"{dt.strftime('%H:%M:%S.%f')}.{(ns % 1e3):03.0f}"
-
 
 
 def launch_prometheus():
@@ -383,6 +381,7 @@ def query_loop(prom_api, seconds):
         query_prometheus(prom_api)
         time.sleep(1)
 
+
 def test_fault_injection(prom_api, platform):
     if check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
@@ -390,16 +389,16 @@ def test_fault_injection(prom_api, platform):
         sys.exit(util.EXIT_FAILURE)
     # once everything has started, retrieve the necessary url info
     _, _, gateway_url = get_gateway_info(platform)
-    cur_time = time.time()/TO_NANOSECONDS
+    cur_time = time.time() / TO_NANOSECONDS
     log.info("Running Fortio at time %s", cur_time)
     fortio_proc = start_fortio(gateway_url)
     # let things sink in a little
     query_loop(prom_api, 30)
-    cur_time = time.time()/TO_NANOSECONDS
+    cur_time = time.time() / TO_NANOSECONDS
     log.info("Injecting latency at time %s", cur_time)
     inject_failure()
     query_loop(prom_api, 30)
-    cur_time = time.time()/TO_NANOSECONDS
+    cur_time = time.time() / TO_NANOSECONDS
     log.info("Removing latency at time %s", cur_time)
     remove_failure()
     # query_loop(prom_api, 60)
@@ -408,51 +407,57 @@ def test_fault_injection(prom_api, platform):
     # terminate fortio by sending an interrupt to the process group
     os.killpg(os.getpgid(fortio_proc.pid), signal.SIGINT)
 
-def kill_cluster():
-    cmd = f"gcloud container clusters delete demo --zone us-central1-a --quiet"
-    util.get_output_from_proc(cmd)
     log.info("Cluster killed")
 
-def do_multiple_runs(platform, num_runs, output_file, prom_api=None):
+
+def do_multiple_runs(platform, num_runs, output_file):
     _, _, gateway_url = get_gateway_info(platform)
     with open(output_file, 'w') as csvfile:
         writer = csv.writer(csvfile, delimiter=' ')
-        writer.writerow(["found congestion?", "congestion started", "congested detected", "difference in nanoseconds", "difference in seconds"])
+        writer.writerow(["found congestion?", "congestion started",
+                         "congested detected",
+                         "difference in nanoseconds",
+                         "difference in seconds"])
         # set up storage to query later
-        #storage_proc = launch_storage_mon()
-        for i in range(int(num_runs)):
+        storage_proc = launch_storage_mon()
+        for i in range(int(1)):
             # once everything has started, retrieve the necessary url info
-            cur_time = time.time()/TO_NANOSECONDS
+            cur_time = time.time() / TO_NANOSECONDS
             log.info("Running Fortio at time %s", cur_time)
             fortio_proc = start_fortio(gateway_url)
-            # let things sink in a little
-            #query_loop(prom_api, 30)
-            cur_time = time.time()/TO_NANOSECONDS
+            cur_time = time.time() / TO_NANOSECONDS
             log.info("Injecting latency at time %s", cur_time)
             inject_failure()
             log.info("Sending burst")
-            time_of_congestion = time.time()/TO_NANOSECONDS
+            time_of_congestion = time.time() / TO_NANOSECONDS
             cause_congestion(platform)
-            #query_loop(prom_api, 30)
-            cur_time = time.time()/TO_NANOSECONDS
+            # query_loop(prom_api, 30)
+            cur_time = time.time() / TO_NANOSECONDS
             log.info("Removing latency at time %s", cur_time)
             remove_failure()
-            #query_loop(prom_api, 5)
-            cur_time = time.time()/TO_NANOSECONDS
+            # query_loop(prom_api, 5)
+            cur_time = time.time() / TO_NANOSECONDS
             log.info("Done at time %s", cur_time)
             # terminate fortio by sending an interrupt to the process group
             os.killpg(os.getpgid(fortio_proc.pid), signal.SIGINT)
-            log.info("killed fortio")
-            first_recorded_congestion = find_congestion(output_file, time_of_congestion)
-            if first_recorded_congestion != None:
-                print("Sent burst at " + ns_to_timestamp(time_of_congestion) + " and recorded it at " + ns_to_timestamp(first_recorded_congestion))
-                latency = int(first_recorded_congestion) - int(time_of_congestion)
-                print("This means the latency between sending and recording in storage is %d seconds", float(latency*TO_NANOSECONDS))
-                writer.writerow(["yes", time_of_congestion, first_recorded_congestion, latency, latency*TO_NANOSECONDS])
+            log.info("Killed fortio")
+            first_recorded_congestion = find_congestion(time_of_congestion)
+            if first_recorded_congestion is not None:
+                log.info("Sent burst at " + ns_to_timestamp(time_of_congestion) +
+                         " and recorded it at " + ns_to_timestamp(first_recorded_congestion))
+                latency = int(first_recorded_congestion) - \
+                    int(time_of_congestion)
+                log.info(
+                    "This means the latency between sending and recording in storage is %s seconds", (latency / 1e9))
+                writer.writerow(
+                    ["yes", time_of_congestion, first_recorded_congestion, latency, latency * TO_NANOSECONDS])
             else:
                 writer.writerow(["no", "." * 4])
-                print("no congestion caused")
-            time.sleep(5) # sleep long enough that the congestion times will not be mixed up
+                log.info("No congestion caused")
+            # sleep long enough that the congestion times will not be mixed up
+            time.sleep(5)
+        # kill the storage proc after the query
+        os.killpg(os.getpgid(storage_proc.pid), signal.SIGINT)
 
 
 def do_experiment(platform, multizonal, filter_name, num_experiments, output_file):
@@ -470,8 +475,6 @@ def do_experiment(platform, multizonal, filter_name, num_experiments, output_fil
     """
     do_multiple_runs(platform, num_experiments, output_file)
 
-    #if platform == "GCP":
-    #    kill_cluster()
     # kill prometheus
     #os.killpg(os.getpgid(prom_proc.pid), signal.SIGINT)
 
@@ -589,14 +592,12 @@ def main(args):
     if args.full_run:
         setup_bookinfo_deployment(args.platform, args.multizonal)
     if args.find_congestion:
-        return find_congestion()
+        return find_congestion(0)
     if args.cause_congestion:
-        return cause_congestion()
-    if args.kill_cluster:
-        print("helo")
-        return kill_cluster()
+        return cause_congestion(args.platform)
     # test the fault injection on an existing deployment
-    do_experiment(args.platform, args.multizonal, args.filter_name, args.num_experiments, args.output_file)
+    do_experiment(args.platform, args.multizonal, args.filter_name,
+                  args.num_experiments, args.output_file)
     if args.full_run:
         # all done with the test, clean up
         stop_kubernetes(args.platform)
@@ -664,9 +665,6 @@ if __name__ == '__main__':
     parser.add_argument("-cc", "--cause-congestion", dest="cause_congestion",
                         action="store_true",
                         help="Cause congestion/queue buildup. ")
-    parser.add_argument("-kc", "--kill-cluster", dest="kill_cluster",
-                        action="store_true",
-                        help="Kill the cluster. ")
     parser.add_argument("-nr", "--num_runs", dest="num_runs",
                         default=NUM_EXPERIMENTS,
                         help="Number of times to cause congestion as a part of an experiment. ")
