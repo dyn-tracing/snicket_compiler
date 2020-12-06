@@ -249,18 +249,15 @@ def find_congestion(starting_time):
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
-    storage_proc = launch_storage_mon()
     logs = query_storage()
     if logs == []:
         return None
-    # kill the storage proc after the query
-    os.killpg(os.getpgid(storage_proc.pid), signal.SIGINT)
     if not logs:
         log.info("No congestion found")
         return None
     # we want to make sure we aren't recording anything earlier
     # than our starting time. That wouldn't make sense
-    ival_start = 0
+    ival_start = -1
     ival_end = -1
     for idx, (time_stamp, _) in enumerate(logs):
         if int(time_stamp) > starting_time:
@@ -402,35 +399,31 @@ def do_multiple_runs(platform, num_runs, output_file):
                          "difference in seconds"])
         # set up storage to query later
         storage_proc = launch_storage_mon()
-        for _ in range(int(num_runs)):
+        cur_time = time.time() / TO_NANOSECONDS
+        log.info("Running Fortio at time %s", cur_time)
+        fortio_proc = start_fortio(gateway_url)
+        for _ in range(int(1)):
             # once everything has started, retrieve the necessary url info
-            cur_time = time.time() / TO_NANOSECONDS
-            log.info("Running Fortio at time %s", cur_time)
-            fortio_proc = start_fortio(gateway_url)
             cur_time = time.time() / TO_NANOSECONDS
             log.info("Injecting latency at time %s", cur_time)
             inject_failure()
             log.info("Sending burst")
             time_of_congestion = time.time() / TO_NANOSECONDS
             cause_congestion(platform)
-            # query_loop(prom_api, 30)
             cur_time = time.time() / TO_NANOSECONDS
             log.info("Removing latency at time %s", cur_time)
             remove_failure()
-            # query_loop(prom_api, 5)
             cur_time = time.time() / TO_NANOSECONDS
             log.info("Done at time %s", cur_time)
-            # terminate fortio by sending an interrupt to the process group
-            os.killpg(os.getpgid(fortio_proc.pid), signal.SIGINT)
-            log.info("Killed fortio")
             first_recorded_congestion = find_congestion(time_of_congestion)
             if first_recorded_congestion is not None:
-                log.info("Sent burst at " + ns_to_timestamp(time_of_congestion) +
-                         " and recorded it at " + ns_to_timestamp(first_recorded_congestion))
-                latency = int(first_recorded_congestion) - \
-                    int(time_of_congestion)
+                congestion_ts = ns_to_timestamp(time_of_congestion)
+                detection_ts = ns_to_timestamp(first_recorded_congestion)
+                log.info("Sent burst at %s recorded it at %s",
+                         congestion_ts, detection_ts)
+                latency = (int(first_recorded_congestion) - int(time_of_congestion))
                 log.info(
-                    "This means the latency between sending and recording in storage is %s seconds", (latency / 1e9))
+                    "Latency between sending and recording in storage is %s seconds", (latency / 1e9))
                 writer.writerow(
                     ["yes", time_of_congestion, first_recorded_congestion, latency, latency * TO_NANOSECONDS])
             else:
@@ -438,6 +431,9 @@ def do_multiple_runs(platform, num_runs, output_file):
                 log.info("No congestion caused")
             # sleep long enough that the congestion times will not be mixed up
             time.sleep(5)
+        # terminate fortio by sending an interrupt to the process group
+        os.killpg(os.getpgid(fortio_proc.pid), signal.SIGINT)
+        log.info("Killed fortio")
         # kill the storage proc after the query
         os.killpg(os.getpgid(storage_proc.pid), signal.SIGINT)
 
@@ -455,6 +451,10 @@ def do_experiment(platform, multizonal, filter_name, num_experiments, output_fil
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
     """
+    # clean up any proc listening on 8080 just to be safe
+    cmd = "lsof -ti tcp:8080 | xargs kill || exit 0"
+    _ = util.exec_process(
+        cmd, stdout=util.subprocess.PIPE, stderr=util.subprocess.PIPE)
     do_multiple_runs(platform, num_experiments, output_file)
 
     # kill prometheus
@@ -573,8 +573,6 @@ def main(args):
         return stop_kubernetes(args.platform)
     if args.full_run:
         setup_bookinfo_deployment(args.platform, args.multizonal)
-    if args.find_congestion:
-        return find_congestion(0)
     if args.cause_congestion:
         return cause_congestion(args.platform)
     # test the fault injection on an existing deployment
