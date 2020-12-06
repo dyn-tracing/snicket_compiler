@@ -239,12 +239,9 @@ def cause_congestion(platform):
     cur_time = time.time() / TO_NANOSECONDS  # everything is in nanoseconds
     log.info("causing congestion at %s", cur_time)
     cmd = f"{TOOLS_DIR}/parallel_curl/pc {gateway_url}/productpage"
-    curls = str(util.get_output_from_proc(cmd))
-    curls = curls[curls.find("sending burst at"):]
-    curls = curls[curls.find("at") + 3:]
-    curls = curls.split()
-    log.info(curls[0])
-    return util.EXIT_SUCCESS
+    result = util.exec_process(
+        cmd, stdout=util.subprocess.PIPE, stderr=util.subprocess.PIPE)
+    return result
 
 
 def find_congestion(starting_time):
