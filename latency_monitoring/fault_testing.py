@@ -258,48 +258,33 @@ def find_congestion(starting_time):
     if not logs:
         log.info("No congestion found")
         return None
-    # these variables represent the index of the log where we find congestion
-    reviews2congested = -1
-    reviews3congested = -1
-    if "2" in logs[0][1]:
-        reviews2congested = 0
-    if "3" in logs[0][1]:
-        reviews3congested = 0
-    log_len = len(logs)
-    foundCongestion = False
-    start = 0
-    # we want to make sure we aren't recording anything earlier than our starting time
-    # that wouldn't make sense
-    while start < log_len and int(logs[start][0]) < starting_time:
-        start += 1
-    if start == len(logs):
-        return None
+    # we want to make sure we aren't recording anything earlier
+    # than our starting time. That wouldn't make sense
+    ival_start = 0
+    ival_end = -1
+    for idx, (time_stamp, _) in enumerate(logs):
+        if int(time_stamp) > starting_time:
+            ival_start = idx
+            break
+    for idx, (time_stamp, _) in enumerate(logs):
+        if int(time_stamp) > (starting_time + CONGESTION_PERIOD):
+            ival_end = idx
+            break
 
-    while start < log_len - 1:
-        i = start + 1
-        while i < log_len and int(logs[start][0]) + CONGESTION_PERIOD > int(logs[i][0]):
-            if "2" in logs[i][0]:
-                reviews2congested = i
-            if "3" in logs[i][0]:
-                reviews3congested = i
-            if reviews2congested != -1 and reviews3congested != -1:
-                time_reviews_1 = int(logs[reviews2congested][0])
-                time_reviews_2 = int(logs[reviews3congested][0])
-                ts_reviews_1 = ns_to_timestamp(time_reviews_1)
-                ts_reviews_2 = ns_to_timestamp(time_reviews_2)
-                log_str = ("Congestion at 2 and 3 between times "
-                           f"{ts_reviews_1} and "
-                           f"{ts_reviews_2}.")
+    congestion_dict = {}
+    for idx, (time_stamp, service_name) in enumerate(logs[ival_start:ival_end]):
+        congestion_dict[service_name] = int(time_stamp)
+        # we have congestion at more than 1 service
+        if len(congestion_dict) > 1:
+            for congested_service, congestion_ts in congestion_dict.items():
+                congestion_ts_str = ns_to_timestamp(congestion_ts)
+                log_str = (
+                    f"Congestion at {congested_service} at time {congestion_ts_str}")
                 log.info(log_str)
-                foundCongestion = True
-                return min(time_reviews_1, time_reviews_2)
-            i += 1
-        reviews2congested = -1
-        reviews3congested = -1
-        start += 1
-    if not foundCongestion:
-        log.info("No congestion found")
-        return None
+            return min(congestion_dict.values())
+
+    log.info("No congestion found")
+    return None
 
 
 def query_storage():
@@ -461,7 +446,7 @@ def do_experiment(platform, multizonal, filter_name, num_experiments, output_fil
     """
     setup_bookinfo_deployment(platform, multizonal)
     wait_until_pods_ready(platform)
-    #prom_proc, prom_api = launch_prometheus()
+    # prom_proc, prom_api = launch_prometheus()
     log.info("deploying filter")
     deploy_filter(filter_name)
     wait_until_pods_ready(platform)
@@ -473,7 +458,7 @@ def do_experiment(platform, multizonal, filter_name, num_experiments, output_fil
     do_multiple_runs(platform, num_experiments, output_file)
 
     # kill prometheus
-    #os.killpg(os.getpgid(prom_proc.pid), signal.SIGINT)
+    # os.killpg(os.getpgid(prom_proc.pid), signal.SIGINT)
 
 
 def build_filter(filter_dir, filter_name):
