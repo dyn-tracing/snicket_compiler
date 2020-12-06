@@ -3,7 +3,6 @@ import argparse
 import logging
 import sys
 import time
-import calendar
 import os
 import signal
 from datetime import datetime
@@ -296,7 +295,7 @@ def query_storage(platform):
                 name = line[-1]
                 logs.append([timestamp, name])
     else:
-        storage_content = requests.get("http://localhost:8080/list")
+        storage_content = requests.get("http://localhost:8090/list")
         output = storage_content.text.split("\n")
         logs = []
         for line in output:
@@ -336,7 +335,7 @@ def launch_storage_mon():
     cmd = "kubectl get pods -lapp=storage-upstream "
     cmd += " -o jsonpath={.items[0].metadata.name}"
     storage_pod_name = util.get_output_from_proc(cmd).decode("utf-8")
-    cmd = f"kubectl port-forward {storage_pod_name} 8080"
+    cmd = f"kubectl port-forward {storage_pod_name} 8090:8080"
     storage_proc = util.start_process(cmd, preexec_fn=os.setsid)
     # Let settle things in a bit
     time.sleep(2)
@@ -454,8 +453,8 @@ def do_experiment(platform, multizonal, filter_name, num_experiments, output_fil
         sys.exit(util.EXIT_FAILURE)
     """
     if platform != "GCP":
-        # clean up any proc listening on 8080 just to be safe
-        cmd = "lsof -ti tcp:8080 | xargs kill || exit 0"
+        # clean up any proc listening on 8090 just to be safe
+        cmd = "lsof -ti tcp:8090 | xargs kill || exit 0"
         _ = util.exec_process(
             cmd, stdout=util.subprocess.PIPE, stderr=util.subprocess.PIPE)
     do_multiple_runs(platform, num_experiments, output_file)
