@@ -204,7 +204,7 @@ def start_fortio(gateway_url):
     # fortio_pod_name = util.get_output_from_proc(cmd).decode("utf-8")
     # cmd = f"kubectl exec {fortio_pod_name} -c fortio -- /usr/bin/fortio "
     cmd = f"{FILE_DIR}/bin/fortio "
-    cmd += "load -c 50 -qps 1000 -jitter -t 10s -loglevel Warning "
+    cmd += "load -c 50 -qps 2000 -jitter -t 10s -loglevel Warning "
     cmd += f"http://{gateway_url}/productpage"
     fortio_proc = util.start_process(cmd, preexec_fn=os.setsid)
     return fortio_proc
@@ -236,12 +236,12 @@ def setup_bookinfo_deployment(platform, multizonal):
 
 def cause_congestion(platform):
     _, _, gateway_url = get_gateway_info(platform)
-    cur_time = time.time() / TO_NANOSECONDS  # everything is in nanoseconds
     log.info("causing congestion at %s", cur_time)
     cmd = f"{TOOLS_DIR}/parallel_curl/pc {gateway_url}/productpage"
     result = util.exec_process(
         cmd, stdout=util.subprocess.PIPE, stderr=util.subprocess.PIPE)
-    return result
+    cur_time = time.time() / TO_NANOSECONDS  # everything is in nanoseconds
+    return cur_time
 
 
 def find_congestion(starting_time):
@@ -253,7 +253,7 @@ def find_congestion(starting_time):
     if logs == []:
         return None
     if not logs:
-        log.info("No congestion found")
+        log.info("No congestion found!")
         return None
     # we want to make sure we aren't recording anything earlier
     # than our starting time. That wouldn't make sense
@@ -285,18 +285,20 @@ def find_congestion(starting_time):
 
 
 def query_storage():
-    # time.sleep(10)  # wait for logs to come in
-    # cmd = f"gcloud logging read textPayload:Stored --limit 300"
-    # output = util.get_output_from_proc(cmd).decode("utf-8").split("\n")
-    # logs = []
-    # for line in output:
-    #     if "Stored" in line:
-    #         line = line[line.find("Stored") + 7:]  # get right after timestamp
-    #         line = line.split()
-    #         timestamp = line[0]
-    #         name = line[-1]
-    #         logs.append([timestamp, name])
+    time.sleep(10)  # wait for logs to come in
+    logs = []
+    cmd = f"{TOOLS_DIR}/logs_script.sh"
+    output = util.get_output_from_proc(cmd).decode("utf-8").split("\n")
+    for line in output:
+        if "Stored" in line:
+            line = line[line.find("Stored"):]  # get right after timestamp
+            line = line.split()
+            timestamp = line[1]
+            name = line[-1]
+            logs.append([timestamp, name])
+    return sorted(logs)
 
+    """"
     storage_content = requests.get("http://localhost:8080/list")
     output = storage_content.text.split("\n")
     logs = []
@@ -304,6 +306,7 @@ def query_storage():
         if "->" in line:
             line_time, line_name = line.split("->")
             logs.append([line_time, line_name])
+    """
     return sorted(logs)
 
 
@@ -402,14 +405,14 @@ def do_multiple_runs(platform, num_runs, output_file):
         cur_time = time.time() / TO_NANOSECONDS
         log.info("Running Fortio at time %s", cur_time)
         fortio_proc = start_fortio(gateway_url)
-        for _ in range(int(1)):
+        for _ in range(int(num_runs)):
             # once everything has started, retrieve the necessary url info
             cur_time = time.time() / TO_NANOSECONDS
             log.info("Injecting latency at time %s", cur_time)
             inject_failure()
             log.info("Sending burst")
-            time_of_congestion = time.time() / TO_NANOSECONDS
-            cause_congestion(platform)
+            #time_of_congestion = time.time() / TO_NANOSECONDS
+            time_of_congestion = cause_congestion(platform)
             cur_time = time.time() / TO_NANOSECONDS
             log.info("Removing latency at time %s", cur_time)
             remove_failure()
@@ -425,7 +428,7 @@ def do_multiple_runs(platform, num_runs, output_file):
                 log.info(
                     "Latency between sending and recording in storage is %s seconds", (latency / 1e9))
                 writer.writerow(
-                    ["yes", time_of_congestion, first_recorded_congestion, latency, latency * TO_NANOSECONDS])
+                    ["yes", time_of_congestion, first_recorded_congestion, latency, (latency / 1e9) ])
             else:
                 writer.writerow(["no", "." * 4])
                 log.info("No congestion caused")
@@ -450,11 +453,11 @@ def do_experiment(platform, multizonal, filter_name, num_experiments, output_fil
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
-    """
     # clean up any proc listening on 8080 just to be safe
     cmd = "lsof -ti tcp:8080 | xargs kill || exit 0"
     _ = util.exec_process(
         cmd, stdout=util.subprocess.PIPE, stderr=util.subprocess.PIPE)
+    """
     do_multiple_runs(platform, num_experiments, output_file)
 
     # kill prometheus
