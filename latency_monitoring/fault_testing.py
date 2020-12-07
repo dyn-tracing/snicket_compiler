@@ -66,7 +66,7 @@ def inject_istio():
 def deploy_addons():
     apply_cmd = "kubectl apply -f "
     url = "https://raw.githubusercontent.com/istio/istio/release-1.8"
-    cmd = f"{apply_cmd} {url}/samples/addons/prometheus.yaml && "
+    cmd = f"{apply_cmd} {YAML_DIR}/prometheus-mod.yaml && "
     cmd += f"{apply_cmd} {url}/samples/addons/grafana.yaml && "
     cmd += f"{apply_cmd} {url}/samples/addons/jaeger.yaml && "
     cmd += f"{apply_cmd} {url}/samples/addons/kiali.yaml || "
@@ -140,7 +140,8 @@ def remove_failure():
 
 def check_kubernetes_status():
     cmd = "kubectl cluster-info"
-    result = util.exec_process(cmd)
+    result = util.exec_process(
+        cmd, stdout=util.subprocess.PIPE, stderr=util.subprocess.PIPE)
     return result
 
 
@@ -265,9 +266,9 @@ def find_congestion(platform, starting_time):
         if int(time_stamp) > (starting_time + CONGESTION_PERIOD):
             ival_end = idx
             break
-
+    log_slice = logs[ival_start:ival_end]
     congestion_dict = {}
-    for idx, (time_stamp, service_name) in enumerate(logs[ival_start:ival_end]):
+    for idx, (time_stamp, service_name) in enumerate(log_slice):
         congestion_dict[service_name] = int(time_stamp)
         # we have congestion at more than 1 service
         if len(congestion_dict) > 1:
@@ -303,7 +304,7 @@ def query_storage(platform):
             if "->" in line:
                 line_time, line_name = line.split("->")
                 logs.append([line_time, line_name])
-    return sorted(logs)
+    return sorted(logs, key=lambda tup: tup[0])
 
 
 def ns_to_timestamp(str_ns):
@@ -369,10 +370,11 @@ def query_csv_loop(prom_api):
                 query="(histogram_quantile(0.90, sum(irate(istio_request_duration_milliseconds_bucket{reporter=\"source\",destination_service=~\"productpage.default.svc.cluster.local\"}[1m])) by (le)) / 1000) or histogram_quantile(0.90, sum(irate(istio_request_duration_seconds_bucket{reporter=\"source\",destination_service=~\"productpage.default.svc.cluster.local\"}[1m])) by (le))")
             for q in query:
                 val = q["value"]
-                query_time = "{:.7f}".format(val[0] * TO_NANOSECONDS)
                 latency = float(val[1]) * 1000
+                query_time = datetime.fromtimestamp(val[0])
                 log.info("Time: %s 90pct Latency (ms) %s", query_time, latency)
-                writer.writerow([query_time, latency])
+                query_ns = f"{val[0] * TO_NANOSECONDS:.7f}"
+                writer.writerow([query_ns, latency])
                 csvfile.flush()
             time.sleep(1)
 
@@ -420,8 +422,9 @@ def do_multiple_runs(platform, num_runs, output_file):
             inject_failure()
             time.sleep(10)
             log.info("Sending burst")
-            time_of_congestion = time.time() * TO_NANOSECONDS
-            log.info("Causing congestion at %s", time_of_congestion)
+            time_of_congestion = int(time.time() * TO_NANOSECONDS)
+            log.info("Causing congestion at %s",
+                     ns_to_timestamp(time_of_congestion))
             cause_congestion(platform)
             time.sleep(10)
             cur_time = ns_to_timestamp(time.time() * TO_NANOSECONDS)
@@ -451,7 +454,8 @@ def do_multiple_runs(platform, num_runs, output_file):
                             if timestamp > time_of_congestion and timestamp < first_recorded_congestion:
                                 avg += float(line[1])
                                 num_of_recordings += 1
-                    avg = avg / num_of_recordings
+                    if num_of_recordings != 0.0:
+                        avg = avg / num_of_recordings
                     writer.writerow(
                         ["yes", time_of_congestion, first_recorded_congestion, latency, (latency / TO_NANOSECONDS), avg])
             else:
