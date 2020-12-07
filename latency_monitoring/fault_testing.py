@@ -204,7 +204,7 @@ def start_fortio(gateway_url):
     # fortio_pod_name = util.get_output_from_proc(cmd).decode("utf-8")
     # cmd = f"kubectl exec {fortio_pod_name} -c fortio -- /usr/bin/fortio "
     cmd = f"{FILE_DIR}/bin/fortio "
-    cmd += "load -c 50 -qps 2000 -jitter -t 10s -loglevel Warning "
+    cmd += "load -c 50 -qps 2000 -jitter -t 0 -loglevel Warning "
     cmd += f"http://{gateway_url}/productpage"
     fortio_proc = util.start_process(cmd, preexec_fn=os.setsid)
     return fortio_proc
@@ -359,22 +359,22 @@ def query_loop(prom_api, seconds):
         query_prometheus(prom_api)
         time.sleep(1)
 
-
 def query_csv_loop(prom_api):
     with open("prom.csv", "w+") as csvfile:
         writer = csv.writer(csvfile, delimiter=',')
         writer.writerow(["Time", "RPS"])
         while True:
             query = prom_api.custom_query(
-                query="rate(istio_requests_total{destination_service=~\"productpage.*\", app=\"productpage\",  response_code=\"200\"}[1m])")
+                query="(histogram_quantile(0.90, sum(irate(istio_request_duration_milliseconds_bucket{reporter=\"source\",destination_service=~\"productpage.default.svc.cluster.local\"}[1m])) by (le)) / 1000) or histogram_quantile(0.90, sum(irate(istio_request_duration_seconds_bucket{reporter=\"source\",destination_service=~\"productpage.default.svc.cluster.local\"}[1m])) by (le))")
             for q in query:
                 val = q["value"]
                 query_time = "{:.7f}".format(val[0]*TO_NANOSECONDS)
                 rps = val[1]
                 log.info("Time: %s Requests per second %s", query_time, rps)
                 writer.writerow([query_time, rps])
+                query_time = datetime.fromtimestamp(val[0])
                 csvfile.flush()
-            time.sleep(0.5)
+            time.sleep(1)
 
 
 def test_fault_injection(prom_api, platform):
@@ -406,18 +406,12 @@ def test_fault_injection(prom_api, platform):
 
 
 def do_multiple_runs(platform, num_runs, output_file):
-    _, _, gateway_url = get_gateway_info(platform)
     with open(output_file, "w+") as csvfile:
         writer = csv.writer(csvfile, delimiter=' ')
         writer.writerow(["found congestion?", "congestion started",
                          "congested detected",
                          "difference in nanoseconds",
-                         "difference in seconds", "average load between inducing and detecting congestion"])
-        # set up storage to query later
-        storage_proc = launch_storage_mon()
-        cur_time = ns_to_timestamp(time.time() * TO_NANOSECONDS)
-        log.info("Running Fortio at time %s", cur_time)
-        fortio_proc = start_fortio(gateway_url)
+                         "difference in seconds"])
         for _ in range(int(num_runs)):
             time.sleep(30)
             # once everything has started, retrieve the necessary url info
@@ -464,11 +458,6 @@ def do_multiple_runs(platform, num_runs, output_file):
                 log.info("No congestion caused")
             # sleep long enough that the congestion times will not be mixed up
             time.sleep(5)
-        # terminate fortio by sending an interrupt to the process group
-        os.killpg(os.getpgid(fortio_proc.pid), signal.SIGINT)
-        log.info("Killed fortio")
-        # kill the storage proc after the query
-        os.killpg(os.getpgid(storage_proc.pid), signal.SIGINT)
 
 
 def do_experiment(platform, multizonal, filter_name, num_experiments, output_file):
@@ -499,15 +488,28 @@ def do_experiment(platform, multizonal, filter_name, num_experiments, output_fil
         cmd = "lsof -ti tcp:8090 | xargs kill || exit 0"
         _ = util.exec_process(
             cmd, stdout=util.subprocess.PIPE, stderr=util.subprocess.PIPE)
+    else:
+        setup_bookinfo_deployment(platform, multizonal)
+        wait_until_pods_ready(platform)
+        # prom_proc, prom_api = launch_prometheus()
+        log.info("Deploying filter")
+        deploy_filter(filter_name)
+        wait_until_pods_ready(platform)
 
     """
     prom_proc, prom_api = launch_prometheus()
-    time.sleep(5)
+    time.sleep(10)
     p = Process(target=query_csv_loop, args=(prom_api, ))
     p.start()
-    time.sleep(5)
     do_multiple_runs(platform, num_experiments, output_file)
+    log.info("Killing fortio")
+    # terminate fortio by sending an interrupt to the process group
+    os.killpg(os.getpgid(fortio_proc.pid), signal.SIGINT)
+    # kill the storage proc after the query
+    log.info("Killing storage")
+    os.killpg(os.getpgid(storage_proc.pid), signal.SIGINT)
     # kill prometheus
+    log.info("Killing prometheus.")
     p.terminate()
     os.killpg(os.getpgid(prom_proc.pid), signal.SIGINT)
 
