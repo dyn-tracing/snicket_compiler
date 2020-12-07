@@ -369,7 +369,7 @@ def query_csv_loop(prom_api):
                 query="rate(istio_requests_total{destination_service=~\"productpage.*\", app=\"productpage\",  response_code=\"200\"}[1m])")
             for q in query:
                 val = q["value"]
-                query_time = datetime.fromtimestamp(val[0])
+                query_time = "{:.7f}".format(val[0]*TO_NANOSECONDS)
                 rps = val[1]
                 log.info("Time: %s Requests per second %s", query_time, rps)
                 writer.writerow([query_time, rps])
@@ -412,7 +412,7 @@ def do_multiple_runs(platform, num_runs, output_file):
         writer.writerow(["found congestion?", "congestion started",
                          "congested detected",
                          "difference in nanoseconds",
-                         "difference in seconds"])
+                         "difference in seconds", "average load between inducing and detecting congestion"])
         # set up storage to query later
         storage_proc = launch_storage_mon()
         cur_time = ns_to_timestamp(time.time() * TO_NANOSECONDS)
@@ -446,10 +446,21 @@ def do_multiple_runs(platform, num_runs, output_file):
                            int(time_of_congestion))
                 log.info(
                     "Latency between sending and recording in storage is %s seconds", (latency / TO_NANOSECONDS))
-                writer.writerow(
-                    ["yes", time_of_congestion, first_recorded_congestion, latency, (latency / TO_NANOSECONDS)])
+                with open("prom.csv", "r") as prom:
+                    avg = 0
+                    num_of_recordings = 0.0
+                    read = csv.reader(prom)
+                    for line in read:
+                        if line[0] != "Time": # don't look at the header
+                            timestamp = float(line[0])
+                            if timestamp > time_of_congestion and timestamp < first_recorded_congestion:
+                                avg += float(line[1])
+                                num_of_recordings += 1
+                    avg = avg/num_of_recordings
+                    writer.writerow(
+                        ["yes", time_of_congestion, first_recorded_congestion, latency, (latency / TO_NANOSECONDS), avg])
             else:
-                writer.writerow(["no", "." * 4])
+                writer.writerow(["no", "." * 5])
                 log.info("No congestion caused")
             # sleep long enough that the congestion times will not be mixed up
             time.sleep(5)
@@ -461,6 +472,7 @@ def do_multiple_runs(platform, num_runs, output_file):
 
 
 def do_experiment(platform, multizonal, filter_name, num_experiments, output_file):
+    """
     setup_bookinfo_deployment(platform, multizonal)
     wait_until_pods_ready(platform)
     # prom_proc, prom_api = launch_prometheus()
@@ -488,6 +500,7 @@ def do_experiment(platform, multizonal, filter_name, num_experiments, output_fil
         _ = util.exec_process(
             cmd, stdout=util.subprocess.PIPE, stderr=util.subprocess.PIPE)
 
+    """
     prom_proc, prom_api = launch_prometheus()
     time.sleep(5)
     p = Process(target=query_csv_loop, args=(prom_api, ))
