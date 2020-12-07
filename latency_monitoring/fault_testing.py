@@ -461,6 +461,17 @@ def do_multiple_runs(platform, num_runs, output_file):
 
 
 def do_experiment(platform, multizonal, filter_name, num_experiments, output_file):
+    setup_bookinfo_deployment(platform, multizonal)
+    wait_until_pods_ready(platform)
+    # prom_proc, prom_api = launch_prometheus()
+    log.info("deploying filter")
+    deploy_filter(filter_name)
+    wait_until_pods_ready(platform)
+    if check_kubernetes_status() != util.EXIT_SUCCESS:
+        log.error("Kubernetes is not set up."
+                  " Did you run the deployment script?")
+        sys.exit(util.EXIT_FAILURE)
+
     if check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
