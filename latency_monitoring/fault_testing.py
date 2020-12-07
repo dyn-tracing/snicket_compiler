@@ -359,6 +359,7 @@ def query_loop(prom_api, seconds):
         query_prometheus(prom_api)
         time.sleep(1)
 
+
 def query_csv_loop(prom_api):
     with open("prom.csv", "w+") as csvfile:
         writer = csv.writer(csvfile, delimiter=',')
@@ -368,7 +369,7 @@ def query_csv_loop(prom_api):
                 query="(histogram_quantile(0.90, sum(irate(istio_request_duration_milliseconds_bucket{reporter=\"source\",destination_service=~\"productpage.default.svc.cluster.local\"}[1m])) by (le)) / 1000) or histogram_quantile(0.90, sum(irate(istio_request_duration_seconds_bucket{reporter=\"source\",destination_service=~\"productpage.default.svc.cluster.local\"}[1m])) by (le))")
             for q in query:
                 val = q["value"]
-                query_time = "{:.7f}".format(val[0]*TO_NANOSECONDS)
+                query_time = "{:.7f}".format(val[0] * TO_NANOSECONDS)
                 rps = val[1]
                 log.info("Time: %s Requests per second %s", query_time, rps)
                 writer.writerow([query_time, rps])
@@ -449,12 +450,12 @@ def do_multiple_runs(platform, num_runs, output_file):
                     num_of_recordings = 0.0
                     read = csv.reader(prom)
                     for line in read:
-                        if line[0] != "Time": # don't look at the header
+                        if line[0] != "Time":  # don't look at the header
                             timestamp = float(line[0])
                             if timestamp > time_of_congestion and timestamp < first_recorded_congestion:
                                 avg += float(line[1])
                                 num_of_recordings += 1
-                    avg = avg/num_of_recordings
+                    avg = avg / num_of_recordings
                     writer.writerow(
                         ["yes", time_of_congestion, first_recorded_congestion, latency, (latency / TO_NANOSECONDS), avg])
             else:
@@ -465,18 +466,6 @@ def do_multiple_runs(platform, num_runs, output_file):
 
 
 def do_experiment(platform, multizonal, filter_name, num_experiments, output_file):
-    """
-    setup_bookinfo_deployment(platform, multizonal)
-    wait_until_pods_ready(platform)
-    # prom_proc, prom_api = launch_prometheus()
-    log.info("deploying filter")
-    deploy_filter(filter_name)
-    wait_until_pods_ready(platform)
-    if check_kubernetes_status() != util.EXIT_SUCCESS:
-        log.error("Kubernetes is not set up."
-                  " Did you run the deployment script?")
-        sys.exit(util.EXIT_FAILURE)
-
     if check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
@@ -500,7 +489,6 @@ def do_experiment(platform, multizonal, filter_name, num_experiments, output_fil
         deploy_filter(filter_name)
         wait_until_pods_ready(platform)
 
-    """
     prom_proc, prom_api = launch_prometheus()
     time.sleep(10)
     p = Process(target=query_csv_loop, args=(prom_api, ))
