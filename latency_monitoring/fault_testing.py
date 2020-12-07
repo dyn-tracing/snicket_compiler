@@ -414,7 +414,7 @@ def do_multiple_runs(platform, num_runs, output_file):
         writer.writerow(["found congestion?", "congestion started",
                          "congested detected",
                          "difference in nanoseconds",
-                         "difference in seconds"])
+                         "difference in seconds", "average load between inducing and detecting congestion"])
         for _ in range(int(num_runs)):
             time.sleep(30)
             # once everything has started, retrieve the necessary url info
