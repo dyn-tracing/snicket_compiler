@@ -489,6 +489,12 @@ def do_experiment(platform, multizonal, filter_name, num_experiments, output_fil
         deploy_filter(filter_name)
         wait_until_pods_ready(platform)
 
+    _, _, gateway_url = get_gateway_info(platform)
+    # set up storage to query later
+    storage_proc = launch_storage_mon()
+    cur_time = ns_to_timestamp(time.time() * TO_NANOSECONDS)
+    log.info("Running Fortio at time %s", cur_time)
+    fortio_proc = start_fortio(gateway_url)
     prom_proc, prom_api = launch_prometheus()
     time.sleep(10)
     p = Process(target=query_csv_loop, args=(prom_api, ))
