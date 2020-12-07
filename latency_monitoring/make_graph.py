@@ -8,13 +8,13 @@ import csv
 import pandas as pd
 
 INPUT_FILE = "input_file.csv"
+MAX = 5
 
-
-def make_graph(input_file):
+def make_graph(input_file, title):
     data = []
     valid_data = 0
     total_data = 0
-    dividers = np.linspace(0,5,51).tolist()
+    dividers = np.linspace(0,MAX,MAX*10+1).tolist()
     for d in range(len(dividers)):
         dividers[d] = round(dividers[d], 1)
 
@@ -37,19 +37,26 @@ def make_graph(input_file):
     data_to_graph = []
     for datapoint in binned_data:
         data_to_graph.append(datapoint.left)
-
+    data_to_graph = pd.DataFrame(data_to_graph)
     f, ax = plt.subplots(figsize=(7, 5))
     sns.despine(f)
 
     sns.histplot(
-        pd.DataFrame(data_to_graph)[0])
+        data_to_graph,
+        palette='muted',
+        legend=False
+    )
+    ax.set(xlabel="Latency", ylabel="Number of Runs")
+    ax.set_xticks(np.linspace(0, MAX, MAX).tolist())
+    ax.set_facecolor('xkcd:light grey')
+    ax.set_title(title)
     plt.show()
     plt.savefig('test.png')  
 
 
 
 def main(args):
-    make_graph(args.input_file)
+    make_graph(args.input_file, args.graph_title)
 
 
 if __name__ == '__main__':
@@ -57,6 +64,9 @@ if __name__ == '__main__':
     parser.add_argument("-i", "--input_file", dest="input_file",
                         default=INPUT_FILE,
                         help="File of data to make a graph of. ")
+    parser.add_argument("-t", "--graph_title", dest="graph_title",
+                        default="Latency Markers",
+                        help="The title of the graph. ")
 
     arguments = parser.parse_args()
     main(arguments)
