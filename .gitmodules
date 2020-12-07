@@ -2,5 +2,5 @@
     url = https://github.com/fruffy/microservices-demo
     path = latency_monitoring/microservices-demo
 [submodule "latency_monitoring/wasm"]
-    url = https://github.com/solo-io/wasm
+    url = https://github.com/fruffy/wasm
     path = latency_monitoring/wasm
