@@ -49,8 +49,8 @@ def make_graph(input_file, title):
     ax.set_xticks(np.linspace(0, MAX, MAX).tolist())
     ax.set_facecolor('xkcd:light grey')
     ax.set_title(title)
-    plt.show()
     plt.savefig('test.png')
+    plt.show()
 
 
 def main(args):

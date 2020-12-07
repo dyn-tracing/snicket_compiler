@@ -5,10 +5,11 @@ import sys
 import time
 import os
 import signal
+import csv
 from datetime import datetime
 from pathlib import Path
 import requests
-import csv
+from multiprocessing import Process
 
 from prometheus_api_client import PrometheusConnect
 
@@ -359,6 +360,23 @@ def query_loop(prom_api, seconds):
         time.sleep(1)
 
 
+def query_csv_loop(prom_api):
+    with open("prom.csv", "w+") as csvfile:
+        writer = csv.writer(csvfile, delimiter=',')
+        writer.writerow(["Time", "RPS"])
+        while True:
+            query = prom_api.custom_query(
+                query="rate(istio_requests_total{destination_service=~\"productpage.*\", app=\"productpage\",  response_code=\"200\"}[1m])")
+            for q in query:
+                val = q["value"]
+                query_time = datetime.fromtimestamp(val[0])
+                rps = val[1]
+                log.info("Time: %s Requests per second %s", query_time, rps)
+                writer.writerow([query_time, rps])
+                csvfile.flush()
+            time.sleep(0.5)
+
+
 def test_fault_injection(prom_api, platform):
     if check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
@@ -389,7 +407,7 @@ def test_fault_injection(prom_api, platform):
 
 def do_multiple_runs(platform, num_runs, output_file):
     _, _, gateway_url = get_gateway_info(platform)
-    with open(output_file, 'w') as csvfile:
+    with open(output_file, "w+") as csvfile:
         writer = csv.writer(csvfile, delimiter=' ')
         writer.writerow(["found congestion?", "congestion started",
                          "congested detected",
@@ -401,6 +419,7 @@ def do_multiple_runs(platform, num_runs, output_file):
         log.info("Running Fortio at time %s", cur_time)
         fortio_proc = start_fortio(gateway_url)
         for _ in range(int(num_runs)):
+            time.sleep(30)
             # once everything has started, retrieve the necessary url info
             cur_time = ns_to_timestamp(time.time() * TO_NANOSECONDS)
             log.info("Injecting latency at time %s", cur_time)
@@ -409,9 +428,11 @@ def do_multiple_runs(platform, num_runs, output_file):
             time_of_congestion = time.time() * TO_NANOSECONDS
             cause_congestion(platform)
             log.info("Causing congestion at %s", cur_time)
+            time.sleep(5)
             cur_time = ns_to_timestamp(time.time() * TO_NANOSECONDS)
             log.info("Removing latency at time %s", cur_time)
             remove_failure()
+            time.sleep(30)
             cur_time = ns_to_timestamp(time.time() * TO_NANOSECONDS)
             log.info("Done at time %s", cur_time)
             first_recorded_congestion = find_congestion(
@@ -440,27 +461,31 @@ def do_multiple_runs(platform, num_runs, output_file):
 
 
 def do_experiment(platform, multizonal, filter_name, num_experiments, output_file):
-    """
-    setup_bookinfo_deployment(platform, multizonal)
-    wait_until_pods_ready(platform)
-    # prom_proc, prom_api = launch_prometheus()
-    log.info("deploying filter")
-    deploy_filter(filter_name)
-    wait_until_pods_ready(platform)
     if check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
-    """
+
+    # clean up any proc listening on 9090 just to be safe
+    cmd = "lsof -ti tcp:9090 | xargs kill || exit 0"
+    _ = util.exec_process(
+        cmd, stdout=util.subprocess.PIPE, stderr=util.subprocess.PIPE)
+
     if platform != "GCP":
         # clean up any proc listening on 8090 just to be safe
         cmd = "lsof -ti tcp:8090 | xargs kill || exit 0"
         _ = util.exec_process(
             cmd, stdout=util.subprocess.PIPE, stderr=util.subprocess.PIPE)
-    do_multiple_runs(platform, num_experiments, output_file)
 
+    prom_proc, prom_api = launch_prometheus()
+    time.sleep(5)
+    p = Process(target=query_csv_loop, args=(prom_api, ))
+    p.start()
+    time.sleep(5)
+    do_multiple_runs(platform, num_experiments, output_file)
     # kill prometheus
-    # os.killpg(os.getpgid(prom_proc.pid), signal.SIGINT)
+    p.terminate()
+    os.killpg(os.getpgid(prom_proc.pid), signal.SIGINT)
 
 
 def build_filter(filter_dir, filter_name):
@@ -665,7 +690,7 @@ if __name__ == '__main__':
     logging.basicConfig(filename=arguments.log_file,
                         format="%(levelname)s:%(message)s",
                         level=getattr(logging, arguments.log_level),
-                        filemode='w')
+                        filemode="w")
     stderr_log = logging.StreamHandler()
     stderr_log.setFormatter(logging.Formatter("%(levelname)s:%(message)s"))
     logging.getLogger().addHandler(stderr_log)
