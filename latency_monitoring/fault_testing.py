@@ -370,10 +370,6 @@ def query_csv_loop(prom_api):
             for q in query:
                 val = q["value"]
                 query_time = "{:.7f}".format(val[0] * TO_NANOSECONDS)
-                rps = val[1]
-                log.info("Time: %s Requests per second %s", query_time, rps)
-                writer.writerow([query_time, rps])
-                query_time = datetime.fromtimestamp(val[0])
                 latency = float(val[1]) * 1000
                 log.info("Time: %s 90pct Latency (ms) %s", query_time, latency)
                 writer.writerow([query_time, latency])
