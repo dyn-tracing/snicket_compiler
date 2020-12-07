@@ -35,19 +35,16 @@ def make_graph(input_file):
     binned_data = pd.cut(data[0], bins=dividers)
 
     data_to_graph = []
-    for divider in dividers:
-        data_to_graph.append(0)
     for datapoint in binned_data:
-        data_to_graph[divider_to_index[datapoint.left]] += 1
+        data_to_graph.append(datapoint.left)
 
+    f, ax = plt.subplots(figsize=(7, 5))
+    sns.despine(f)
 
-    # convert everything to dataframe so it can be graphed
-    data_to_graph = pd.DataFrame(data_to_graph)
-    dividers = pd.DataFrame(dividers)
-    input_to_graph = pd.concat([data_to_graph, dividers], axis=1)
-    input_to_graph.columns = ["latency", "bins"]
-    import pdb; pdb.set_trace()
-
+    sns.histplot(
+        pd.DataFrame(data_to_graph)[0])
+    plt.show()
+    plt.savefig('test.png')  
 
 
 
