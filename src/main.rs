@@ -77,6 +77,6 @@ fn main() {
         .render_template(&template_str, &code_gen)
         .expect("handlebar render failed");
 
-    let mut file = File::create("./wasm/filter.cc").expect("file create failed.");
+    let mut file = File::create("./cpp_filter/filter.cc").expect("file create failed.");
     file.write_all(output.as_bytes()).expect("write failed");
 }
