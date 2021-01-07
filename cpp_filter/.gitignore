@@ -3,4 +3,4 @@ bazel-out
 bazel-testlogs
 bazel-workspace
 bazel-path-based-counter
-bazel-wasm
+bazel-cpp_filter
