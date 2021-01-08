@@ -1,0 +1,6 @@
+bazel-bin
+bazel-out
+bazel-testlogs
+bazel-workspace
+bazel-path-based-counter
+bazel-cpp_filter
