@@ -1,0 +1,29 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: productpage-storage-upstream-cluster
+  namespace: default
+spec:
+  configPatches:
+    - applyTo: CLUSTER
+      match:
+        context: SIDECAR_INBOUND
+      patch:
+        operation: ADD
+        value:
+          name: storage-upstream
+          lb_policy: ROUND_ROBIN
+          type: STRICT_DNS
+          connect_timeout: 0.5s
+          load_assignment:
+            cluster_name: storage-upstream
+            endpoints:
+            - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: storage-upstream
+                      port_value: 8080
+  # workloadSelector:
+  #   labels:
+  #     app: productpage

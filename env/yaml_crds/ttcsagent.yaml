@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ttcs-agent
+  labels:
+    app: ttcs-agent
+spec:
+  selector:
+    matchLabels:
+      app: ttcs-agent
+  template:
+    metadata:
+      labels:
+        app: ttcs-agent
+    spec:
+      hostNetwork: true
+      dnsPolicy: "ClusterFirstWithHostNet"
+      containers:
+      - name: ttcs-agent
+        image: gcr.io/canvas-diagram-295814/ttcs-agent-image:latest
+        ports:
+        - containerPort: 6171
+        securityContext:
+          privileged: true
+        env:
+        - name: FLAGS_subscription_mode
+          value: "true"
+        - name: FLAGS_coordinator_address
+          value: "c-jb7399-264b.gcp.ticktocknetworks.com"
+        - name: FLAGS_coordinator_subscription_service_port
+          value: "6176"
+        - name: FLAGS_probe_port
+          value: "3190"
+        - name: FLAGS_correct_clock
+          value: "true"
+        - name: FLAGS_management_address
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: FLAGS_probe_address
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        # This is the name of the node (not pod) on which the agent is running.
+        - name: FLAGS_agent_name
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
