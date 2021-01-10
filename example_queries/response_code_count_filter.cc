@@ -224,7 +224,7 @@ void BidiContext::onResponseHeadersInbound() {
     LOG_WARN("x-wasm-property: " + properties_joined);
   }
 
-  if (root_->getWorkloadName() == "productpage-v1") {
+  if (root_->getWorkloadName() == ""productpage-v1"") {
     // TODO: Construct TreeNode graph using paths and properties returned
     // and check whether the query is subgraph isomorphic to the graph
     // generated from request trace.
