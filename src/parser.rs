@@ -1,6 +1,6 @@
 use crate::grammar::*;
-use std::iter::Peekable;
 use crate::token::Token;
+use std::iter::Peekable;
 
 type TokenIterator<'a> = Peekable<std::slice::Iter<'a, Token<'a>>>;
 

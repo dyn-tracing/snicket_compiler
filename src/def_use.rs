@@ -1,6 +1,6 @@
 use crate::grammar::*;
-use std::collections::HashSet;
 use crate::tree_fold::TreeFold;
+use std::collections::HashSet;
 
 #[derive(Default)]
 pub struct DefUse<'a> {

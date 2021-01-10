@@ -1,11 +1,11 @@
 use crate::grammar::*;
+use crate::tree_fold::TreeFold;
 use regex::Regex;
 use serde::{Serialize, Serializer};
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::string::ToString;
 use strum_macros::EnumString;
-use crate::tree_fold::TreeFold;
 
 /// C++ type
 #[derive(Clone, Copy, Display, Debug, Eq, Hash, PartialEq, EnumString)]
@@ -463,8 +463,8 @@ mod tests {
     use super::*;
     use crate::lexer;
     use crate::parser;
-    use std::iter::Peekable;
     use crate::token::Token;
+    use std::iter::Peekable;
 
     #[test]
     fn test_match() {
