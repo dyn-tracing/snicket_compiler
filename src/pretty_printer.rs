@@ -1,5 +1,5 @@
-use grammar::*;
-use tree_fold::TreeFold;
+use crate::grammar::*;
+use crate::tree_fold::TreeFold;
 
 #[derive(Default)]
 pub struct PrettyPrinter {

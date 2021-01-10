@@ -1,11 +1,11 @@
-use grammar::*;
+use crate::grammar::*;
 use regex::Regex;
 use serde::{Serialize, Serializer};
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::string::ToString;
 use strum_macros::EnumString;
-use tree_fold::TreeFold;
+use crate::tree_fold::TreeFold;
 
 /// C++ type
 #[derive(Clone, Copy, Display, Debug, Eq, Hash, PartialEq, EnumString)]
@@ -461,10 +461,10 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lexer;
-    use parser;
+    use crate::lexer;
+    use crate::parser;
     use std::iter::Peekable;
-    use token::Token;
+    use crate::token::Token;
 
     #[test]
     fn test_match() {

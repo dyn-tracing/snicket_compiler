@@ -10,7 +10,7 @@ lazy_static! {
     static ref VALUES: Regex = Regex::new(r"^([0-9]+)$").unwrap();
 }
 
-use token::Token;
+use crate::token::Token;
 fn get_single_token(tok_str: &str) -> Token {
     if KEYWORDS.is_match(tok_str) {
         match tok_str {
