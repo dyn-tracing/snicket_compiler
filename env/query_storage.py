@@ -1,28 +1,34 @@
 #!/usr/bin/env python3
+import signal
+import os
 import argparse
 import logging
 import requests
 
-import kube_env
+import run_experiment
+import util
 
 log = logging.getLogger(__name__)
 
 
-def send_request(args):
-    _, _, gateway_url = kube_env.get_gateway_info(args.platform)
-    url = f"http://{gateway_url}/productpage"
-    response = requests.get(url)
-    return response
+def query_storage():
+    storage_content = requests.get("http://localhost:8090/list")
+    return storage_content
 
 
-def main(args):
-    log.info(send_request(args).headers)
+def main(_):
+    util.kill_tcp_proc(8090)
+    storage_proc = run_experiment.launch_storage_mon()
+
+    log.info("Storage content:\n%s", query_storage().text)
+    # kill the storage proc after the query
+    os.killpg(os.getpgid(storage_proc.pid), signal.SIGINT)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-l", "--log-file", dest="log_file",
-                        default="requests.log",
+                        default="storage.log",
                         help="Specifies name of the log file.")
     parser.add_argument("-ll", "--log-level", dest="log_level",
                         default="INFO",

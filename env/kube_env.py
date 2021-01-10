@@ -20,7 +20,7 @@ YAML_DIR = FILE_DIR.joinpath("yaml_crds")
 TOOLS_DIR = FILE_DIR.joinpath("tools")
 
 FILTER_DIR = FILE_DIR.joinpath("../cpp_filter")
-
+CM_FILTER_NAME = "example_filter"
 # the kubernetes python API sucks, but keep this for later
 
 # from kubernetes import client
@@ -52,9 +52,9 @@ def inject_istio():
 def deploy_addons():
     apply_cmd = "kubectl apply -f "
     url = "https://raw.githubusercontent.com/istio/istio/release-1.8"
-    cmd = f"{apply_cmd} {YAML_DIR}/prometheus-mod.yaml && "
-    cmd += f"{apply_cmd} {url}/samples/addons/grafana.yaml "
-    # cmd += f"{apply_cmd} {url}/samples/addons/jaeger.yaml && "
+    # cmd = f"{apply_cmd} {YAML_DIR}/prometheus-mod.yaml && "
+    cmd = f"{apply_cmd} {url}/samples/addons/jaeger.yaml "
+    # cmd += f"{apply_cmd} {url}/samples/addons/grafana.yaml "
     # cmd += f"{apply_cmd} {url}/samples/addons/kiali.yaml || "
     # cmd += f"{apply_cmd} {url}/samples/addons/kiali.yaml"
     result = util.exec_process(cmd)
@@ -255,18 +255,18 @@ def undeploy_filter():
 
 def deploy_filter(filter_dir):
     # check if the config map already exists
-    cmd = "kubectl get configmaps example-filter "
+    cmd = f"kubectl get configmaps {CM_FILTER_NAME} "
     result = util.exec_process(cmd)
     if result != util.EXIT_SUCCESS:
         # create the config map with the filter
-        cmd = "kubectl create configmap example-filter --from-file "
-        cmd += f"{filter_dir}/bazel-bin/filter.wasm --dry-run=client -o yaml "
-        cmd += "| kubectl apply -f -"
+        cmd = f"kubectl create configmap {CM_FILTER_NAME} --from-file "
+        cmd += f"{filter_dir}/bazel-bin/filter.wasm "
         result = util.exec_process(cmd)
         if result != util.EXIT_SUCCESS:
+            log.error("Failed to create config map.")
             return result
     else:
-        log.info("Config map example-filter already exists!")
+        log.warning("Config map %s already exists!", CM_FILTER_NAME)
     # update the containers with the config map
     cmd = f"kubectl replace -f {YAML_DIR}/bookinfo-mod-filter.yaml "
     # FIXME: There is an issue with the yaml currently, so we ignore the result
@@ -280,7 +280,21 @@ def deploy_filter(filter_dir):
     return result
 
 
-def refresh_filter():
+def refresh_filter(filter_dir):
+
+    # delete the config map
+    cmd = f"kubectl delete configmap {CM_FILTER_NAME} "
+    result = util.exec_process(cmd)
+    if result != util.EXIT_SUCCESS:
+        log.warning("Failed to delete the config map.")
+    # "refresh" it by recreating the config map
+    cmd = f"kubectl create configmap {CM_FILTER_NAME} --from-file "
+    cmd += f"{filter_dir}/bazel-bin/filter.wasm "
+    result = util.exec_process(cmd)
+    if result != util.EXIT_SUCCESS:
+        log.error("Failed to create config map.")
+        return result
+
     # this is equivalent to a deployment restart right now
     cmd = "kubectl rollout restart  deployments --namespace=default"
     result = util.exec_process(cmd)
@@ -295,7 +309,7 @@ def handle_filter(args):
     if args.undeploy_filter:
         return undeploy_filter()
     if args.refresh_filter:
-        return refresh_filter()
+        return refresh_filter(args.filter_dir)
     log.warning("No command line input provided. Do nothing.")
     return util.EXIT_SUCCESS
 

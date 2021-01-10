@@ -10,6 +10,9 @@ spec:
       app: storage-upstream
   template:
     metadata:
+      annotations:
+        sidecar.istio.io/userVolume: '[{"name":"wasmfilters-dir","configMap": {"name": "example-filter"}}]'
+        sidecar.istio.io/userVolumeMount: '[{"mountPath":"/var/local/lib/wasm-filters","name":"wasmfilters-dir"}]'
       labels:
         app: storage-upstream
     spec:
