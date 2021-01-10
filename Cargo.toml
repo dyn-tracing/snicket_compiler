@@ -12,6 +12,10 @@ serde = { version = "1.0", features = ["derive"] }
 strum = "0.19"
 strum_macros = "0.19"
 
+[dev-dependencies]
+assert_cmd = "0.10"
+predicates = "1"
+
 [lib]
 name = "dyntracing"
 path = "src/lib.rs"

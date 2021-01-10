@@ -1,1 +1,1 @@
-MATCH x-->y: m, WHERE x.service_name == productpagev1, RETURN x.height,
+MATCH x-->y: m, WHERE x.service_name == productpage-v1, RETURN x.height,

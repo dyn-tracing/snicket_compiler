@@ -1,5 +1,5 @@
 MATCH a-->b : x, b-->c : y, a-->d: z,
-WHERE a.service_name == productpagev1,
+WHERE a.service_name == productpage-v1,
     b.service_name == reviewsv2,
     c.service_name == ratingsv1,
     d.service_name == detailsv1,
