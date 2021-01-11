@@ -25,26 +25,26 @@ kind: Service
 metadata:
   name: storage-upstream
   namespace: storage
+  labels:
+    app: storage-upstream
+    service: storage-upstream
 spec:
-  type: ClusterIP
+  ports:
+  - port: 8080
+    name: http
   selector:
     app: storage-upstream
-  ports:
-  - name: storage-upstream
-    port: 8080
-    targetPort: 8080
 ---
 kind: Service
 apiVersion: v1
 metadata:
   name: storage-upstream
+  namespace: default
 spec:
   type: ExternalName
   externalName: storage-upstream.storage.svc.cluster.local
   ports:
-  - name: storage-upstream
-    port: 8080
-    targetPort: 8080
+  - port: 8080
 
 
 

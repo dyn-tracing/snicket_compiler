@@ -263,7 +263,7 @@ void BidiContext::onResponseHeadersInbound() {
       LOG_WARN(std::string(body->view()));
     };
 
-    auto result = root()->httpCall("storage-upstream.storage",
+    auto result = root()->httpCall("storage-upstream",
                                    { {":method", "GET"},
                                     {":path", "/store"},
                                     {":authority", "storage-upstream"},
