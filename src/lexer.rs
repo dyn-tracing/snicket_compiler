@@ -3,15 +3,15 @@ use regex::RegexSet;
 
 lazy_static! {
     static ref TOKENS: Regex =
-        Regex::new(r"[0-9]+|[A-Za-z_][A-Za-z0-9_]*|-->|-\*>|:|,|\.|==|\S+").unwrap();
+        Regex::new(r#""(.*)"|[0-9]+|[A-Za-z_][A-Za-z0-9_]*|-->|-\*>|:|,|\.|=="#).unwrap();
     static ref KEYWORDS: Regex = Regex::new(r"^(MATCH|WHERE|RETURN|GROUP|BY)$").unwrap();
     static ref IDENTIFIERS: RegexSet =
-        RegexSet::new(&[r"^[A-Za-z][A-Za-z0-9_]*$", r#"^"[A-Za-z][A-Za-z0-9_-]*"$"#]).unwrap();
+        RegexSet::new(&[r"^[A-Za-z][A-Za-z0-9_]*$", r#"^".*"$"#]).unwrap();
     static ref VALUES: Regex = Regex::new(r"^([0-9]+)$").unwrap();
 }
 
 use crate::token::Token;
-fn get_single_token(tok_str: &str) -> Token {
+fn get_single_token(tok_str: &str, is_wrapped: bool) -> Token {
     if KEYWORDS.is_match(tok_str) {
         match tok_str {
             "MATCH" => Token::Match,
@@ -21,9 +21,9 @@ fn get_single_token(tok_str: &str) -> Token {
             "BY" => Token::By,
             _ => panic!("Unrecognized keyword string: {}", tok_str),
         }
-    } else if IDENTIFIERS.is_match(tok_str) {
+    } else if IDENTIFIERS.is_match(tok_str) || is_wrapped {
         Token::Identifier(tok_str)
-    } else if VALUES.is_match(tok_str) {
+    } else if VALUES.is_match(&tok_str) {
         Token::Value(tok_str.parse::<u32>().unwrap())
     } else {
         match tok_str {
@@ -41,8 +41,19 @@ fn get_single_token(tok_str: &str) -> Token {
 pub fn get_tokens(input_program: &str) -> Vec<Token> {
     let mut token_array = Vec::new();
     for cap in TOKENS.captures_iter(input_program) {
-        let tok_str = cap.get(0).unwrap().as_str();
-        token_array.push(get_single_token(tok_str));
+        // because of ambiguity when parsing wrapped quotes
+        // we may get two capture groups
+        let capture_0 = cap.get(0);
+        let capture_1 = cap.get(1);
+        // if the second capture group is not none,
+        // it indicates an identifier that was wrapped in quotes
+        if capture_1.is_none() {
+            let tok_str = capture_0.unwrap().as_str();
+            token_array.push(get_single_token(tok_str, false));
+        } else {
+            let tok_str = capture_1.unwrap().as_str();
+            token_array.push(get_single_token(tok_str, true));
+        }
     }
     token_array
 }

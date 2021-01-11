@@ -1,7 +1,7 @@
 use assert_cmd::prelude::*; // Add methods on commands
 use std::path::Path; // Directory management
 use std::process::Command; // Run programs
-use test_case::test_case;
+use test_case::test_case; // Parametrized tests
 
 #[test_case("breadth_histogram.cql", vec!["histogram.cc"]; "breadth_histogram")]
 #[test_case("height_histogram.cql", vec!["histogram.cc"]; "height_histogram")]
