@@ -20,7 +20,7 @@ YAML_DIR = FILE_DIR.joinpath("yaml_crds")
 TOOLS_DIR = FILE_DIR.joinpath("tools")
 
 FILTER_DIR = FILE_DIR.joinpath("../cpp_filter")
-CM_FILTER_NAME = "example_filter"
+CM_FILTER_NAME = "example-filter"
 # the kubernetes python API sucks, but keep this for later
 
 # from kubernetes import client
@@ -229,6 +229,11 @@ def setup_bookinfo_deployment(platform, multizonal):
     result = inject_istio()
     if result != util.EXIT_SUCCESS:
         return result
+    # create the namespace for storage
+    cmd = " kubectl create namespace storage "
+    result = util.exec_process(cmd)
+    if result != util.EXIT_SUCCESS:
+        return result
     result = deploy_bookinfo()
     if result != util.EXIT_SUCCESS:
         return result
@@ -298,7 +303,16 @@ def refresh_filter(filter_dir):
     # this is equivalent to a deployment restart right now
     cmd = "kubectl rollout restart  deployments --namespace=default"
     result = util.exec_process(cmd)
-    return result
+    if result != util.EXIT_SUCCESS:
+        return result
+
+    # also reset storage since we are working with a different filter now
+    cmd = "kubectl rollout restart deployment storage-upstream -n=storage "
+    result = util.exec_process(cmd)
+    if result != util.EXIT_SUCCESS:
+        return result
+
+    return bookinfo_wait()
 
 
 def handle_filter(args):
