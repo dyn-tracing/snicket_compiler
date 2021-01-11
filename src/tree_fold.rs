@@ -3,7 +3,7 @@
 // methods that process specific types of tree nodes, while using default
 // methods for other types of tree nodes.
 
-use grammar::*;
+use crate::grammar::*;
 
 pub trait TreeFold<'a> {
     fn visit_prog(&mut self, tree: &'a Prog) {

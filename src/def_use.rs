@@ -1,6 +1,6 @@
-use grammar::*;
+use crate::grammar::*;
+use crate::tree_fold::TreeFold;
 use std::collections::HashSet;
-use tree_fold::TreeFold;
 
 #[derive(Default)]
 pub struct DefUse<'a> {
@@ -68,9 +68,9 @@ impl<'a> TreeFold<'a> for DefUse<'a> {
 #[cfg(test)]
 mod tests {
     use super::DefUse;
-    use lexer;
-    use parser;
-    use tree_fold::TreeFold;
+    use crate::lexer;
+    use crate::parser;
+    use crate::tree_fold::TreeFold;
 
     fn run_def_use(input_program: &str) {
         // Lexing

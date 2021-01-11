@@ -54,7 +54,7 @@ fn main() {
     code_gen.cmd = std::env::args().collect::<Vec<String>>().join(" ");
 
     // TODO(taegyunkim): Specify the root service name from commandline
-    code_gen.root_id = "productpagev1";
+    code_gen.root_id = "productpage-v1";
     code_gen.visit_prog(&parse_tree);
 
     // Open filter template.
