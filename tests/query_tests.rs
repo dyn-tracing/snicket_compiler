@@ -14,17 +14,23 @@ fn check_compilation(
     query_name: &str,
     udf_names: Vec<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // Static folders
     let proj_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let query_dir = proj_dir.join("example_queries/");
-    let udf_dir = proj_dir.join("example_udfs/");
+    let query_dir = proj_dir.join("example_queries");
+    let udf_dir = proj_dir.join("example_udfs");
+
+    // The input query in the folder is provided as test case
     let query_file = query_dir.join(query_name);
+    // This is the binary to compile a query
+    let mut cmd = Command::cargo_bin("dyntracing")?;
+    // Assemble the args, first the input query
     let mut args = vec!["-q".to_string(), format!("{}", query_file.display()).into()];
+    // Append every udf that is provided
     for udf_name in udf_names {
         let udf_file = udf_dir.join(udf_name);
         args.push("-u".to_string());
         args.push(format!("{}", udf_file.display()).to_string());
     }
-    let mut cmd = Command::cargo_bin("dyntracing")?;
     cmd.args(args);
     cmd.assert().success();
 
