@@ -43,16 +43,13 @@ pub fn get_tokens(input_program: &str) -> Vec<Token> {
     for cap in TOKENS.captures_iter(input_program) {
         // because of ambiguity when parsing wrapped quotes
         // we may get two capture groups
-        let capture_0 = cap.get(0);
-        let capture_1 = cap.get(1);
-        // if the second capture group is not none,
-        // it indicates an identifier that was wrapped in quotes
-        if capture_1.is_none() {
-            let tok_str = capture_0.unwrap().as_str();
-            token_array.push(get_single_token(tok_str, false));
+        if let Some(capture_1) = cap.get(1) {
+            // if the second capture group is not none,
+            // it indicates an identifier that was wrapped in quotes
+            token_array.push(get_single_token(capture_1.as_str(), true));
         } else {
-            let tok_str = capture_1.unwrap().as_str();
-            token_array.push(get_single_token(tok_str, true));
+            let tok_str = cap.get(0).unwrap().as_str();
+            token_array.push(get_single_token(tok_str, false));
         }
     }
     token_array
