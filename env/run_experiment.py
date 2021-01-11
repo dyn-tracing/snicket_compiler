@@ -115,9 +115,9 @@ def launch_storage_mon():
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
     cmd = "kubectl get pods -lapp=storage-upstream "
-    cmd += " -o jsonpath={.items[0].metadata.name}"
+    cmd += " -o jsonpath={.items[0].metadata.name} -n=storage"
     storage_pod_name = util.get_output_from_proc(cmd).decode("utf-8")
-    cmd = f"kubectl port-forward {storage_pod_name} 8090:8080"
+    cmd = f"kubectl -n=storage port-forward {storage_pod_name} 8090:8080"
     storage_proc = util.start_process(cmd, preexec_fn=os.setsid)
     # Let settle things in a bit
     time.sleep(2)

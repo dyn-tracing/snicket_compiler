@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: storage-upstream
+  namespace: storage
   labels:
     name: storage-upstream
 spec:
@@ -10,9 +11,6 @@ spec:
       app: storage-upstream
   template:
     metadata:
-      annotations:
-        sidecar.istio.io/userVolume: '[{"name":"wasmfilters-dir","configMap": {"name": "example-filter"}}]'
-        sidecar.istio.io/userVolumeMount: '[{"mountPath":"/var/local/lib/wasm-filters","name":"wasmfilters-dir"}]'
       labels:
         app: storage-upstream
     spec:
@@ -26,13 +24,28 @@ apiVersion: v1
 kind: Service
 metadata:
   name: storage-upstream
+  namespace: storage
+  labels:
+    app: storage-upstream
+    service: storage-upstream
 spec:
-  type: ClusterIP
+  ports:
+  - port: 8080
+    name: http
   selector:
     app: storage-upstream
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: storage-upstream
+  namespace: default
+spec:
+  type: ExternalName
+  externalName: storage-upstream.storage.svc.cluster.local
   ports:
-  - name: storage-upstream
-    port: 8080
-    targetPort: 8080
+  - port: 8080
+
+
 
 # kubectl port-forward (kubectl get pods  -lapp=storage-upstream -o jsonpath={.items[0].metadata.name}) 8080
