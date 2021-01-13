@@ -1,5 +1,5 @@
 [package]
-name = "dyntracing"
+name = "dtc"
 version = "0.1.0"
 authors = ["Anirudh Sivaraman <sk.anirudh@gmail.com>"]
 edition = "2018"
@@ -23,5 +23,5 @@ name = "dyntracing"
 path = "src/lib.rs"
 
 [[bin]]
-name = "dyntracing"
+name = "dtc"
 path = "src/main.rs"
