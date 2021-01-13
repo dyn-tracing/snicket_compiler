@@ -1,5 +1,5 @@
 // Auto generated Envoy WASM filter from following command:
-// target/debug/dyntracing -q example_queries/breadth_histogram.cql -u example_udfs/histogram.cc
+// /storage/Projekte/tracing_env/tracing_compiler/target/debug/dtc -q /storage/Projekte/tracing_env/tracing_compiler/example_queries/height_histogram.cql -u /storage/Projekte/tracing_env/tracing_compiler/example_udfs/histogram.cc -o /storage/Projekte/tracing_env/tracing_compiler/example_queries/height_histogram.cc
 
 // NOLINT(namespace-envoy)
 #include <map>
@@ -9,11 +9,10 @@
 #include <string>
 #include <unordered_map>
 
-#include "absl/strings/str_join.h"
-#include "absl/strings/str_split.h"
 #include "proxy_wasm_intrinsics.h"
 
 #include "graph_utils.h"
+#include "str_utils.h"
 
 // TrafficDirection is a mirror of envoy xDS traffic direction.
 // As defined in istio/proxy/extensions/common/context.h
@@ -60,7 +59,7 @@ public:
 
 class BidiRootContext : public RootContext {
 public:
-  explicit BidiRootContext(uint32_t id, StringView root_id)
+  explicit BidiRootContext(uint32_t id, std::string_view root_id)
       : RootContext(id, root_id) {
     std::string workload_name;
     if (getValue({"node", "metadata", "WORKLOAD_NAME"}, &workload_name)) {
@@ -72,9 +71,10 @@ public:
   }
   bool onConfigure(size_t /* configuration_size */) override;
 
-  StringView getWorkloadName() { return workload_name_; }
+  std::string_view getWorkloadName() { return workload_name_; }
 
-  histogram histogram_udf_;
+histogram histogram_udf_;
+
 
 private:
   std::string workload_name_;
@@ -89,11 +89,14 @@ public:
     direction_ = getTrafficDirection();
   }
 
-  FilterHeadersStatus onRequestHeaders(uint32_t headers) override;
-  FilterHeadersStatus onResponseHeaders(uint32_t headers) override;
-
-  void onResponseHeadersInbound();
-  void onResponseHeadersOutbound();
+    FilterHeadersStatus onRequestHeaders(uint32_t headers,
+                                         bool end_of_stream) override;
+    FilterHeadersStatus onRequestHeadersInbound();
+    FilterHeadersStatus onRequestHeadersOutbound();
+    FilterHeadersStatus onResponseHeaders(uint32_t headers,
+                                          bool end_of_stream) override;
+    void onResponseHeadersInbound();
+    void onResponseHeadersOutbound();
 
 private:
   BidiRootContext *root_;
@@ -109,7 +112,7 @@ static RegisterContextFactory
 
 bool BidiRootContext::onConfigure(size_t) { return true; }
 
-FilterHeadersStatus BidiContext::onRequestHeaders(uint32_t) {
+FilterHeadersStatus BidiContext::onRequestHeaders(uint32_t, bool) {
   auto trace_id = getRequestHeader("x-b3-traceid");
   if (trace_id->data() == nullptr) {
     LOG_WARN(trafficDirectionToString(direction_) + " " +
@@ -155,8 +158,7 @@ void BidiContext::onResponseHeadersInbound() {
 
     // Multiple paths could exist separated by commas.
     // split string using ','
-    std::vector<std::string> paths =
-        absl::StrSplit(header_value, ",", absl::SkipEmpty());
+    std::vector<std::string> paths = str_split(header_value, ",", true);
 
     // Prepend current workload name to paths.
     for (auto &w : paths) {
@@ -164,7 +166,7 @@ void BidiContext::onResponseHeadersInbound() {
     }
 
     // Join them all to a single string.
-    paths_joined = absl::StrJoin(paths, ",");
+    paths_joined = str_join(paths, ",");
   }
 
   // When this service is a leaf node
@@ -182,35 +184,29 @@ void BidiContext::onResponseHeadersInbound() {
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
   {
-    std::string value;
-    if (getValue(
-            {
-                "node",
-                "metadata",
-                "WORKLOAD_NAME",
-            },
-            &value)) {
-      std::string result = std::string(root_->getWorkloadName());
-      for (auto p : {
-               "node",
-               "metadata",
-               "WORKLOAD_NAME",
-           }) {
-        result += "." + std::string(p);
-      }
-      result += "==";
-      result += value;
-
-      properties.push_back(result);
-    } else {
-      LOG_WARN("failed to get property");
+  std::string value;
+  if (getValue({
+      "node","metadata","WORKLOAD_NAME",
+  }, &value)) {
+    std::string result = std::string(root_->getWorkloadName());
+    for (auto p : {
+        "node","metadata","WORKLOAD_NAME",
+    }) {
+      result += "." + std::string(p);
     }
+    result += "==";
+    result += value;
+
+    properties.push_back(result);
+  } else {
+    LOG_WARN("failed to get property");
+  }
   }
 
   LOG_WARN("number of properties collected " +
            std::to_string(properties.size()));
 
-  properties_joined = absl::StrJoin(properties, ",");
+  properties_joined = str_join(properties, ",");
 
   LOG_WARN("properties_joined:" + properties_joined);
 
@@ -236,24 +232,16 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-        "y",
-        "x",
+      "x", "y", 
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
-        {
-            "x",
-            "y",
-        },
+         { "x", "y",  }, 
     };
 
-    std::map<std::string, std::map<std::vector<std::string>, std::string>>
-        ids_to_properties;
-    ids_to_properties["x"][{
-        "node",
-        "metadata",
-        "WORKLOAD_NAME",
-    }] = "frontend";
+    std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
+    ids_to_properties["x"][{ "node","metadata","WORKLOAD_NAME", }] = "productpage-v1";
+    
 
     trace_graph_t pattern =
         generate_trace_graph(vertices, edges, ids_to_properties);
@@ -266,20 +254,18 @@ void BidiContext::onResponseHeadersInbound() {
       return;
     }
 
-    const Node *node_ptr = nullptr;
+    const Node* node_ptr = nullptr;
 
     std::string key = b3_trace_id_;
     std::string value;
 
-    std::string x_height =
-        std::to_string(get_out_degree(target, mapping->at("x")));
-    int x_height_conv = std::atoi(x_height.c_str());
-    auto histogram_udf_result = root_->histogram_udf_(x_height_conv);
-    std::tie(key, value) =
-        std::make_pair(histogram_udf_result.first,
-                       std::to_string(histogram_udf_result.second));
+    std::string x_height = std::to_string(get_tree_height(target, mapping->at("x")));int x_height_conv = std::atoi(x_height.c_str());auto histogram_udf_result = root_->histogram_udf_(x_height_conv);std::tie(key, value) = std::make_pair(histogram_udf_result.first, std::to_string(histogram_udf_result.second));
 
+    
+    
     value = x_height;
+    
+    
 
     LOG_WARN("Value to store: " + value);
 
@@ -287,16 +273,16 @@ void BidiContext::onResponseHeadersInbound() {
     auto callback = [context_id](uint32_t, size_t body_size, uint32_t) {
       getContext(context_id)->setEffectiveContext();
       auto body =
-          getBufferBytes(BufferType::HttpCallResponseBody, 0, body_size);
+          getBufferBytes(WasmBufferType::HttpCallResponseBody, 0, body_size);
       LOG_WARN(std::string(body->view()));
     };
 
     auto result = root()->httpCall("storage-upstream",
-                                   {{":method", "GET"},
+                                   { {":method", "GET"},
                                     {":path", "/store"},
                                     {":authority", "storage-upstream"},
                                     {"key", key},
-                                    {"value", value}},
+                                    {"value", value} },
                                    "", {}, 1000, callback);
     if (result != WasmResult::Ok) {
       LOG_WARN("Failed to make a call to storage-upstream: " +
@@ -346,7 +332,7 @@ void BidiContext::onResponseHeadersOutbound() {
   }
 }
 
-FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t) {
+FilterHeadersStatus BidiContext::onResponseHeaders(uint32_t, bool) {
   if (b3_trace_id_ == "") {
     LOG_WARN(trafficDirectionToString(direction_) + " " +
              "x-b3-traceid not set");

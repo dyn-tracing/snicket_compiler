@@ -10,8 +10,9 @@ use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
-
 fn main() {
+    let bin_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let def_filter_dir = bin_dir.join("cpp_filter/filter.cc");
     let matches = App::new("Dynamic Tracing")
         .arg(
             Arg::with_name("query")
@@ -28,10 +29,19 @@ fn main() {
                 .value_name("UDF_FILE")
                 .help("Optionally sets .cc user defined function file to use"),
         )
+        .arg(
+            Arg::with_name("output")
+                .short("o")
+                .long("out_file")
+                .value_name("OUT_FILE")
+                .default_value(def_filter_dir.to_str().unwrap())
+                .help("Location and name of the output file."),
+        )
         .get_matches();
 
     // Read query from file specified by command line argument.
     let query_file = matches.value_of("query").unwrap();
+    let out_file = matches.value_of("output").unwrap();
     let query = fs::read_to_string(query_file)
         .unwrap_or_else(|_| panic!("failed to read file {}", query_file));
 
@@ -58,7 +68,7 @@ fn main() {
     code_gen.visit_prog(&parse_tree);
 
     // Open filter template.
-    let template_path = Path::new("filter.cc.handlebars");
+    let template_path = bin_dir.join("filter.cc.handlebars");
     let display = template_path.display();
     let mut template_file = match File::open(&template_path) {
         Err(msg) => panic!("Failed to open {}: {}", display, msg),
@@ -77,6 +87,6 @@ fn main() {
         .render_template(&template_str, &code_gen)
         .expect("handlebar render failed");
 
-    let mut file = File::create("./cpp_filter/filter.cc").expect("file create failed.");
+    let mut file = File::create(out_file).expect("file create failed.");
     file.write_all(output.as_bytes()).expect("write failed");
 }

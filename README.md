@@ -11,7 +11,8 @@ We primarily use Ubuntu 18.04 for our tests. For convenience, dependencies can b
 ## The Dyntracing Compiler (dtc)
 
 ### Building the Compiler
-The compiler can be build with `cargo build`.
+The compiler can be installed with `cargo install --path . --root . --no-track`.
+After, the binary can be found in the `bin` folder.
 
 ### Compiling a Filter from a Query
 After the compiler has been built, you can compile queries with the
