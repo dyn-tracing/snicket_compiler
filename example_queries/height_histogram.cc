@@ -1,5 +1,5 @@
 // Auto generated Envoy WASM filter from following command:
-// /storage/Projekte/tracing_env/tracing_compiler/target/debug/dtc -q /storage/Projekte/tracing_env/tracing_compiler/example_queries/height_histogram.cql -u /storage/Projekte/tracing_env/tracing_compiler/example_udfs/histogram.cc -o /storage/Projekte/tracing_env/tracing_compiler/example_queries/height_histogram.cc
+// target/debug/dtc -q example_queries/height_histogram.cql -u example_udfs/histogram.cc -o example_queries/height_histogram.cc
 
 // NOLINT(namespace-envoy)
 #include <map>
@@ -232,7 +232,7 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-      "x", "y", 
+      "y", "x", 
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -254,7 +254,7 @@ void BidiContext::onResponseHeadersInbound() {
       return;
     }
 
-    const Node* node_ptr = nullptr;
+    const Node *node_ptr = nullptr;
 
     std::string key = b3_trace_id_;
     std::string value;

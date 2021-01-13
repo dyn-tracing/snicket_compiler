@@ -15,14 +15,14 @@ fn check_compilation(
     udf_names: Vec<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Static folders
-    let proj_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let proj_dir = Path::new("");
     let query_dir = proj_dir.join("example_queries");
     let udf_dir = proj_dir.join("example_udfs");
 
     // The input query in the folder is provided as test case
     let query_file = query_dir.join(query_name);
     // This is the binary to compile a query
-    let mut cmd = Command::cargo_bin("dtc").unwrap();
+    let mut cmd = Command::new(proj_dir.join("target/debug/dtc"));
     // Assemble the args, first the input query
     let mut args = vec!["-q".to_string(), format!("{}", query_file.display()).into()];
     // Append every udf that is provided

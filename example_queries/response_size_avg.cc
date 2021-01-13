@@ -1,5 +1,5 @@
 // Auto generated Envoy WASM filter from following command:
-// /storage/Projekte/tracing_env/tracing_compiler/target/debug/dtc -q /storage/Projekte/tracing_env/tracing_compiler/example_queries/response_size_avg.cql -u /storage/Projekte/tracing_env/tracing_compiler/example_udfs/avg.cc -o /storage/Projekte/tracing_env/tracing_compiler/example_queries/response_size_avg.cc
+// target/debug/dtc -q example_queries/response_size_avg.cql -u example_udfs/avg.cc -o example_queries/response_size_avg.cc
 
 // NOLINT(namespace-envoy)
 #include <map>
@@ -251,7 +251,7 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-      "d", "b", "a", "c", 
+      "c", "d", "b", "a", 
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -275,7 +275,7 @@ void BidiContext::onResponseHeadersInbound() {
       return;
     }
 
-    const Node* node_ptr = nullptr;
+    const Node *node_ptr = nullptr;
 
     std::string key = b3_trace_id_;
     std::string value;

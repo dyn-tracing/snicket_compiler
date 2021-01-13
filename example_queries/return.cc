@@ -1,5 +1,5 @@
 // Auto generated Envoy WASM filter from following command:
-// /storage/Projekte/tracing_env/tracing_compiler/target/debug/dtc -q /storage/Projekte/tracing_env/tracing_compiler/example_queries/return.cql -o /storage/Projekte/tracing_env/tracing_compiler/example_queries/return.cc
+// target/debug/dtc -q example_queries/return.cql -o example_queries/return.cc
 
 // NOLINT(namespace-envoy)
 #include <map>
@@ -168,24 +168,6 @@ void BidiContext::onResponseHeadersInbound() {
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
   {
-  std::string value;
-  if (getValue({
-      "node","metadata","WORKLOAD_NAME",
-  }, &value)) {
-    std::string result = std::string(root_->getWorkloadName());
-    for (auto p : {
-        "node","metadata","WORKLOAD_NAME",
-    }) {
-      result += "." + std::string(p);
-    }
-    result += "==";
-    result += value;
-
-    properties.push_back(result);
-  } else {
-    LOG_WARN("failed to get property");
-  }
-  }{
   int64_t value;
   if (getValue({
       "response","total_size",
@@ -198,6 +180,24 @@ void BidiContext::onResponseHeadersInbound() {
     }
     result += "==";
     result += std::to_string(value);
+
+    properties.push_back(result);
+  } else {
+    LOG_WARN("failed to get property");
+  }
+  }{
+  std::string value;
+  if (getValue({
+      "node","metadata","WORKLOAD_NAME",
+  }, &value)) {
+    std::string result = std::string(root_->getWorkloadName());
+    for (auto p : {
+        "node","metadata","WORKLOAD_NAME",
+    }) {
+      result += "." + std::string(p);
+    }
+    result += "==";
+    result += value;
 
     properties.push_back(result);
   } else {
@@ -234,7 +234,7 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-      "c", "a", "b", "d", 
+      "d", "b", "a", "c", 
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -259,7 +259,7 @@ void BidiContext::onResponseHeadersInbound() {
       return;
     }
 
-    const Node* node_ptr = nullptr;
+    const Node *node_ptr = nullptr;
 
     std::string key = b3_trace_id_;
     std::string value;

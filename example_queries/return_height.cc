@@ -1,5 +1,5 @@
 // Auto generated Envoy WASM filter from following command:
-// /storage/Projekte/tracing_env/tracing_compiler/target/debug/dtc -q /storage/Projekte/tracing_env/tracing_compiler/example_queries/return_height.cql -o /storage/Projekte/tracing_env/tracing_compiler/example_queries/return_height.cc
+// target/debug/dtc -q example_queries/return_height.cql -o example_queries/return_height.cc
 
 // NOLINT(namespace-envoy)
 #include <map>
@@ -238,7 +238,7 @@ void BidiContext::onResponseHeadersInbound() {
       return;
     }
 
-    const Node* node_ptr = nullptr;
+    const Node *node_ptr = nullptr;
 
     std::string key = b3_trace_id_;
     std::string value;
