@@ -22,7 +22,7 @@ fn check_compilation(
     // The input query in the folder is provided as test case
     let query_file = query_dir.join(query_name);
     // This is the binary to compile a query
-    let mut cmd = Command::cargo_bin("dyntracing")?;
+    let mut cmd = Command::cargo_bin("dtc").unwrap();
     // Assemble the args, first the input query
     let mut args = vec!["-q".to_string(), format!("{}", query_file.display()).into()];
     // Append every udf that is provided
@@ -31,6 +31,9 @@ fn check_compilation(
         args.push("-u".to_string());
         args.push(format!("{}", udf_file.display()).to_string());
     }
+    let mut out_file = query_dir.join(query_name);
+    out_file.set_extension("cc");
+    args.extend(vec!["-o".to_string(), out_file.to_str().unwrap().into()]);
     cmd.args(args);
     cmd.assert().success();
 
