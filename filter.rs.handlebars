@@ -1,0 +1,127 @@
+use rpc_lib::rpc::Rpc;
+use std::collections::HashMap;
+use std::fs;
+use crate::graph_utils::{generate_target_graph, generate_trace_graph_from_headers, get_sub_graph_mapping};
+
+pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
+
+
+// user defined functions:
+{{#each rust_udfs}}{{{this.func_impl}}}{{/each}}
+
+
+// This represents a piece of state of the filter
+// it either contains a user defined function, or some sort of 
+// other persistent state
+#[derive(Clone, Debug)]
+pub struct State {
+    pub type_of_state: Option<String>,
+    pub string_data: Option<String>,
+    {{#each rust_udfs}}pub udf_{{this.id}}: Option<{{this.struct_name}}>,{{/each}}
+}
+
+impl State {
+    pub fn new() -> State {
+        State { 
+            type_of_state: None,
+            string_data: None,
+            {{#each rust_udfs}}udf_{{this.id}}:  None {{/each}},
+        }
+    } 
+
+    pub fn new_with_str(str_data: String) -> State {
+        State { 
+            type_of_state: Some(String::from("String")),
+            string_data: Some(str_data),
+            {{#each rust_udfs}}udf_{{this.id}}:  None {{/each}},
+        }
+    } 
+}
+
+#[derive(Clone, Debug)]
+pub struct Filter {
+    pub filter_state: HashMap<String, State>,
+}
+
+impl Filter {
+    #[no_mangle]
+    pub fn new() -> Filter {
+        Filter { 
+	    filter_state: HashMap::new(),
+	}
+    }
+
+    #[no_mangle]
+    pub fn new_with_envoy_properties(string_data: HashMap<String, String>) -> Filter {
+         let mut hash = HashMap::new();
+         for key in string_data.keys() {
+             hash.insert(key.clone(), State::new_with_str(string_data[key].clone()));
+         }
+         let new_filter = Filter { 
+	    filter_state: hash,
+	 };
+         return new_filter;
+    }
+
+    #[no_mangle]
+    pub fn execute(&mut self, x: &Rpc) -> Option<Rpc> {
+        // 0. Who am I?
+        let my_node = self.filter_state.get("WORKLOAD_NAME").unwrap().string_data.clone().unwrap();
+
+        // 1. Do I need to put any udf variables/objects in?
+        {{#each rust_udfs}}
+        if !self.filter_state.contains_key("{{this.id}}") {
+            let mut new_state = State::new();
+            new_state.type_of_state = Some(String::from("{{this.id}}"));
+            new_state.udf_{{this.id}} = Some({{this.struct_name}}::{{this.init_func}}());
+            self.filter_state.insert(String::from("{{this.id}}"), new_state);
+        }
+        {{/each}}
+
+        // 2. TODO: Find the node attributes to be collected
+
+        // 3.  Make a subgraph representing the query, check isomorphism compared to the
+        //     observed trace, and do return calls based on that info
+        if my_node == String::from("{{root_id}}") {
+            // we need to create the graph given by the query
+            let vertices = vec![ {{#each vertices}}String::from("{{this}}"), {{/each}}  ];
+            let edges = vec![ {{#each edges}} ( {{#each this}}String::from("{{this}}"), {{/each}} ), {{/each}} ];
+            let mut ids_to_properties: HashMap<String, Vec<String>> = HashMap::new();
+            {{#each nodes_to_attributes}}
+            ids_to_properties.insert(String::from("{{this.id}}"), vec![ {{#each this.parts}} String::from("{{this}}"), {{/each}} ]);
+            {{/each}}
+
+
+            let target_graph = generate_target_graph(vertices, edges, ids_to_properties);
+            let trace_graph = generate_trace_graph_from_headers(x.path.clone());
+            let mapping = get_sub_graph_mapping(trace_graph, target_graph); 
+            if mapping.len() > 0 {
+                // In the non-simulator version, we will send the result to storage.  Given this is 
+                // a simulation, we will write it to a file.
+                {{#each rust_udfs}}
+                let {{this.id}}_state_ptr = self.filter_state.get_mut("{{this.id}}").unwrap();
+                let {{this.id}}_obj_ptr = {{this.id}}_state_ptr.udf_{{this.id}}.as_mut().unwrap();
+                let {{this.id}}_value = {{this.id}}_obj_ptr.execute().to_string();
+                
+                fs::write("result.txt", {{this.id}}_value).expect("Unable to write file");
+
+                {{/each}}
+       
+            }
+        }
+
+        // 4.  Allow udfs to execute
+        {{#each rust_udfs}}
+        let {{this.id}}_state_ptr = self.filter_state.get_mut("{{this.id}}").unwrap();
+        let {{this.id}}_obj_ptr = {{this.id}}_state_ptr.udf_{{this.id}}.as_mut().unwrap();
+        {{this.id}}_obj_ptr.execute().to_string();
+        {{/each}}
+
+
+        // 5.  Pass the rpc on
+        Some(Rpc{ 
+            data: x.data, uid: x.uid , path: x.path.clone()
+             }   ) 
+    }
+
+}
