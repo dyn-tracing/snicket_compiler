@@ -1,0 +1,23 @@
+use std::collections::HashMap;
+use std::fs;
+use crate::rpc::Rpc;
+
+pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
+
+
+// user defined functions:
+{{#each rust_udfs}}{{{this.func_impl}}}{{/each}}
+
+
+// This represents a piece of state of the filter
+// it either contains a user defined function, or some sort of 
+// other persistent state
+pub struct State {
+    pub type_of_state: Option<String>,
+    pub string_data: Option<String>,
+    {{#each rust_udfs}}pub udf_{{this.id}}: Option<{{this.struct_name}}>,{{/each}}
+}
+
+pub struct Filter {
+    pub filter_state: HashMap<String, State>,
+}
