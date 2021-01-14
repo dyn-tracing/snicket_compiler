@@ -128,20 +128,20 @@ fn main() {
     // Use the information in the code generator code_gen and format it, using handlebars
     // to a template with all the basic filter information enclosed
     let c_mode = matches.value_of("compilation_mode").unwrap();
-    let output_name = matches.value_of("output").unwrap();
+    let output_name = PathBuf::from(matches.value_of("output").unwrap());
     if c_mode == "sim" {
         // Because we are making a library, not just one file, we need to copy over an example library.  Then,
         // we have to write to three files:  Cargo.toml to edit the filter name, lib.rs to edit the filter name,
         // and <output_name>.rs for the actual filter implementation
+        let src = "src";
+        let rust_dir = bin_dir.join("rust_filter");
 
         // Making new library folder
-        let lib_src_folder: PathBuf = [output_name, "src"].iter().collect();
+        let lib_src_folder = output_name.join(src);
         fs::create_dir_all(&lib_src_folder).unwrap();
 
-        let src = "src";
-
         // Filter types
-        let filter_types_file: PathBuf = ["rust_filter", "src", "types.rs"].iter().collect();
+        let filter_types_file = rust_dir.join("src").join("types.rs");
         let filter_types_handlebars = bin_dir.join("filter_types.rs.handlebars");
         generate_code_from_codegen_with_handlebars(
             &code_gen,
@@ -150,7 +150,7 @@ fn main() {
         );
 
         // The filter itself
-        let mut filter_file_name: PathBuf = ["rust_filter", src, output_name].iter().collect();
+        let mut filter_file_name = rust_dir.join("src").join(output_name);
         filter_file_name.set_extension(".rs");
         let filter_name_handlebars = bin_dir.join("filter.rs.handlebars");
         generate_code_from_codegen_with_handlebars(
@@ -160,8 +160,6 @@ fn main() {
         );
     } else {
         let filter_handlebars_cc = bin_dir.join("filter.cc.handlebars");
-        let mut filter_name_cc = PathBuf::from(output_name);
-        filter_name_cc.set_extension("cc");
-        generate_code_from_codegen_with_handlebars(&code_gen, filter_handlebars_cc, filter_name_cc);
+        generate_code_from_codegen_with_handlebars(&code_gen, filter_handlebars_cc, output_name);
     }
 }
