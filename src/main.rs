@@ -24,7 +24,7 @@ static FILTER_FOLDER : &str = "templates_for_code_gen/filter_folder/";
  * @template_path_name: the path leading to a handlebars template
  * @output_filename: where the output is written
  */
-fn generate_code_from_codegen_with_handlebars(code_gen: &code_gen::CodeGen, template_path: PathBuf, output_filename: String) {
+fn generate_code_from_codegen_with_handlebars(code_gen: &code_gen::CodeGen, template_path: PathBuf, output_filename: PathBuf) {
     let display = template_path.display();
     let mut template_file = match File::open(&template_path) {
         Err(msg) => panic!("Failed to open {}: {}", display, msg),
@@ -56,7 +56,7 @@ fn generate_code_from_codegen_with_handlebars(code_gen: &code_gen::CodeGen, temp
  * @template_path_name: the path leading to a handlebars template
  * @output_filename: where the output is written
  */
-fn generate_code_from_filter_name_with_handlebars(filter_name: String, template_path: PathBuf, output_filename: String) {
+fn generate_code_from_filter_name_with_handlebars(filter_name: String, template_path: PathBuf, output_filename: PathBuf) {
     let display = template_path.display();
     let mut template_file = match File::open(&template_path) {
         Err(msg) => panic!("Failed to open {}: {}", display, msg),
@@ -164,7 +164,7 @@ fn main() {
     // Use the information in the code generator code_gen and format it, using handlebars
     // to a template with all the basic filter information enclosed
     let c_mode = matches.value_of("compilation_mode").unwrap();
-    let filter_name = matches.value_of("filter_name").unwrap().to_string();
+    let filter_name = matches.value_of("filter_name").unwrap();
     if c_mode == "sim" {
         // Because we are making a library, not just one file, we need to copy over an example library.  Then,
         // we have to write to three files:  Cargo.toml to edit the filter name, lib.rs to edit the filter name,
@@ -174,38 +174,34 @@ fn main() {
         let mut lib_src_folder = filter_name.to_string();
         lib_src_folder.push_str("/src/");
         fs::create_dir_all(&lib_src_folder).unwrap();
+        
+        let src = "src";
 
         // Cargo.toml
-        let mut cargo_file_name = filter_name.clone();
-        cargo_file_name.push_str("/");
-        cargo_file_name.push_str("/Cargo.toml");
+        let cargo_file_name : PathBuf = [filter_name, "Cargo.toml"].iter().collect();
         let cargo_handlebars_name : PathBuf = [FILTER_FOLDER, "Cargo.toml.handlebars"].iter().collect();
-        generate_code_from_filter_name_with_handlebars(filter_name.clone(), cargo_handlebars_name, cargo_file_name);
+        generate_code_from_filter_name_with_handlebars(filter_name.to_string(), cargo_handlebars_name, cargo_file_name);
 
         // Filter types
-        let mut filter_types_file = filter_name.clone();
-        filter_types_file.push_str("/");
-        filter_types_file.push_str(&filter_name);
-        filter_types_file.push_str("_types.rs");
+        let mut filename = String::from(filter_name);
+        filename.push_str("_types.rs");
+        let filter_types_file : PathBuf = [filter_name, &filename].iter().collect();
         let filter_types_handlebars : PathBuf = [FILTER_FOLDER, "src", "filter_types.rs.handlebars"].iter().collect();
         generate_code_from_codegen_with_handlebars(&code_gen, filter_types_handlebars, filter_types_file);
 
         // The lib file
-        let mut lib_file_name = filter_name.clone();
-        lib_file_name.push_str("/src/lib.rs");
+        let lib_file_name : PathBuf = [filter_name, src, "lib.rs"].iter().collect();
         let lib_file_handlebars : PathBuf = [FILTER_FOLDER, "src", "lib.rs.handlebars"].iter().collect();
-        generate_code_from_filter_name_with_handlebars(filter_name.clone(), lib_file_handlebars, lib_file_name);
+        generate_code_from_filter_name_with_handlebars(filter_name.to_string(), lib_file_handlebars, lib_file_name);
         
         // The filter itself
-        let mut filter_file_name = filter_name.clone();
-        filter_file_name.push_str("/src/");
-        filter_file_name.push_str(&filter_name);
-        filter_file_name.push_str(".rs");
+        let mut filter_file_name :PathBuf = [filter_name, src, filter_name].iter().collect();
+        filter_file_name.set_extension(".rs");
         let filter_name_handlebars : PathBuf = [FILTER_FOLDER, "src", "filter.rs.handlebars"].iter().collect();
         generate_code_from_codegen_with_handlebars(&code_gen, filter_name_handlebars, filter_file_name);
 
         // The graph_utils file
-        let mut graph_utils_new_file_name = filter_name.clone();
+        let mut graph_utils_new_file_name = filter_name.to_string().clone();
         graph_utils_new_file_name.push_str("/src/graph_utils.rs");
         let mut graph_utils_old_file_name = FILTER_FOLDER.to_string();
         graph_utils_old_file_name.push_str("src/graph_utils.rs");
@@ -214,8 +210,8 @@ fn main() {
 
     }
     else {
-        let mut filter_name_cc = filter_name.to_string().clone();
-        filter_name_cc.push_str(".cc");
+        let mut filter_name_cc = PathBuf::from(filter_name);
+        filter_name_cc.set_extension(".cc");
         let filter_handlebars_cc : PathBuf = [TEMPLATE_FOLDER, "filter.cc.handlebars"].iter().collect();
         generate_code_from_codegen_with_handlebars(&code_gen, filter_handlebars_cc, filter_name_cc);
     }
