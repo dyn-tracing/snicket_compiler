@@ -9,11 +9,7 @@ use handlebars::Handlebars;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
-use std::path::PathBuf;
-use std::collections::BTreeMap;
-
-static TEMPLATE_FOLDER : &str = "templates_for_code_gen";
-static FILTER_FOLDER : &str = "templates_for_code_gen/filter_folder/";
+use std::path::{Path, PathBuf};
 
 /* Generates code using templates formatted by handlebars
  * (see https://docs.rs/handlebars/3.5.2/handlebars/)
@@ -24,7 +20,11 @@ static FILTER_FOLDER : &str = "templates_for_code_gen/filter_folder/";
  * @template_path_name: the path leading to a handlebars template
  * @output_filename: where the output is written
  */
-fn generate_code_from_codegen_with_handlebars(code_gen: &code_gen::CodeGen, template_path: PathBuf, output_filename: PathBuf) {
+fn generate_code_from_codegen_with_handlebars(
+    code_gen: &code_gen::CodeGen,
+    template_path: PathBuf,
+    output_filename: PathBuf,
+) {
     let display = template_path.display();
     let mut template_file = match File::open(&template_path) {
         Err(msg) => panic!("Failed to open {}: {}", display, msg),
@@ -47,42 +47,9 @@ fn generate_code_from_codegen_with_handlebars(code_gen: &code_gen::CodeGen, temp
     file.write_all(output.as_bytes()).expect("write failed");
 }
 
-/* Generates code using templates formatted by handlebars
- * (see https://docs.rs/handlebars/3.5.2/handlebars/)
- * The handlebars templates are given filter_name as input;  it is their only piece of information.
- * The formatted output is written to the file in output_filename.
- * Arguments:
- * @filter_name:  the name of the filter;  also the only information used by the handlebars formatter
- * @template_path_name: the path leading to a handlebars template
- * @output_filename: where the output is written
- */
-fn generate_code_from_filter_name_with_handlebars(filter_name: String, template_path: PathBuf, output_filename: PathBuf) {
-    let display = template_path.display();
-    let mut template_file = match File::open(&template_path) {
-        Err(msg) => panic!("Failed to open {}: {}", display, msg),
-        Ok(file) => file,
-    };
-
-    let mut template_str = String::new();
-    match template_file.read_to_string(&mut template_str) {
-        Err(msg) => panic!("Failed to read {}: {}", display, msg),
-        Ok(_) => println!("Successfully read {}", display),
-    }
-
-    let handlebars = Handlebars::new();
-
-    let mut data = BTreeMap::new();
-    data.insert("filter_name".to_string(), filter_name);
-    let output = handlebars
-        .render_template(&template_str, &data)
-        .expect("handlebar render failed");
-
-    let mut file = File::create(output_filename).expect("file create failed.");
-    file.write_all(output.as_bytes()).expect("write failed");
-}
-
-
 fn main() {
+    let bin_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let def_filter_dir = bin_dir.join("cpp_filter/filter.cc");
     let compile_vals = ["sim", "cpp"];
     let matches = App::new("Dynamic Tracing")
         .arg(
@@ -101,33 +68,32 @@ fn main() {
                 .help("Optionally sets user defined function file to use"),
         )
         .arg(
-             Arg::with_name("root_node")
-                 .short("r")
-                 .long("root_node")
-                 .value_name("ROOT_NODE")
-                 .takes_value(true)
-                 .default_value("0")
-                 .help("Sets the root node of a query"),
-         )
+            Arg::with_name("root_node")
+                .short("r")
+                .long("root_node")
+                .value_name("ROOT_NODE")
+                .takes_value(true)
+                .default_value("0")
+                .help("Sets the root node of a query"),
+        )
         .arg(
-             Arg::with_name("compilation_mode")
-                 .short("c")
-                 .long("compilation_mode")
-                 .value_name("COMPILATION_MODE")
-                 .takes_value(true)
-                 .possible_values(&compile_vals)
-                 .default_value("cpp")
-                 .help("Sets what to compile to:  the simulator (sim) or cpp wasm filter (cpp)"),
-         )
+            Arg::with_name("compilation_mode")
+                .short("c")
+                .long("compilation_mode")
+                .value_name("COMPILATION_MODE")
+                .takes_value(true)
+                .possible_values(&compile_vals)
+                .default_value("cpp")
+                .help("Sets what to compile to:  the simulator (sim) or cpp wasm filter (cpp)"),
+        )
         .arg(
-             Arg::with_name("filter_name")
-                 .short("fn")
-                 .long("filter_name")
-                 .value_name("FILTER_NAME")
-                 .takes_value(true)
-                 .default_value("my_filter")
-                 .help("Sets the name of the filter that is produced"),
-         )
+            Arg::with_name("output")
+                .short("o")
+                .long("out_file")
+                .value_name("OUT_FILE")
+                .default_value(def_filter_dir.to_str().unwrap())
+                .help("Location and name of the output file."),
+        )
         .get_matches();
 
     // Read query from file specified by command line argument.
@@ -154,65 +120,48 @@ fn main() {
     let parse_tree = parser::parse_prog(&mut token_iter);
 
     let mut code_gen = code_gen::CodeGen::new_with_config(config);
-     code_gen.cmd = std::env::args().collect::<Vec<String>>().join(" ");
+    code_gen.cmd = std::env::args().collect::<Vec<String>>().join(" ");
 
-     code_gen.root_id = matches.value_of("root_node").unwrap();
-     code_gen.visit_prog(&parse_tree);
-
-
+    code_gen.root_id = matches.value_of("root_node").unwrap();
+    code_gen.visit_prog(&parse_tree);
 
     // Use the information in the code generator code_gen and format it, using handlebars
     // to a template with all the basic filter information enclosed
     let c_mode = matches.value_of("compilation_mode").unwrap();
-    let filter_name = matches.value_of("filter_name").unwrap();
+    let output_name = matches.value_of("output").unwrap();
     if c_mode == "sim" {
         // Because we are making a library, not just one file, we need to copy over an example library.  Then,
         // we have to write to three files:  Cargo.toml to edit the filter name, lib.rs to edit the filter name,
-        // and <filter_name>.rs for the actual filter implementation
-        
+        // and <output_name>.rs for the actual filter implementation
+
         // Making new library folder
-        let mut lib_src_folder = filter_name.to_string();
-        lib_src_folder.push_str("/src/");
+        let lib_src_folder: PathBuf = [output_name, "src"].iter().collect();
         fs::create_dir_all(&lib_src_folder).unwrap();
-        
+
         let src = "src";
 
-        // Cargo.toml
-        let cargo_file_name : PathBuf = [filter_name, "Cargo.toml"].iter().collect();
-        let cargo_handlebars_name : PathBuf = [FILTER_FOLDER, "Cargo.toml.handlebars"].iter().collect();
-        generate_code_from_filter_name_with_handlebars(filter_name.to_string(), cargo_handlebars_name, cargo_file_name);
-
         // Filter types
-        let mut filename = String::from(filter_name);
-        filename.push_str("_types.rs");
-        let filter_types_file : PathBuf = [filter_name, &filename].iter().collect();
-        let filter_types_handlebars : PathBuf = [FILTER_FOLDER, "src", "filter_types.rs.handlebars"].iter().collect();
-        generate_code_from_codegen_with_handlebars(&code_gen, filter_types_handlebars, filter_types_file);
+        let filter_types_file: PathBuf = ["rust_filter", "src", "types.rs"].iter().collect();
+        let filter_types_handlebars = bin_dir.join("filter_types.rs.handlebars");
+        generate_code_from_codegen_with_handlebars(
+            &code_gen,
+            filter_types_handlebars,
+            filter_types_file,
+        );
 
-        // The lib file
-        let lib_file_name : PathBuf = [filter_name, src, "lib.rs"].iter().collect();
-        let lib_file_handlebars : PathBuf = [FILTER_FOLDER, "src", "lib.rs.handlebars"].iter().collect();
-        generate_code_from_filter_name_with_handlebars(filter_name.to_string(), lib_file_handlebars, lib_file_name);
-        
         // The filter itself
-        let mut filter_file_name :PathBuf = [filter_name, src, filter_name].iter().collect();
+        let mut filter_file_name: PathBuf = ["rust_filter", src, output_name].iter().collect();
         filter_file_name.set_extension(".rs");
-        let filter_name_handlebars : PathBuf = [FILTER_FOLDER, "src", "filter.rs.handlebars"].iter().collect();
-        generate_code_from_codegen_with_handlebars(&code_gen, filter_name_handlebars, filter_file_name);
-
-        // The graph_utils file
-        let mut graph_utils_new_file_name = filter_name.to_string().clone();
-        graph_utils_new_file_name.push_str("/src/graph_utils.rs");
-        let mut graph_utils_old_file_name = FILTER_FOLDER.to_string();
-        graph_utils_old_file_name.push_str("src/graph_utils.rs");
-        fs::copy(&graph_utils_old_file_name, &graph_utils_new_file_name).unwrap();
-
-
-    }
-    else {
-        let mut filter_name_cc = PathBuf::from(filter_name);
-        filter_name_cc.set_extension(".cc");
-        let filter_handlebars_cc : PathBuf = [TEMPLATE_FOLDER, "filter.cc.handlebars"].iter().collect();
+        let filter_name_handlebars = bin_dir.join("filter.rs.handlebars");
+        generate_code_from_codegen_with_handlebars(
+            &code_gen,
+            filter_name_handlebars,
+            filter_file_name,
+        );
+    } else {
+        let filter_handlebars_cc = bin_dir.join("filter.cc.handlebars");
+        let mut filter_name_cc = PathBuf::from(output_name);
+        filter_name_cc.set_extension("cc");
         generate_code_from_codegen_with_handlebars(&code_gen, filter_handlebars_cc, filter_name_cc);
     }
 }

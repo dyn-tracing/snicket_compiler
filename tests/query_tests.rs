@@ -31,6 +31,9 @@ fn check_compilation(
         args.push("-u".to_string());
         args.push(format!("{}", udf_file.display()).to_string());
     }
+    let mut out_file = query_dir.join(query_name);
+    out_file.set_extension("cc");
+    args.extend(vec!["-o".to_string(), out_file.to_str().unwrap().into()]);
     cmd.args(args);
     cmd.assert().success();
 

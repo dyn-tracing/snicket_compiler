@@ -1,5 +1,5 @@
 [package]
-name = "{{filter_name}}"
+name = "filter"
 version = "0.1.0"
 authors = ["Jessica Berg <jb7399@nyu.edu>"]
 edition = "2018"

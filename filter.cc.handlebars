@@ -41,7 +41,7 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
-{{#each udfs}}{{{this.func_impl}}}{{/each}}
+{{#each cpp_udfs}}{{{this.func_impl}}}{{/each}}
 
 class BidiRootContext : public RootContext {
 public:
@@ -58,7 +58,7 @@ public:
   bool onConfigure(size_t /* configuration_size */) override;
 
   std::string_view getWorkloadName() { return workload_name_; }
-{{#each udfs}}
+{{#each cpp_udfs}}
 {{this.id}} {{this.id}}_udf_;
 {{/each}}
 
@@ -240,12 +240,12 @@ void BidiContext::onResponseHeadersInbound() {
       return;
     }
 
-    const Node *node_ptr = nullptr;
+    const Node* node_ptr = nullptr;
 
     std::string key = b3_trace_id_;
     std::string value;
 
-    {{#each blocks}}{{{this}}}{{/each}}
+    {{#each cpp_blocks}}{{{this}}}{{/each}}
 
     {{#with result}}
     {{#if this.Return}}{{#with this.Return}}
