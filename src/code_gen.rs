@@ -462,7 +462,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
         self.cpp_blocks.push(key_value_block);
     }
 
-    fn codegen_call_func_rust(&mut self, func_name: &str, arg: &str) {
+    fn codegen_call_func_rust(&mut self, func_name: &str, _arg: &str) {
         let func = &self.config.rust_udf_table[func_name];
         self.rust_udfs.push(func.clone());
 
