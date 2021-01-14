@@ -91,7 +91,7 @@ pub struct RustUdf {
     pub exec_func: String,
     pub struct_name: String,
     pub func_impl: String,
-    pub id: String
+    pub id: String,
 }
 
 #[derive(Serialize, PartialEq, Eq, Debug, Clone)]
@@ -124,23 +124,24 @@ impl<'a> CodeGenConfig<'a> {
     }
 
     fn parse_udf_cpp(&mut self, udf: String) {
-	let cpp_re = Regex::new(
+        let cpp_re = Regex::new(
 	   r".*udf_type:\s+(?P<udf_type>\w+)\n.*id:\s+(?P<id>\w+)\n.*return_type:\s+(?P<return_type>\w+)",
 	).unwrap();
-	let cpp_caps = cpp_re.captures(&udf).unwrap();
-	let udf_type = CppUdfType::from_str(cpp_caps.name("udf_type").unwrap().as_str()).unwrap();
-	let id = String::from(cpp_caps.name("id").unwrap().as_str());
-	let return_type = CppType::from_str(cpp_caps.name("return_type").unwrap().as_str()).unwrap();
+        let cpp_caps = cpp_re.captures(&udf).unwrap();
+        let udf_type = CppUdfType::from_str(cpp_caps.name("udf_type").unwrap().as_str()).unwrap();
+        let id = String::from(cpp_caps.name("id").unwrap().as_str());
+        let return_type =
+            CppType::from_str(cpp_caps.name("return_type").unwrap().as_str()).unwrap();
 
-	self.cpp_udf_table.insert(
-	    id.clone(),
-	    CppUdf {
-		udf_type,
-		id,
-		func_impl: udf,
-		return_type,
-	    },
-	);
+        self.cpp_udf_table.insert(
+            id.clone(),
+            CppUdf {
+                udf_type,
+                id,
+                func_impl: udf,
+                return_type,
+            },
+        );
     }
 
     fn parse_udf_rust(&mut self, udf: String) {
@@ -149,46 +150,45 @@ impl<'a> CodeGenConfig<'a> {
             r".*init_func:\s+(?P<init_func>\w+)\n.*exec_func:\s+(?P<exec_func>\w+)\n.*struct_name:\s+(?P<struct_name>\w+)\n.*id:\s+(?P<id>\w+)",
         ).unwrap();
         let rust_caps = rust_re.captures(&udf_clone);
-        
+
         match rust_caps {
             Some(caps) => {
-		let init_func = String::from(caps.name("init_func").unwrap().as_str());
-		let exec_func = String::from(caps.name("exec_func").unwrap().as_str());
-		let struct_name = String::from(caps.name("struct_name").unwrap().as_str());
-		let id = String::from(caps.name("id").unwrap().as_str());
+                let init_func = String::from(caps.name("init_func").unwrap().as_str());
+                let exec_func = String::from(caps.name("exec_func").unwrap().as_str());
+                let struct_name = String::from(caps.name("struct_name").unwrap().as_str());
+                let id = String::from(caps.name("id").unwrap().as_str());
 
-		self.rust_udf_table.insert(
-		    id.clone(),
-		    RustUdf {
-			init_func,
-			exec_func,
-			struct_name,
-			func_impl: udf,
+                self.rust_udf_table.insert(
+                    id.clone(),
+                    RustUdf {
+                        init_func,
+                        exec_func,
+                        struct_name,
+                        func_impl: udf,
                         id,
-		    }
-		);
+                    },
+                );
             }
 
             None => panic!("Rust UDF did not have proper header"),
-
         }
     }
 
     /*
      * Parses the udf and stores values for code generation inside a udf struct
      * Cpp udfs must have the following header:
-        // udf_type: <udf_type>
-        // id: <id>
-        // return_type: <return_type>
-        // arg: <arg>
+    // udf_type: <udf_type>
+    // id: <id>
+    // return_type: <return_type>
+    // arg: <arg>
      * Rust udfs must have the following header:
-        // init_func: <init_func_name>
-        // exec_func: <exec_func_name>
-        // struct_name: <struct_name>
+    // init_func: <init_func_name>
+    // exec_func: <exec_func_name>
+    // struct_name: <struct_name>
      * This function does not return anything, but rather just stores the value of the parsing
      * for use later
      * Arguments:
-     * udf: the string representation of the user defined function 
+     * udf: the string representation of the user defined function
      */
     pub fn parse_udf(&mut self, udf: String) {
         // TODO: Support parsing multiple arguments.
@@ -196,11 +196,9 @@ impl<'a> CodeGenConfig<'a> {
 
         if self.am_cpp {
             self.parse_udf_cpp(udf);
-        }
-        else {
+        } else {
             self.parse_udf_rust(udf);
         }
-              
     }
 }
 
@@ -350,7 +348,6 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
         );
         self.rust_blocks.push(rust_block);
 
-
         self.result = CppResult::Return {
             typ: attribute.cpp_type,
             id: property_var_id.clone(),
@@ -415,7 +412,6 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
         }
     }
 
-
     fn codegen_call_func_cpp(&mut self, func_name: &str, arg: &str) {
         if !self.config.cpp_udf_table.contains_key(func_name) {
             panic!("can't find udf function: {}", func_name);
@@ -466,7 +462,6 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
         self.cpp_blocks.push(key_value_block);
     }
 
-
     fn codegen_call_func_rust(&mut self, func_name: &str, arg: &str) {
         let func = &self.config.rust_udf_table[func_name];
         self.rust_udfs.push(func.clone());
@@ -476,16 +471,16 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
     }
 
     fn codegen_call_func(&mut self, func_name: &str, arg: &str) {
-        if !self.config.cpp_udf_table.contains_key(func_name) && !self.config.rust_udf_table.contains_key(func_name) {
+        if !self.config.cpp_udf_table.contains_key(func_name)
+            && !self.config.rust_udf_table.contains_key(func_name)
+        {
             panic!("can't find udf function: {}", func_name);
         }
         if self.config.am_cpp {
             self.codegen_call_func_cpp(func_name, arg);
-        }
-        else {
+        } else {
             self.codegen_call_func_rust(func_name, arg);
         }
-
     }
 }
 
@@ -566,7 +561,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                 };
                 self.cpp_blocks.push(cpp_conv);
 
-                let rust_conv =  format!(
+                let rust_conv = format!(
                     "let {converted_id} = {cpp_var_id}.to_string();",
                     converted_id = converted_id,
                     cpp_var_id = property_var_id
@@ -901,10 +896,7 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
             }",
         ));
 
-        let parsed_udf = config
-            .rust_udf_table
-            .get(&String::from("count"))
-            .unwrap();
+        let parsed_udf = config.rust_udf_table.get(&String::from("count")).unwrap();
         assert_eq!(parsed_udf.init_func, String::from("init"));
         assert_eq!(parsed_udf.exec_func, String::from("increment"));
         assert_eq!(parsed_udf.struct_name, String::from("Count"));
