@@ -34,14 +34,6 @@ http_archive(
 load("@bazel_skylib//:workspace.bzl", "bazel_skylib_workspace")
 bazel_skylib_workspace()
 
-# this must be named com_google_protobuf to match dependency pulled in by
-# rules_proto.
-git_repository(
-    name = "com_google_protobuf",
-    remote = "https://github.com/protocolbuffers/protobuf",
-    commit = "655310ca192a6e3a050e0ca0b7084a2968072260",
-)
-
 # we don't need all the envoy buildry,
 # and so i go in straight to the api/wasm/cpp so that i can create a new workspace with
 # just the things needed.
@@ -55,18 +47,18 @@ new_git_repository(
     build_file = '//bazel/external:envoy-wasm-api.BUILD',
 )
 
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
 http_archive(
-    name = "rules_proto",
-    sha256 = "602e7161d9195e50246177e7c55b2f39950a9cf7366f74ed5f22fd45750cd208",
-    strip_prefix = "rules_proto-97d8af4dc474595af3900dd85cb3a29ad28cc313",
-    urls = [
-        "https://mirror.bazel.build/github.com/bazelbuild/rules_proto/archive/97d8af4dc474595af3900dd85cb3a29ad28cc313.tar.gz",
-        "https://github.com/bazelbuild/rules_proto/archive/97d8af4dc474595af3900dd85cb3a29ad28cc313.tar.gz",
-    ],
+    name = "com_google_protobuf",
+    sha256 = "9748c0d90e54ea09e5e75fb7fac16edce15d2028d4356f32211cfa3c0e956564",
+    strip_prefix = "protobuf-3.11.4",
+    urls = ["https://github.com/protocolbuffers/protobuf/archive/v3.11.4.zip"],
 )
-load("@rules_proto//proto:repositories.bzl", "rules_proto_dependencies", "rules_proto_toolchains")
-rules_proto_dependencies()
-rules_proto_toolchains()
+
+load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
+
+protobuf_deps()
 
 # Built against ABI 0_2_0
 http_archive(
@@ -76,8 +68,7 @@ http_archive(
         name = "proxy_wasm_cpp_sdk",
 )
 
-git_repository(
-    name = "com_github_taegyunkim_rules_emscripten_boost",
+git_repository(    name = "com_github_taegyunkim_rules_emscripten_boost",
     commit = "3b9dd84879ede431c4233b137a5345490e060f58",
     shallow_since = "1598019040 -0400",
     remote = "https://github.com/taegyunkim/rules_emscripten_boost"
