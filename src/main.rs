@@ -128,7 +128,7 @@ fn main() {
     // Use the information in the code generator code_gen and format it, using handlebars
     // to a template with all the basic filter information enclosed
     let c_mode = matches.value_of("compilation_mode").unwrap();
-    let output_name = PathBuf::from(matches.value_of("output").unwrap());
+    let mut output_name = PathBuf::from(matches.value_of("output").unwrap());
     if c_mode == "sim" {
         // Because we are making a library, not just one file, we need to copy over an example library.  Then,
         // we have to write to three files:  Cargo.toml to edit the filter name, lib.rs to edit the filter name,
@@ -155,6 +155,7 @@ fn main() {
         );
     } else {
         let filter_handlebars_cc = bin_dir.join("filter.cc.handlebars");
+        output_name.set_extension("cc");
         generate_code_from_codegen_with_handlebars(&code_gen, filter_handlebars_cc, output_name);
     }
 }
