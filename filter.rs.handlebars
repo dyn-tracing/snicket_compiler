@@ -2,7 +2,8 @@ use rpc_lib::rpc::Rpc;
 use std::collections::HashMap;
 use std::fs;
 use petgraph::algo::isomorphic_subgraph_mapping;
-use crate::graph_utils::{generate_target_graph, generate_trace_graph_from_headers};
+use petgraph::graph::NodeIndex;
+use crate::graph_utils;
 
 pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
 
@@ -26,7 +27,7 @@ impl State {
         State { 
             type_of_state: None,
             string_data: None,
-            {{#each rust_udfs}}udf_{{this.id}}:  None {{/each}},
+            {{#each rust_udfs}}udf_{{this.id}}:  None, {{/each}}
         }
     } 
 
@@ -34,7 +35,7 @@ impl State {
         State { 
             type_of_state: Some(String::from("String")),
             string_data: Some(str_data),
-            {{#each rust_udfs}}udf_{{this.id}}:  None {{/each}},
+            {{#each rust_udfs}}udf_{{this.id}}:  None, {{/each}}
         }
     } 
 }
@@ -93,12 +94,14 @@ impl Filter {
             {{/each}}
 
 
-            let target_graph = generate_target_graph(vertices, edges, ids_to_properties);
-            let trace_graph = generate_trace_graph_from_headers(x.path.clone());
-            let mapping = isomorphic_subgraph_mapping(&trace_graph, &target_graph); 
-            if !mapping.is_none() {
+            let target = graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
+            let trace_graph = graph_utils::generate_trace_graph_from_headers(x.path.clone());
+            let wrapped_mapping = isomorphic_subgraph_mapping(&trace_graph, &target); 
+            if !wrapped_mapping.is_none() {
+                let mapping = wrapped_mapping.unwrap();
                 // In the non-simulator version, we will send the result to storage.  Given this is 
                 // a simulation, we will write it to a file.
+                {{#each rust_blocks}}{{{this}}}{{/each}}
                 {{#each rust_udfs}}
                 let {{this.id}}_state_ptr = self.filter_state.get_mut("{{this.id}}").unwrap();
                 let {{this.id}}_obj_ptr = {{this.id}}_state_ptr.udf_{{this.id}}.as_mut().unwrap();
