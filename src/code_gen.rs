@@ -336,7 +336,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
         self.cpp_blocks.push(cpp_block);
 
         let rust_block = format!(
-            "let node_ptr = get_node_with_id(target, mapping->at(\"{node_id}\"));
+            "let node_ptr = graph_utils::get_node_with_id(target, mapping->at(\"{node_id}\"));
 if (node_ptr == None || node_ptr->properties.find({parts}) == node_ptr->properties.end()) {{
     LOG_WARN(\"Node {node_id} not found\");
     return;
@@ -371,11 +371,16 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                             node_id = id.id_name,
                         );
                     self.cpp_blocks.push(cpp_block);
-                    let rust_block = format!(
-                            "let {cpp_var_id} = get_tree_height(target, mapping->at(\"{node_id}\")).to_string());",
+                    let rust_index_code = format!("let node_index = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());\n                if node_index.is_none() {{\n                    print!(\"WARNING: could not find node with id\");\n                }}\n",
+                            node_id = id.id_name);
+                    let rust_get_tree_height_code = format!(
+                            "               else {{\n                    let trace_index = NodeIndex::new(mapping[node_index.unwrap().index()]);\n                    let {cpp_var_id} = graph_utils::get_tree_height(&trace_graph, Some(trace_index));\n",
                             cpp_var_id = cpp_var_id,
-                            node_id = id.id_name,
                         );
+                    let rust_error_check = format!("                    let ret = fs::write(\"result.txt\", {cpp_var_id}.to_string());\n                    match ret {{\n                        Ok(result) => result,\n                        Err(_e) => print!(\"WARNING: could not write result to file\"),\n                    }}; \n                }}",
+                            cpp_var_id = cpp_var_id,
+                        );
+                    let rust_block = format!("{}{}{}", rust_index_code, rust_get_tree_height_code, rust_error_check);
                     self.rust_blocks.push(rust_block);
                     self.result = CppResult::Return {
                         typ: attribute.cpp_type,
