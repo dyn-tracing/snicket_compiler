@@ -1,7 +1,7 @@
 /* This file contains functions relating to creating and comparing trace and target (user-given) graphs */
 
 use petgraph::graph::{Graph, NodeIndex};
-use petgraph::algo::toposort;
+use petgraph::algo::{toposort, dijkstra};
 use std::collections::HashMap;
 
 
@@ -57,61 +57,56 @@ pub fn generate_target_graph(vertices: Vec<String>,
  */
 pub fn generate_trace_graph_from_headers(paths_header: String) -> Graph<String, String> {
     let mut graph = Graph::new();
-    let mut nodes_iterator2 = paths_header.split_whitespace();
-    let first_node_wrapped = nodes_iterator2.next();
-    if first_node_wrapped == None {
-        return graph;
+    let mut nodes_iterator = paths_header.split_whitespace();
+    let mut node_str_to_node_handle = HashMap::new();
+    let first_node = nodes_iterator.next();
+    if first_node.is_none() {
+        return graph; // clearly we don't have anything, so return an empty graph
     }
-    let first_node = first_node_wrapped.unwrap().to_string();
-    let mut first_node_handle = graph.add_node(first_node);
-    for node in nodes_iterator2 {
-        let second_node_handle = graph.add_node(node.to_string());
-        graph.add_edge(first_node_handle, second_node_handle, String::new());
-        first_node_handle = second_node_handle;
+    let first_node_str = first_node.unwrap();
+    node_str_to_node_handle.insert(first_node_str.to_string(), graph.add_node(first_node_str.to_string()));
+    let mut prev_node_handle = node_str_to_node_handle[first_node_str];
+    for node_str in nodes_iterator {
+        // 1. Is this node already in the graph?  If so, ignore it and move "up" the tree
+        if !node_str_to_node_handle.contains_key(node_str) {
+            let new_node_handle = graph.add_node(node_str.to_string());
+            node_str_to_node_handle.insert(node_str.to_string(), new_node_handle);
+            graph.add_edge(prev_node_handle, new_node_handle, "".to_string());
+            prev_node_handle = new_node_handle;
+        }
+        else {
+            prev_node_handle = node_str_to_node_handle[node_str];
+        }
     }
     graph
 }
 
-
-
-/* Note:  the more efficient algorithm to do this (that is also used by the boost library) is here:
- * https://citeseerx.ist.psu.edu/viewdoc/download;jsessionid=E6BEA4B7B3694938A0BBEBB3604F14C7?doi=10.1.1.101.5342&rep=rep1&type=pdf
- * But that's more complicated than we need right now for a prototype, so the below algorithm 
- * does subgraph isomorphism only on non-branching trees.  So... they're always subgraph isomorphic, unless target is bigger than trace.
- * 
- * All this algorithm does is check the length, and if so, create a mapping between the trace and target graphs
- * Arguments:
- * @trace_graph: the graph of the trace observed
- * @target_graph: the graph of the target pattern we want to match to
- *
- * Return value:
- * @mapping: a hashmap mapping vertices in target_graph to those in trace_graph if the graphs are subgraph isomophic, and
- *           an empty hashmap otherwise
- */
-pub fn get_sub_graph_mapping(trace_graph:  Graph<String, String>, target_graph: Graph<String, String>) -> HashMap<NodeIndex, NodeIndex> {
-    // Right now, simply having more nodes than the target will be sufficient to say yes because
-    // I haven't implemented branching.  So that's what we're going to do, and we'll make this more general later
-    let mut mapping = HashMap::new();
-    if trace_graph.node_count() >= target_graph.node_count() {
-        let trace_graph_order = toposort(&trace_graph, None).unwrap();
-        let target_graph_order = toposort(&target_graph, None).unwrap();
-        let trace_root = trace_graph_order[0];
-        let target_root = target_graph_order[0];
-        mapping.insert(trace_root, target_root);
-        let mut trace_children: Vec<NodeIndex> = trace_graph.neighbors(trace_root).collect();
-        let mut target_children: Vec<NodeIndex> = trace_graph.neighbors(target_root).collect();
-        while trace_children.len() != 0 && target_children.len() != 0 {
-            let trace_child = trace_children[0];
-            let target_child = target_children[0];
-            mapping.insert(target_child, trace_child);
-            trace_children = trace_graph.neighbors(trace_child).collect();
-            target_children = trace_graph.neighbors(target_child).collect();
+pub fn get_node_with_id(graph: &Graph<String, String>, node_name: String) -> Option<NodeIndex> {
+    for index in graph.node_indices() {
+        if graph.node_weight(index).unwrap() == &node_name {
+            return Some(index);
         }
     }
-    mapping
+    None
 }
 
-
+pub fn get_tree_height(graph: &Graph<String, String>, root: Option<NodeIndex>) -> u32 {
+    let starting_point;
+    if !root.is_none() { starting_point = root.unwrap() }
+    else {
+        // The root of the tree by definition has no incoming edges
+        let sorted = toposort(graph, None).unwrap();
+        starting_point = sorted[0];
+    }
+    let node_map = dijkstra(graph, starting_point, None, |_| 1);
+    let mut max = 0;
+    for key in node_map.keys() {
+        if node_map[key] > max {
+            max = node_map[key];
+        }
+    }
+    return max;
+}
 
 #[cfg(test)]
 mod tests {
@@ -152,12 +147,31 @@ mod tests {
         assert_eq!(graph.edge_count(), 2);
     }
 
+
     #[test]
-    fn test_get_subgraph_mapping_with_single_child_graphs() {
-        let trace_graph = make_small_trace_graph();
-        let target_graph = make_small_target_graph();
-        let mapping = get_sub_graph_mapping(trace_graph, target_graph);
-        assert_eq!(mapping.len(), 3); 
+    fn test_correctly_parse_branching_graphs() {
+        let graph = generate_trace_graph_from_headers("0 1 3 1 2".to_string());
+        assert!(graph.node_count()==4);
+        for node in graph.node_indices() {
+            if graph.node_weight(node).unwrap() == "0" {
+                assert!(graph.neighbors(node).count() == 1);
+            }
+            if graph.node_weight(node).unwrap() == "1" {
+                assert!(graph.neighbors(node).count() == 2);
+            }
+        }
+
+    }
+
+    #[test]
+    fn test_generate_trace_graph_from_headers_on_empty_string() {
+        let graph = generate_trace_graph_from_headers(String::new());
+        assert!(graph.node_count()==0);
+    }
+    #[test]
+    fn test_get_tree_height() {
+        let graph = generate_trace_graph_from_headers("0 1 3 1 2".to_string());
+        assert!(get_tree_height(&graph, None)==2);
     }
 
 }
