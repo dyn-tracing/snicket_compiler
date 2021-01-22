@@ -1,7 +1,10 @@
+[workspace]
+modules = []
+
 [package]
-name = "rust_lib"
+name = "rust_filter"
 version = "0.1.0"
-authors = ["Jessica Berg <jb7399@nyu.edu>"]
+authors = ["Anirudh Sivaraman <sk.anirudh@gmail.com>", "Jessica Berg <jb7399@nyu.edu>", "Fabian Ruffy <fruffy@nyu.edu>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
