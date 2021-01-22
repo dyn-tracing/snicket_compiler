@@ -1,6 +1,5 @@
 use std::collections::HashMap;
-use std::fs;
-use crate::rpc::Rpc;
+use rpc_lib::rpc::Rpc;
 
 pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
 
