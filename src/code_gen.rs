@@ -336,8 +336,8 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
         self.cpp_blocks.push(cpp_block);
 
         let rust_block = format!(
-            "let node_ptr = graph_utils::get_node_with_id(target, mapping->at(\"{node_id}\"));
-if (node_ptr == None || node_ptr->properties.find({parts}) == node_ptr->properties.end()) {{
+            "let node_ptr = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());
+if (node_ptr.is_none()) {{
     LOG_WARN(\"Node {node_id} not found\");
     return;
 }}
