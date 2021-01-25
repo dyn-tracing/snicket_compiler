@@ -134,16 +134,6 @@ fn main() {
         // we have to write to three files:  Cargo.toml to edit the filter name, lib.rs to edit the filter name,
         // and <output_name>.rs for the actual filter implementation
         let rust_dir = bin_dir.join("rust_filter");
-
-        // Filter types
-        let filter_types_file = rust_dir.join("src").join("types.rs");
-        let filter_types_handlebars = bin_dir.join("filter_types.rs.handlebars");
-        generate_code_from_codegen_with_handlebars(
-            &code_gen,
-            filter_types_handlebars,
-            filter_types_file,
-        );
-
         // The filter itself
         let mut filter_file_name = rust_dir.join("src").join(output_name);
         filter_file_name.set_extension("rs");

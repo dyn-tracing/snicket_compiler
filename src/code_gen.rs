@@ -125,8 +125,8 @@ impl<'a> CodeGenConfig<'a> {
 
     fn parse_udf_cpp(&mut self, udf: String) {
         let cpp_re = Regex::new(
-	   r".*udf_type:\s+(?P<udf_type>\w+)\n.*id:\s+(?P<id>\w+)\n.*return_type:\s+(?P<return_type>\w+)",
-	).unwrap();
+       r".*udf_type:\s+(?P<udf_type>\w+)\n.*id:\s+(?P<id>\w+)\n.*return_type:\s+(?P<return_type>\w+)",
+    ).unwrap();
         let cpp_caps = cpp_re.captures(&udf).unwrap();
         let udf_type = CppUdfType::from_str(cpp_caps.name("udf_type").unwrap().as_str()).unwrap();
         let id = String::from(cpp_caps.name("id").unwrap().as_str());

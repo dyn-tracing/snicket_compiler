@@ -13,7 +13,7 @@ pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
 
 
 // This represents a piece of state of the filter
-// it either contains a user defined function, or some sort of 
+// it either contains a user defined function, or some sort of
 // other persistent state
 #[derive(Clone, Debug)]
 pub struct State {
@@ -24,20 +24,20 @@ pub struct State {
 
 impl State {
     pub fn new() -> State {
-        State { 
+        State {
             type_of_state: None,
             string_data: None,
             {{#each rust_udfs}}udf_{{this.id}}:  None, {{/each}}
         }
-    } 
+    }
 
     pub fn new_with_str(str_data: String) -> State {
-        State { 
+        State {
             type_of_state: Some(String::from("String")),
             string_data: Some(str_data),
             {{#each rust_udfs}}udf_{{this.id}}:  None, {{/each}}
         }
-    } 
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -47,22 +47,19 @@ pub struct Filter {
 
 impl Filter {
     #[no_mangle]
-    pub fn new() -> Filter {
-        Filter { 
-	    filter_state: HashMap::new(),
-	}
+    pub fn new() -> *mut Filter {
+         Box::into_raw(Box::new(Filter {
+            filter_state: HashMap::new(),
+        }))
     }
 
     #[no_mangle]
-    pub fn new_with_envoy_properties(string_data: HashMap<String, String>) -> Filter {
-         let mut hash = HashMap::new();
-         for key in string_data.keys() {
-             hash.insert(key.clone(), State::new_with_str(string_data[key].clone()));
-         }
-         let new_filter = Filter { 
-	    filter_state: hash,
-	 };
-         return new_filter;
+    pub fn new_with_envoy_properties(string_data: HashMap<String, String>) -> *mut Filter {
+        let mut hash = HashMap::new();
+        for key in string_data.keys() {
+            hash.insert(key.clone(), State::new_with_str(string_data[key].clone()));
+        }
+        Box::into_raw(Box::new(Filter { filter_state: hash }))
     }
 
     #[no_mangle]
@@ -96,21 +93,21 @@ impl Filter {
 
             let target = graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
             let trace_graph = graph_utils::generate_trace_graph_from_headers(x.path.clone());
-            let wrapped_mapping = isomorphic_subgraph_mapping(&trace_graph, &target); 
+            let wrapped_mapping = isomorphic_subgraph_mapping(&trace_graph, &target);
             if !wrapped_mapping.is_none() {
                 let mapping = wrapped_mapping.unwrap();
-                // In the non-simulator version, we will send the result to storage.  Given this is 
+                // In the non-simulator version, we will send the result to storage.  Given this is
                 // a simulation, we will write it to a file.
                 {{#each rust_blocks}}{{{this}}}{{/each}}
                 {{#each rust_udfs}}
                 let {{this.id}}_state_ptr = self.filter_state.get_mut("{{this.id}}").unwrap();
                 let {{this.id}}_obj_ptr = {{this.id}}_state_ptr.udf_{{this.id}}.as_mut().unwrap();
                 let {{this.id}}_value = {{this.id}}_obj_ptr.execute().to_string();
-                
+
                 fs::write("result.txt", {{this.id}}_value).expect("Unable to write file");
 
                 {{/each}}
-       
+
             }
         }
 
@@ -123,9 +120,9 @@ impl Filter {
 
 
         // 5.  Pass the rpc on
-        Some(Rpc{ 
+        Some(Rpc{
             data: x.data, uid: x.uid , path: x.path.clone()
-             }   ) 
+             }   )
     }
 
 }
