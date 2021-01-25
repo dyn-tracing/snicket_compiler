@@ -335,19 +335,19 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
         );
         self.cpp_blocks.push(cpp_block);
 
-        # TODO: right now can't put custom headers in simulator, so once we can, update this
-        # let rust_block = format!(
-        #    "let node_ptr = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());
-        # if (node_ptr.is_none()) {{
-        # LOG_WARN(\"Node {node_id} not found\");
-        # return;
-        #}}
-        # let {cpp_var_id} = node_ptr->properties.at({parts});",
-        #     node_id = id.id_name,
-        #   parts = parts,
-        #    cpp_var_id = property_var_id,
-        #);
-        #self.rust_blocks.push(rust_block);
+        // TODO: right now can't put custom headers in simulator, so once we can, update this
+        // let rust_block = format!(
+        //    "let node_ptr = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());
+        // if (node_ptr.is_none()) {{
+        // LOG_WARN(\"Node {node_id} not found\");
+        // return;
+        // }}
+        //  let {cpp_var_id} = node_ptr->properties.at({parts});",
+        //     node_id = id.id_name,
+        //   parts = parts,
+        //    cpp_var_id = property_var_id,
+        //);
+        //self.rust_blocks.push(rust_block);
 
         self.result = CppResult::Return {
             typ: attribute.cpp_type,
