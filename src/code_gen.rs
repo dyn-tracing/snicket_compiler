@@ -380,7 +380,10 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                     let rust_error_check = format!("                    let ret = fs::write(\"result.txt\", {cpp_var_id}.to_string());\n                    match ret {{\n                        Ok(result) => result,\n                        Err(_e) => print!(\"WARNING: could not write result to file\"),\n                    }}; \n                }}",
                             cpp_var_id = cpp_var_id,
                         );
-                    let rust_block = format!("{}{}{}", rust_index_code, rust_get_tree_height_code, rust_error_check);
+                    let rust_block = format!(
+                        "{}{}{}",
+                        rust_index_code, rust_get_tree_height_code, rust_error_check
+                    );
                     self.rust_blocks.push(rust_block);
                     self.result = CppResult::Return {
                         typ: attribute.cpp_type,
@@ -408,7 +411,10 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                     let rust_error_check = format!("                    let ret = fs::write(\"result.txt\", {cpp_var_id}.to_string());\n                    match ret {{\n                        Ok(result) => result,\n                        Err(_e) => print!(\"WARNING: could not write result to file\"),\n                    }}; \n                }}",
                             cpp_var_id = cpp_var_id,
                         );
-                    let rust_block = format!("{}{}{}", rust_index_code, rust_get_breadth_code, rust_error_check);
+                    let rust_block = format!(
+                        "{}{}{}",
+                        rust_index_code, rust_get_breadth_code, rust_error_check
+                    );
 
                     self.rust_blocks.push(rust_block);
                     self.result = CppResult::Return {
