@@ -93,10 +93,10 @@ impl Filter {
 
             let target = graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
             let trace_graph = graph_utils::generate_trace_graph_from_headers(x.path.clone());
-            let wrapped_mapping = isomorphic_subgraph_mapping(&trace_graph, &target);
+            let wrapped_mapping = isomorphic_subgraph_mapping(&trace_graph, &target); 
             if !wrapped_mapping.is_none() {
                 let mapping = wrapped_mapping.unwrap();
-                // In the non-simulator version, we will send the result to storage.  Given this is
+                // In the non-simulator version, we will send the result to storage.  Given this is 
                 // a simulation, we will write it to a file.
                 {{#each rust_blocks}}{{{this}}}{{/each}}
                 {{#each rust_udfs}}
