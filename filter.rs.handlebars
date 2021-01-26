@@ -107,16 +107,12 @@ impl Filter {
             // in ids_to_properties we have
             // ids_to_properties("a", { node.metadata.WORKLOAD_NAME = "productpage-v1" } )
             let mut ids_to_properties: HashMap<String, HashMap<String, String>> = HashMap::new();
+
             {{#each nodes_to_attributes}}
-            let properties = vec! [ {{#each this.parts}} String::from("{{this}}"), {{/each}} ].join(".");
+            let mut {{this.id}}_property_hashmap = HashMap::new();
+            {{this.id}}_property_hashmap.insert(vec! [ {{#each this.parts}} String::from("{{this}}"), {{/each}} ].join("."), "{{this.value}}".to_string());
+            ids_to_properties("{{this.id}}".to_string, {{this.id}}_property_hashmap.clone());
             {{/each}}
-
-            {{#each vertices}}
-            let mut {{this}}_hashmap = HashMap::new();
-            {{this}}_hashmap.insert(properties.clone(), "{{this}}".to_string());
-            ids_to_properties.insert("{{this}}".to_string(), {{this}}_hashmap);
-            {{/each}}
-
 
             let target_graph = graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
             let trace_graph = graph_utils::generate_trace_graph_from_headers(x.path.clone());
