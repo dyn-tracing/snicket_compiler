@@ -3,7 +3,7 @@ mod graph_utils;
 use rpc_lib::rpc::Rpc;
 use std::collections::HashMap;
 use std::fs;
-use petgraph::algo::isomorphic_subgraph_mapping;
+use petgraph::algo::isomorphic_subgraph_matching;
 use petgraph::graph::NodeIndex;
 
 pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
@@ -66,7 +66,23 @@ impl Filter {
     #[no_mangle]
     pub fn execute(&mut self, x: &Rpc) -> Option<Rpc> {
         // 0. Who am I?
-        let my_node = self.filter_state.get("WORKLOAD_NAME").unwrap().string_data.clone().unwrap();
+        let my_node_wrapped = self
+            .filter_state
+            .get("node.metadata.WORKLOAD_NAME");
+        if my_node_wrapped.is_none() {
+            print!("WARNING: filter was initialized without envoy properties and thus cannot function");
+            return Some(Rpc {
+                       data: x.data,
+                       uid: x.uid,
+                       path: x.path.clone(),
+                   });
+        }
+        let my_node = my_node_wrapped
+            .unwrap()
+            .string_data
+            .clone()
+            .unwrap();
+
 
         // 1. Do I need to put any udf variables/objects in?
         {{#each rust_udfs}}
@@ -86,17 +102,37 @@ impl Filter {
             // we need to create the graph given by the query
             let vertices = vec![ {{#each vertices}}String::from("{{this}}"), {{/each}}  ];
             let edges = vec![ {{#each edges}} ( {{#each this}}String::from("{{this}}"), {{/each}} ), {{/each}} ];
-            let mut ids_to_properties: HashMap<String, Vec<String>> = HashMap::new();
+            // ids_to_properties is a HashMap taking <(NodeName, Properties), Desired Value>, so if the query says
+            // a.service_name == productpagev1"
+            // in ids_to_properties we have
+            // ids_to_properties("a", { node.metadata.WORKLOAD_NAME = "productpage-v1" } )
+            let mut ids_to_properties: HashMap<String, HashMap<String, String>> = HashMap::new();
             {{#each nodes_to_attributes}}
-            ids_to_properties.insert(String::from("{{this.id}}"), vec![ {{#each this.parts}} String::from("{{this}}"), {{/each}} ]);
+            let properties = vec! [ {{#each this.parts}} String::from("{{this}}"), {{/each}} ].join(".");
+            {{/each}}
+
+            {{#each vertices}}
+            let mut {{this}}_hashmap = HashMap::new();
+            {{this}}_hashmap.insert(properties.clone(), "{{this}}".to_string());
+            ids_to_properties.insert("{{this}}".to_string(), {{this}}_hashmap);
             {{/each}}
 
 
-            let target = graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
+            let target_graph = graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
             let trace_graph = graph_utils::generate_trace_graph_from_headers(x.path.clone());
-            let wrapped_mapping = isomorphic_subgraph_mapping(&trace_graph, &target);
-            if !wrapped_mapping.is_none() {
-                let mapping = wrapped_mapping.unwrap();
+            let mapping = isomorphic_subgraph_matching(
+                &target_graph,
+                &trace_graph,
+                |x, y| {
+                    for property in y.1.keys() {
+                        if property != &"node.metadata.WORKLOAD_NAME".to_string() && &(x.1[property]) != &(y.1[property]) { return false; }
+                    }
+                return true;
+                },
+                |x, y| x == y,
+            );
+            if !mapping.is_none() {
+                let m = mapping.unwrap();
                 // In the non-simulator version, we will send the result to storage.  Given this is
                 // a simulation, we will write it to a file.
                 {{#each rust_blocks}}{{{this}}}{{/each}}
@@ -111,7 +147,6 @@ impl Filter {
 
             }
         }
-
         // 4.  Allow udfs to execute
         {{#each rust_udfs}}
         let {{this.id}}_state_ptr = self.filter_state.get_mut("{{this.id}}").unwrap();
