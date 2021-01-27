@@ -1,10 +1,9 @@
-mod graph_utils;
-
 use rpc_lib::rpc::Rpc;
 use std::collections::HashMap;
 use std::fs;
 use petgraph::algo::isomorphic_subgraph_matching;
 use petgraph::graph::NodeIndex;
+use crate::graph_utils;
 
 pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
 
@@ -65,17 +64,14 @@ impl Filter {
 
     #[no_mangle]
     pub fn execute(&mut self, x: &Rpc) -> Option<Rpc> {
+        let mut to_return = Rpc { data: x.data, uid: x.uid, path: x.path.clone(), headers: x.headers.clone() };
         // 0. Who am I?
         let my_node_wrapped = self
             .filter_state
             .get("node.metadata.WORKLOAD_NAME");
         if my_node_wrapped.is_none() {
             print!("WARNING: filter was initialized without envoy properties and thus cannot function");
-            return Some(Rpc {
-                       data: x.data,
-                       uid: x.uid,
-                       path: x.path.clone(),
-                   });
+            return Some(to_return);
         }
         let my_node = my_node_wrapped
             .unwrap()
@@ -94,7 +90,31 @@ impl Filter {
         }
         {{/each}}
 
-        // 2. TODO: Find the node attributes to be collected
+        // 2. Include any relevant node attributes
+        let mut data_to_append: String;
+        let mut data_key: String;
+        let mut me;
+        {{#each node_attributes_to_fetch}}
+
+        me = my_node.clone();
+        me.insert_str(0, " ");
+        me.push_str(".");
+
+        data_key = vec![ {{#each this.parts}} String::from("{{this}}"), {{/each}} ].join(".");
+        data_to_append = self.filter_state[&data_key].string_data.as_ref().unwrap().to_string();
+        me.push_str(&data_key);
+        me.push_str("==");
+        me.push_str(&data_to_append);
+        me.push_str(",");
+
+        if to_return.headers.contains_key(&"properties".to_string()) {
+            to_return.headers.get_mut(&"properties".to_string()).unwrap().push_str(&me);
+        }
+        else {
+            to_return.headers.insert("properties".to_string(), me);
+        }
+        
+        {{/each}}
 
         // 3.  Make a subgraph representing the query, check isomorphism compared to the
         //     observed trace, and do return calls based on that info
@@ -107,19 +127,22 @@ impl Filter {
             // in ids_to_properties we have
             // ids_to_properties("a", { node.metadata.WORKLOAD_NAME = "productpage-v1" } )
             let mut ids_to_properties: HashMap<String, HashMap<String, String>> = HashMap::new();
+
             {{#each nodes_to_attributes}}
-            let properties = vec! [ {{#each this.parts}} String::from("{{this}}"), {{/each}} ].join(".");
+            let mut {{this.id}}_property_hashmap = HashMap::new();
+            {{this.id}}_property_hashmap.insert(vec! [ {{#each this.parts}} String::from("{{this}}"), {{/each}} ].join("."), "{{this.value}}".to_string());
+            ids_to_properties.insert("{{this.id}}".to_string(), {{this.id}}_property_hashmap.clone());
             {{/each}}
-
-            {{#each vertices}}
-            let mut {{this}}_hashmap = HashMap::new();
-            {{this}}_hashmap.insert(properties.clone(), "{{this}}".to_string());
-            ids_to_properties.insert("{{this}}".to_string(), {{this}}_hashmap);
-            {{/each}}
-
 
             let target_graph = graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
-            let trace_graph = graph_utils::generate_trace_graph_from_headers(x.path.clone());
+            let trace_graph;
+            if x.headers.contains_key(&"properties".to_string()) {
+                trace_graph = graph_utils::generate_trace_graph_from_headers(x.path.clone(), to_return.headers.get_mut(&"properties".to_string()).unwrap().to_string());
+            }
+            else {
+                trace_graph = graph_utils::generate_trace_graph_from_headers(x.path.clone(), String::new());
+
+            }
             let mapping = isomorphic_subgraph_matching(
                 &target_graph,
                 &trace_graph,
@@ -134,8 +157,17 @@ impl Filter {
             if !mapping.is_none() {
                 let m = mapping.unwrap();
                 // In the non-simulator version, we will send the result to storage.  Given this is
-                // a simulation, we will write it to a file.
+                // a simulation, we will write it to a file for now
+                // TODO:  make a storage node in the simulator
                 {{#each rust_blocks}}{{{this}}}{{/each}}
+
+                {{#with result}}
+                {{#if this.Return}}{{#with this.Return}}
+                fs::write("result.txt", {{this.id}}).expect("Unable to write file");
+                {{/with}}{{/if}}
+                {{/with}}
+
+
                 {{#each rust_udfs}}
                 let {{this.id}}_state_ptr = self.filter_state.get_mut("{{this.id}}").unwrap();
                 let {{this.id}}_obj_ptr = {{this.id}}_state_ptr.udf_{{this.id}}.as_mut().unwrap();
@@ -156,9 +188,7 @@ impl Filter {
 
 
         // 5.  Pass the rpc on
-        Some(Rpc{
-            data: x.data, uid: x.uid , path: x.path.clone()
-             }   )
+        Some(to_return)
     }
 
 }
