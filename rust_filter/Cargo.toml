@@ -16,3 +16,4 @@ path = "filter.rs"
 [dependencies]
 petgraph = { path = "../petgraph" }
 rpc_lib = { path = "../rpc_lib" }
+graph_utils = { path = "../graph_utils" }

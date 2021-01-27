@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::fs;
 use petgraph::algo::isomorphic_subgraph_matching;
 use petgraph::graph::NodeIndex;
-use crate::graph_utils;
+use graph_utils::graph_utils;
 
 pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
 
