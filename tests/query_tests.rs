@@ -35,7 +35,7 @@ fn check_compilation(
     let mut out_file = query_dir.join(query_name);
     out_file.set_extension("cc");
     args.extend(vec!["-o".to_string(), out_file.to_str().unwrap().into()]);
-    args.push("-rproductpage-v1".to_string());
+    args.extend(vec!["--root-node".to_string(), "productpage-v1".to_string()]);
     cmd.args(args);
     cmd.assert().success();
 
@@ -77,7 +77,7 @@ fn check_compilation_rust(
     let out_file = String::from("filter");
     args.extend(vec!["-o".to_string(), out_file]);
     args.extend(vec!["-c".to_string(), String::from("sim")]);
-    args.push("-r0".to_string());
+    args.extend(vec!["--root-node".to_string(), "0".to_string()]);
     cmd.args(args);
     cmd.assert().success();
 

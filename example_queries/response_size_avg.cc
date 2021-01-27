@@ -1,5 +1,5 @@
 // Auto generated Envoy WASM filter from following command:
-// target/debug/dtc -q example_queries/response_size_avg.cql -u example_udfs/avg.cc -o example_queries/response_size_avg.cc -rproductpage-v1
+// target/debug/dtc -q example_queries/response_size_avg.cql -u example_udfs/avg.cc -o example_queries/response_size_avg.cc --root-node productpage-v1
 
 // NOLINT(namespace-envoy)
 #include <map>
@@ -185,24 +185,6 @@ void BidiContext::onResponseHeadersInbound() {
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
   {
-  int64_t value;
-  if (getValue({
-      "response","total_size",
-  }, &value)) {
-    std::string result = std::string(root_->getWorkloadName());
-    for (auto p : {
-        "response","total_size",
-    }) {
-      result += "." + std::string(p);
-    }
-    result += "==";
-    result += std::to_string(value);
-
-    properties.push_back(result);
-  } else {
-    LOG_WARN("failed to get property");
-  }
-  }{
   std::string value;
   if (getValue({
       "node","metadata","WORKLOAD_NAME",
@@ -215,6 +197,24 @@ void BidiContext::onResponseHeadersInbound() {
     }
     result += "==";
     result += value;
+
+    properties.push_back(result);
+  } else {
+    LOG_WARN("failed to get property");
+  }
+  }{
+  int64_t value;
+  if (getValue({
+      "response","total_size",
+  }, &value)) {
+    std::string result = std::string(root_->getWorkloadName());
+    for (auto p : {
+        "response","total_size",
+    }) {
+      result += "." + std::string(p);
+    }
+    result += "==";
+    result += std::to_string(value);
 
     properties.push_back(result);
   } else {
@@ -251,7 +251,7 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-      "a", "d", "b", "c", 
+      "b", "a", "c", "d", 
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {

@@ -1,5 +1,5 @@
 // Auto generated Envoy WASM filter from following command:
-// target/debug/dtc -q example_queries/breadth.cql -o example_queries/breadth.cc -rproductpage-v1
+// target/debug/dtc -q example_queries/breadth.cql -o example_queries/breadth.cc --root-node productpage-v1
 
 // NOLINT(namespace-envoy)
 #include <map>
