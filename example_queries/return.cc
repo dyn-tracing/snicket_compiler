@@ -1,5 +1,5 @@
 // Auto generated Envoy WASM filter from following command:
-// target/debug/dtc -q example_queries/return.cql -o example_queries/return.cc
+// target/debug/dtc -q example_queries/return.cql -o example_queries/return.cc --root-node productpage-v1
 
 // NOLINT(namespace-envoy)
 #include <map>
@@ -234,7 +234,7 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-      "d", "b", "a", "c", 
+      "c", "d", "a", "b", 
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
