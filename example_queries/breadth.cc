@@ -1,5 +1,5 @@
 // Auto generated Envoy WASM filter from following command:
-// {{cmd}}
+// target/debug/dtc -q example_queries/breadth.cql -o example_queries/breadth.cc --root-node productpage-v1
 
 // NOLINT(namespace-envoy)
 #include <map>
@@ -41,7 +41,7 @@ std::string trafficDirectionToString(TrafficDirection dir) {
   }
 }
 
-{{#each cpp_udfs}}{{{this.func_impl}}}{{/each}}
+
 
 class BidiRootContext : public RootContext {
 public:
@@ -58,9 +58,7 @@ public:
   bool onConfigure(size_t /* configuration_size */) override;
 
   std::string_view getWorkloadName() { return workload_name_; }
-{{#each cpp_udfs}}
-{{this.id}} {{this.id}}_udf_;
-{{/each}}
+
 
 private:
   std::string workload_name_;
@@ -169,25 +167,25 @@ void BidiContext::onResponseHeadersInbound() {
 
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
-  {{#each node_attributes_to_fetch}}{
-  {{this.cpp_type}} value;
+  {
+  std::string value;
   if (getValue({
-      {{#each this.parts}}"{{this}}",{{/each}}
+      "node","metadata","WORKLOAD_NAME",
   }, &value)) {
     std::string result = std::string(root_->getWorkloadName());
     for (auto p : {
-        {{#each this.parts}}"{{this}}",{{/each}}
+        "node","metadata","WORKLOAD_NAME",
     }) {
       result += "." + std::string(p);
     }
     result += "==";
-    {{#if (eq this.cpp_type "int64_t")}}result += std::to_string(value);{{else}}result += value;{{/if}}
+    result += value;
 
     properties.push_back(result);
   } else {
     LOG_WARN("failed to get property");
   }
-  }{{/each}}
+  }
 
   LOG_WARN("number of properties collected " +
            std::to_string(properties.size()));
@@ -212,22 +210,22 @@ void BidiContext::onResponseHeadersInbound() {
     LOG_WARN("x-wasm-property: " + properties_joined);
   }
 
-  if (root_->getWorkloadName() == "{{root_id}}") {
+  if (root_->getWorkloadName() == "productpage-v1") {
     // TODO: Construct TreeNode graph using paths and properties returned
     // and check whether the query is subgraph isomorphic to the graph
     // generated from request trace.
 
     std::set<std::string> vertices = {
-      {{#each vertices}}"{{this}}", {{/each}}
+      "x", "y", 
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
-        {{#each edges}} { {{#each this}}"{{this}}", {{/each}} }, {{/each}}
+         { "x", "y",  }, 
     };
 
     std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
-    {{#each nodes_to_attributes}}ids_to_properties["{{this.id}}"][{ {{#each this.parts}}"{{this}}",{{/each}} }] = "{{this.value}}";
-    {{/each}}
+    ids_to_properties["x"][{ "node","metadata","WORKLOAD_NAME", }] = "frontend";
+    
 
     trace_graph_t pattern =
         generate_trace_graph(vertices, edges, ids_to_properties);
@@ -245,13 +243,13 @@ void BidiContext::onResponseHeadersInbound() {
     std::string key = b3_trace_id_;
     std::string value;
 
-    {{#each cpp_blocks}}{{{this}}}{{/each}}
+    std::string x_height = std::to_string(get_out_degree(target, mapping->at("x")));
 
-    {{#with result}}
-    {{#if this.Return}}{{#with this.Return}}
-    value = {{this.id}};
-    {{/with}}{{/if}}
-    {{/with}}
+    
+    
+    value = x_height;
+    
+    
 
     LOG_WARN("Value to store: " + value);
 

@@ -1,5 +1,5 @@
 // Auto generated Envoy WASM filter from following command:
-// target/debug/dtc -q example_queries/response_size_avg.cql -u example_udfs/avg.cc -o example_queries/response_size_avg.cc
+// target/debug/dtc -q example_queries/response_size_avg.cql -u example_udfs/avg.cc -o example_queries/response_size_avg.cc --root-node productpage-v1
 
 // NOLINT(namespace-envoy)
 #include <map>

@@ -70,16 +70,15 @@ fn main() {
         .arg(
             Arg::with_name("root_node")
                 .short("r")
-                .long("root_node")
+                .long("root-node")
                 .value_name("ROOT_NODE")
-                .takes_value(true)
-                .default_value("0")
+                .required(true)
                 .help("Sets the root node of a query"),
         )
         .arg(
             Arg::with_name("compilation_mode")
                 .short("c")
-                .long("compilation_mode")
+                .long("compilation-mode")
                 .value_name("COMPILATION_MODE")
                 .takes_value(true)
                 .possible_values(&compile_vals)
@@ -89,7 +88,7 @@ fn main() {
         .arg(
             Arg::with_name("output")
                 .short("o")
-                .long("out_file")
+                .long("out-file")
                 .value_name("OUT_FILE")
                 .default_value(def_filter_dir.to_str().unwrap())
                 .help("Location and name of the output file."),

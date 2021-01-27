@@ -1,5 +1,5 @@
 // Auto generated Envoy WASM filter from following command:
-// target/debug/dtc -q example_queries/count.cql -u example_udfs/count.cc -o example_queries/count.cc
+// target/debug/dtc -q example_queries/count.cql -u example_udfs/count.cc -o example_queries/count.cc --root-node productpage-v1
 
 // NOLINT(namespace-envoy)
 #include <map>
