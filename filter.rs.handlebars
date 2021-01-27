@@ -163,7 +163,6 @@ impl Filter {
 
                 {{#with result}}
                 {{#if this.Return}}{{#with this.Return}}
-                fs::write("result.txt", {{this.id}}).expect("Unable to write file");
                 {{/with}}{{/if}}
                 {{/with}}
 
