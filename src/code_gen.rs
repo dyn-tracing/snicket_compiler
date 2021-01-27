@@ -384,7 +384,6 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                         );
                     self.cpp_blocks.push(cpp_block);
 
-
                     let rust_index_code = format!("let node_index = graph_utils::get_node_with_id(&target_graph, \"{node_id}\".to_string());\n                if node_index.is_none() {{\n                    print!(\"WARNING: could not find node with id\");\n                }}\n",
                             node_id = id.id_name);
                     let rust_get_tree_height_code = format!(
