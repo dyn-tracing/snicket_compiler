@@ -113,8 +113,7 @@ pub fn generate_trace_graph_from_headers(
                     property.push_str(&quality);
                     property.push_str(".");
                 }
-                property.truncate(property_with_node.len()-node.len()-1); // we subtract an extra 2, one for the trailing period on the last iteration of the for loop
-                print!("node: {0}, property: {1}\n\n\n\n", node, property);
+                let _ = property.pop();  // get rid of trailing period
                 let node_weight: &mut (String, HashMap<String, String>) = graph.node_weight_mut(node_str_to_node_handle[node]).unwrap();
                 node_weight.1.insert(property, values_iterator.next().unwrap().to_string());
             }

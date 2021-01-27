@@ -157,7 +157,8 @@ impl Filter {
             if !mapping.is_none() {
                 let m = mapping.unwrap();
                 // In the non-simulator version, we will send the result to storage.  Given this is
-                // a simulation, we will write it to a file.
+                // a simulation, we will write it to a file for now
+                // TODO:  make a storage node in the simulator
                 {{#each rust_blocks}}{{{this}}}{{/each}}
 
                 {{#with result}}
