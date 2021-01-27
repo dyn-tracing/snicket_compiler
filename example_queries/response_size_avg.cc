@@ -245,13 +245,13 @@ void BidiContext::onResponseHeadersInbound() {
     LOG_WARN("x-wasm-property: " + properties_joined);
   }
 
-  if (root_->getWorkloadName() == "0") {
+  if (root_->getWorkloadName() == "productpage-v1") {
     // TODO: Construct TreeNode graph using paths and properties returned
     // and check whether the query is subgraph isomorphic to the graph
     // generated from request trace.
 
     std::set<std::string> vertices = {
-      "a", "c", "b", "d", 
+      "d", "b", "a", "c", 
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -275,7 +275,7 @@ void BidiContext::onResponseHeadersInbound() {
       return;
     }
 
-    const Node* node_ptr = nullptr;
+    const Node *node_ptr = nullptr;
 
     std::string key = b3_trace_id_;
     std::string value;

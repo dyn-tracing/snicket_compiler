@@ -134,7 +134,7 @@ fn main() {
         // and <output_name>.rs for the actual filter implementation
         let rust_dir = bin_dir.join("rust_filter");
         // The filter itself
-        let mut filter_file_name = rust_dir.join("src").join(output_name);
+        let mut filter_file_name = rust_dir.join(output_name);
         filter_file_name.set_extension("rs");
         let filter_name_handlebars = bin_dir.join("filter.rs.handlebars");
         generate_code_from_codegen_with_handlebars(
