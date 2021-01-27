@@ -35,7 +35,10 @@ fn check_compilation(
     let mut out_file = query_dir.join(query_name);
     out_file.set_extension("cc");
     args.extend(vec!["-o".to_string(), out_file.to_str().unwrap().into()]);
-    args.extend(vec!["--root-node".to_string(), "productpage-v1".to_string()]);
+    args.extend(vec![
+        "--root-node".to_string(),
+        "productpage-v1".to_string(),
+    ]);
     cmd.args(args);
     cmd.assert().success();
 
