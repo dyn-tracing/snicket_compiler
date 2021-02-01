@@ -163,28 +163,14 @@ impl Filter {
 
                 {{#with result}}
                 {{#if this.Return}}{{#with this.Return}}
+
                 {{/with}}{{/if}}
                 {{/with}}
 
 
-                {{#each rust_udfs}}
-                let {{this.id}}_state_ptr = self.filter_state.get_mut("{{this.id}}").unwrap();
-                let {{this.id}}_obj_ptr = {{this.id}}_state_ptr.udf_{{this.id}}.as_mut().unwrap();
-                let {{this.id}}_value = {{this.id}}_obj_ptr.execute().to_string();
-
-                fs::write("result.txt", {{this.id}}_value).expect("Unable to write file");
-
-                {{/each}}
 
             }
         }
-        // 4.  Allow udfs to execute
-        {{#each rust_udfs}}
-        let {{this.id}}_state_ptr = self.filter_state.get_mut("{{this.id}}").unwrap();
-        let {{this.id}}_obj_ptr = {{this.id}}_state_ptr.udf_{{this.id}}.as_mut().unwrap();
-        {{this.id}}_obj_ptr.execute();
-        {{/each}}
-
 
         // 5.  Pass the rpc on
         Some(to_return)

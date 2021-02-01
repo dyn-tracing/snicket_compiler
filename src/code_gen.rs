@@ -353,7 +353,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                    return  Some(to_return);
                }}
                let trace_node_index = NodeIndex::new(m[node_ptr.unwrap().index()]);
-               let {cpp_var_id} = &trace_graph.node_weight(trace_node_index).unwrap().1[ &vec!{parts}.join(\".\") ];",
+               let {cpp_var_id} = &trace_graph.node_weight(trace_node_index).unwrap().1[ &vec!{parts}.join(\".\") ];\n",
            node_id = id.id_name,
            parts = rust_parts,
            cpp_var_id = property_var_id,
@@ -492,12 +492,27 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
         self.cpp_blocks.push(key_value_block);
     }
 
-    fn codegen_call_func_rust(&mut self, func_name: &str, _arg: &str) {
+    fn codegen_call_func_rust(&mut self, func_name: &str, arg: &str) {
         let func = &self.config.rust_udf_table[func_name];
         self.rust_udfs.push(func.clone());
+        let var_id = String::from(func_name);
 
-        // TODO: right now we don't need this in rust, but once aggregation-like stuff needs to be implemented,
-        // I will need to write new code
+        // TODO: use func name
+        let rust_block = format!(
+            "let {var_id}_state_ptr = self.filter_state.get_mut(\"{var_id}\").unwrap();\n
+                let {var_id}_obj_ptr = {var_id}_state_ptr.udf_{var_id}.as_mut().unwrap();\n
+                let {var_id}_value = {var_id}_obj_ptr.execute({arg}).to_string();\n
+
+                fs::write(\"result.txt\", {var_id}_value).expect(\"Unable to write file\");",
+
+            var_id = var_id,
+            arg = arg
+        );
+
+        self.rust_blocks.push(rust_block);
+ 
+
+
     }
 
     fn codegen_call_func(&mut self, func_name: &str, arg: &str) {
@@ -563,7 +578,7 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
             Action::GroupBy(id, p, fid) => {
                 let property_var_id = self.codegen_get_property(id, p);
 
-                let attribute = self.get_attribute_def(p.id_name);
+                let attribute = self.get_attribute_def(p.id_name).clone();
 
                 let converted_id = property_var_id.clone() + "_conv";
                 // C++ code for type conversion for the property
@@ -591,11 +606,28 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
                 };
                 self.cpp_blocks.push(cpp_conv);
 
-                let rust_conv = format!(
-                    "let {converted_id} = {cpp_var_id}.to_string();",
-                    converted_id = converted_id,
-                    cpp_var_id = property_var_id
-                );
+                let rust_conv = match &attribute.cpp_type.clone() {
+                    CppType::Float => format!(
+                        "let {converted_id} : f64 = {cpp_var_id}.parse().unwrap();\n",
+                        converted_id = converted_id,
+                        cpp_var_id = property_var_id
+                    ),
+                    CppType::Int => format!(
+                        "let {converted_id} : u64 = {cpp_var_id}.parse().unwrap();\n",
+                        converted_id = converted_id,
+                        cpp_var_id = property_var_id
+                    ),
+                    CppType::Int64T => format!(
+                        "let {converted_id} : u64 = {cpp_var_id}.parse().unwrap();\n",
+                        converted_id = converted_id,
+                        cpp_var_id = property_var_id
+                    ),
+                    CppType::String => format!(
+                        "let {converted_id} = {cpp_var_id}.to_string();\n",
+                        converted_id = converted_id,
+                        cpp_var_id = property_var_id
+                    ),
+                };
                 self.rust_blocks.push(rust_conv);
 
                 // Now generate code for calling user function specified with the value retrieved
