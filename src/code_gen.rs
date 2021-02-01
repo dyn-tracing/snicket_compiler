@@ -503,7 +503,8 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                 let {var_id}_obj_ptr = {var_id}_state_ptr.udf_{var_id}.as_mut().unwrap();\n
                 let {var_id}_value = {var_id}_obj_ptr.execute({arg}).to_string();\n
 
-                fs::write(\"result.txt\", {var_id}_value).expect(\"Unable to write file\");",
+                let mut file = OpenOptions::new().append(true).open(\"result.txt\").unwrap();
+                file.write({var_id}_value.as_bytes());\n",
 
             var_id = var_id,
             arg = arg

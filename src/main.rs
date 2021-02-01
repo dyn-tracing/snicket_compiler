@@ -137,6 +137,7 @@ fn main() {
         let mut filter_file_name = rust_dir.join(output_name);
         filter_file_name.set_extension("rs");
         let filter_name_handlebars = bin_dir.join("filter.rs.handlebars");
+        print!("writing filter to {0}", filter_file_name.to_str().unwrap());
         generate_code_from_codegen_with_handlebars(
             &code_gen,
             filter_name_handlebars,
