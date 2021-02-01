@@ -347,13 +347,13 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
         self.cpp_blocks.push(cpp_block);
 
         let rust_block = format!(
-           "let node_ptr = graph_utils::get_node_with_id(&target_graph, \"{node_id}\".to_string());
+           "let node_ptr = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());
                if node_ptr.is_none() {{
                    print!(\"WARNING Node {node_id} not found\");
                    return  Some(to_return);
                }}
                let trace_node_index = NodeIndex::new(m[node_ptr.unwrap().index()]);
-               let {cpp_var_id} = &trace_graph.node_weight(trace_node_index).unwrap().1[ &vec!{parts}.join(\".\") ];\n",
+               let {cpp_var_id} = &trace.node_weight(trace_node_index).unwrap().1[ &vec!{parts}.join(\".\") ];\n",
            node_id = id.id_name,
            parts = rust_parts,
            cpp_var_id = property_var_id,
@@ -384,14 +384,15 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                         );
                     self.cpp_blocks.push(cpp_block);
 
-                    let rust_index_code = format!("let node_index = graph_utils::get_node_with_id(&target_graph, \"{node_id}\".to_string());\n                if node_index.is_none() {{\n                    print!(\"WARNING: could not find node with id\");\n                }}\n",
+                    let rust_index_code = format!("let node_index = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());\n                if node_index.is_none() {{\n                    print!(\"WARNING: could not find node with id\");\n                }}\n",
                             node_id = id.id_name);
                     let rust_get_tree_height_code = format!(
-                            "               else {{\n                    let trace_index = NodeIndex::new(m[node_index.unwrap().index()]);\n                    let {cpp_var_id} = graph_utils::get_tree_height(&trace_graph, Some(trace_index))+1; // we add one for ourselves - the node we are on is not added to the path until after the filter is run\n",
-                            cpp_var_id = cpp_var_id,
+                            "               else {{\n                    let trace_index = NodeIndex::new(m[node_index.unwrap().index()]);\n                    let {rust_var_id}_value = &(graph_utils::get_tree_height(&trace, Some(trace_index))+1).to_string(); // we add one for ourselves - the node we are on is not added to the path until after the filter is run\n",
+                            rust_var_id = cpp_var_id,
                         );
-                    let rust_error_check = format!("                    let ret = fs::write(\"result.txt\", {cpp_var_id}.to_string());\n                    match ret {{\n                        Ok(result) => result,\n                        Err(_e) => print!(\"WARNING: could not write result to file\"),\n                    }}; \n                }}",
-                            cpp_var_id = cpp_var_id,
+                    let rust_error_check = format!("                    let mut file = OpenOptions::new().append(true).open(\"result.txt\").unwrap();
+                file.write({rust_var_id}_value.as_bytes());\n            }}\n",
+                            rust_var_id = cpp_var_id,
                         );
                     let rust_block = format!(
                         "{}{}{}",
@@ -406,7 +407,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                     cpp_var_id
                 }
                 "breadth" => {
-                    let cpp_var_id = String::from(id.id_name) + "_height";
+                    let cpp_var_id = String::from(id.id_name) + "_breadth";
                     let cpp_block = format!(
                         "std::string {cpp_var_id} = std::to_string(get_out_degree(target, mapping->at(\"{node_id}\")));",
                         cpp_var_id = cpp_var_id,
@@ -415,14 +416,15 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
 
                     self.cpp_blocks.push(cpp_block);
 
-                    let rust_index_code = format!("let node_index = graph_utils::get_node_with_id(&target_graph, \"{node_id}\".to_string());\n                if node_index.is_none() {{\n                    print!(\"WARNING: could not find node with id\");\n                }}\n",
+                    let rust_index_code = format!("let node_index = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());\n                if node_index.is_none() {{\n                    print!(\"WARNING: could not find node with id\");\n                }}\n",
                             node_id = id.id_name);
                     let rust_get_breadth_code = format!(
-                            "               else {{\n                    let trace_index = NodeIndex::new(m[node_index.unwrap().index()]);\n                    let {cpp_var_id} = graph_utils::get_out_degree(&trace_graph, Some(trace_index)); // we add one for ourselves - the node we are on is not added to the path until after the filter is run\n",
+                            "               else {{\n                    let trace_index = NodeIndex::new(m[node_index.unwrap().index()]);\n                    let {cpp_var_id}_value = &graph_utils::get_out_degree(&trace, Some(trace_index)).to_string(); // we add one for ourselves - the node we are on is not added to the path until after the filter is run\n",
                             cpp_var_id = cpp_var_id,
                         );
-                    let rust_error_check = format!("                    let ret = fs::write(\"result.txt\", {cpp_var_id}.to_string());\n                    match ret {{\n                        Ok(result) => result,\n                        Err(_e) => print!(\"WARNING: could not write result to file\"),\n                    }}; \n                }}",
-                            cpp_var_id = cpp_var_id,
+                    let rust_error_check = format!("                    let mut file = OpenOptions::new().append(true).open(\"result.txt\").unwrap();
+                file.write({rust_var_id}_value.as_bytes());\n            }}\n",
+                            rust_var_id = cpp_var_id,
                         );
                     let rust_block = format!(
                         "{}{}{}",

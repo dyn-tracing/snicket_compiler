@@ -135,18 +135,18 @@ impl Filter {
             ids_to_properties.insert("{{this.id}}".to_string(), {{this.id}}_property_hashmap.clone());
             {{/each}}
 
-            let target_graph = graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
-            let trace_graph;
+            let target = graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
+            let trace;
             if x.headers.contains_key(&"properties".to_string()) {
-                trace_graph = graph_utils::generate_trace_graph_from_headers(x.path.clone(), to_return.headers.get_mut(&"properties".to_string()).unwrap().to_string());
+                trace = graph_utils::generate_trace_graph_from_headers(x.path.clone(), to_return.headers.get_mut(&"properties".to_string()).unwrap().to_string());
             }
             else {
-                trace_graph = graph_utils::generate_trace_graph_from_headers(x.path.clone(), String::new());
+                trace = graph_utils::generate_trace_graph_from_headers(x.path.clone(), String::new());
 
             }
             let mapping = isomorphic_subgraph_matching(
-                &target_graph,
-                &trace_graph,
+                &target,
+                &trace,
                 |x, y| {
                     for property in y.1.keys() {
                         if property != &"node.metadata.WORKLOAD_NAME".to_string() && &(x.1[property]) != &(y.1[property]) { return false; }
