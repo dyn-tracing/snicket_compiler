@@ -84,9 +84,12 @@ impl Filter {
         if !self.filter_state.contains_key("path") {
             if !to_return.headers.contains_key("path") {
                 to_return.headers.insert(String::from("path"), String::from(my_node.clone()));
+                to_return.headers.get_mut("path").unwrap().push_str(",");
             }
             else {
                 to_return.headers.get_mut("path").unwrap().push_str(&String::from(my_node.clone()));
+                to_return.headers.get_mut("path").unwrap().push_str(",");
+
             }
         }
 
@@ -107,7 +110,6 @@ impl Filter {
         {{#each node_attributes_to_fetch}}
 
         me = my_node.clone();
-        me.insert_str(0, " ");
         me.push_str(".");
 
         data_key = vec![ {{#each this.parts}} String::from("{{this}}"), {{/each}} ].join(".");
