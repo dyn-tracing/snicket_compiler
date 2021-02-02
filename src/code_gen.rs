@@ -394,10 +394,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                             "               let trace_index = NodeIndex::new(m[node_index.unwrap().index()]);\n                    let {rust_var_id} = &(graph_utils::get_tree_height(&trace, Some(trace_index))+1).to_string(); // we add one for ourselves - the node we are on is not added to the path until after the filter is run\n",
                             rust_var_id = cpp_var_id,
                         );
-                    let rust_block = format!(
-                        "{}{}",
-                        rust_index_code, rust_get_tree_height_code
-                    );
+                    let rust_block = format!("{}{}", rust_index_code, rust_get_tree_height_code);
                     self.rust_blocks.push(rust_block);
                     self.result = CppResult::Return {
                         typ: attribute.cpp_type,
@@ -422,10 +419,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                             "                    let trace_index = NodeIndex::new(m[node_index.unwrap().index()]);\n                    let {cpp_var_id} = &graph_utils::get_out_degree(&trace, Some(trace_index)).to_string(); // we add one for ourselves - the node we are on is not added to the path until after the filter is run\n",
                             cpp_var_id = cpp_var_id,
                         );
-                    let rust_block = format!(
-                        "{}{}",
-                        rust_index_code, rust_get_breadth_code
-                    );
+                    let rust_block = format!("{}{}", rust_index_code, rust_get_breadth_code);
 
                     self.rust_blocks.push(rust_block);
                     self.result = CppResult::Return {
@@ -507,7 +501,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
         );
 
         self.rust_blocks.push(rust_block);
- 
+
         let key_value_block = match func.udf_type {
             UdfType::Scalar => {
                 format!(
@@ -525,7 +519,6 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
             }
         };
         self.rust_blocks.push(key_value_block);
-
     }
 
     fn codegen_call_func(&mut self, func_name: &str, arg: &str) {
@@ -962,7 +955,8 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
         let mut config = CodeGenConfig::new();
         config.am_cpp = false;
         config.parse_udf(String::from(
-            "// init_func: init
+            "// udf_type: Scalar
+                   // init_func: init
                       // exec_func: increment
                       // struct_name: Count
                       // id: count
