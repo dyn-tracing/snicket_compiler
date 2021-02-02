@@ -66,20 +66,20 @@ pub struct AttributeDef<'a> {
 }
 
 #[derive(Serialize, PartialEq, Eq, Debug, Clone, EnumString)]
-pub enum CppUdfType {
+pub enum UdfType {
     Scalar,
     Aggregation,
 }
 
-impl Default for CppUdfType {
+impl Default for UdfType {
     fn default() -> Self {
-        CppUdfType::Scalar
+        UdfType::Scalar
     }
 }
 
 #[derive(Default, Serialize, PartialEq, Eq, Debug, Clone)]
 pub struct CppUdf {
-    pub udf_type: CppUdfType,
+    pub udf_type: UdfType,
     pub id: String,
     pub func_impl: String,
     pub return_type: CppType,
@@ -87,6 +87,7 @@ pub struct CppUdf {
 
 #[derive(Default, Serialize, PartialEq, Eq, Debug, Clone)]
 pub struct RustUdf {
+    pub udf_type: UdfType,
     pub init_func: String,
     pub exec_func: String,
     pub struct_name: String,
@@ -128,7 +129,7 @@ impl<'a> CodeGenConfig<'a> {
        r".*udf_type:\s+(?P<udf_type>\w+)\n.*id:\s+(?P<id>\w+)\n.*return_type:\s+(?P<return_type>\w+)",
     ).unwrap();
         let cpp_caps = cpp_re.captures(&udf).unwrap();
-        let udf_type = CppUdfType::from_str(cpp_caps.name("udf_type").unwrap().as_str()).unwrap();
+        let udf_type = UdfType::from_str(cpp_caps.name("udf_type").unwrap().as_str()).unwrap();
         let id = String::from(cpp_caps.name("id").unwrap().as_str());
         let return_type =
             CppType::from_str(cpp_caps.name("return_type").unwrap().as_str()).unwrap();
@@ -147,12 +148,13 @@ impl<'a> CodeGenConfig<'a> {
     fn parse_udf_rust(&mut self, udf: String) {
         let udf_clone = udf.clone();
         let rust_re = Regex::new(
-            r".*init_func:\s+(?P<init_func>\w+)\n.*exec_func:\s+(?P<exec_func>\w+)\n.*struct_name:\s+(?P<struct_name>\w+)\n.*id:\s+(?P<id>\w+)",
+            r".*udf_type:\s+(?P<udf_type>\w+)\n.*init_func:\s+(?P<init_func>\w+)\n.*exec_func:\s+(?P<exec_func>\w+)\n.*struct_name:\s+(?P<struct_name>\w+)\n.*id:\s+(?P<id>\w+)",
         ).unwrap();
         let rust_caps = rust_re.captures(&udf_clone);
 
         match rust_caps {
             Some(caps) => {
+                let udf_type = UdfType::from_str(caps.name("udf_type").unwrap().as_str()).unwrap();
                 let init_func = String::from(caps.name("init_func").unwrap().as_str());
                 let exec_func = String::from(caps.name("exec_func").unwrap().as_str());
                 let struct_name = String::from(caps.name("struct_name").unwrap().as_str());
@@ -161,6 +163,7 @@ impl<'a> CodeGenConfig<'a> {
                 self.rust_udf_table.insert(
                     id.clone(),
                     RustUdf {
+                        udf_type,
                         init_func,
                         exec_func,
                         struct_name,
@@ -182,6 +185,7 @@ impl<'a> CodeGenConfig<'a> {
     // return_type: <return_type>
     // arg: <arg>
      * Rust udfs must have the following header:
+    // udf_type: <udf_type>
     // init_func: <init_func_name>
     // exec_func: <exec_func_name>
     // struct_name: <struct_name>
@@ -384,19 +388,15 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                         );
                     self.cpp_blocks.push(cpp_block);
 
-                    let rust_index_code = format!("let node_index = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());\n                if node_index.is_none() {{\n                    print!(\"WARNING: could not find node with id\");\n                }}\n",
+                    let rust_index_code = format!("let node_index = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());\n                if node_index.is_none() {{\n                    print!(\"WARNING: could not find node with id\");            return Some(to_return);\n                }}\n",
                             node_id = id.id_name);
                     let rust_get_tree_height_code = format!(
-                            "               else {{\n                    let trace_index = NodeIndex::new(m[node_index.unwrap().index()]);\n                    let {rust_var_id}_value = &(graph_utils::get_tree_height(&trace, Some(trace_index))+1).to_string(); // we add one for ourselves - the node we are on is not added to the path until after the filter is run\n",
-                            rust_var_id = cpp_var_id,
-                        );
-                    let rust_error_check = format!("                    let mut file = OpenOptions::new().append(true).open(\"result.txt\").unwrap();
-                file.write({rust_var_id}_value.as_bytes());\n            }}\n",
+                            "               let trace_index = NodeIndex::new(m[node_index.unwrap().index()]);\n                    let {rust_var_id} = &(graph_utils::get_tree_height(&trace, Some(trace_index))+1).to_string(); // we add one for ourselves - the node we are on is not added to the path until after the filter is run\n",
                             rust_var_id = cpp_var_id,
                         );
                     let rust_block = format!(
-                        "{}{}{}",
-                        rust_index_code, rust_get_tree_height_code, rust_error_check
+                        "{}{}",
+                        rust_index_code, rust_get_tree_height_code
                     );
                     self.rust_blocks.push(rust_block);
                     self.result = CppResult::Return {
@@ -419,16 +419,12 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                     let rust_index_code = format!("let node_index = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());\n                if node_index.is_none() {{\n                    print!(\"WARNING: could not find node with id\");\n                }}\n",
                             node_id = id.id_name);
                     let rust_get_breadth_code = format!(
-                            "               else {{\n                    let trace_index = NodeIndex::new(m[node_index.unwrap().index()]);\n                    let {cpp_var_id}_value = &graph_utils::get_out_degree(&trace, Some(trace_index)).to_string(); // we add one for ourselves - the node we are on is not added to the path until after the filter is run\n",
+                            "               else {{\n                    let trace_index = NodeIndex::new(m[node_index.unwrap().index()]);\n                    let {cpp_var_id} = &graph_utils::get_out_degree(&trace, Some(trace_index)).to_string(); // we add one for ourselves - the node we are on is not added to the path until after the filter is run\n",
                             cpp_var_id = cpp_var_id,
                         );
-                    let rust_error_check = format!("                    let mut file = OpenOptions::new().append(true).open(\"result.txt\").unwrap();
-                file.write({rust_var_id}_value.as_bytes());\n            }}\n",
-                            rust_var_id = cpp_var_id,
-                        );
                     let rust_block = format!(
-                        "{}{}{}",
-                        rust_index_code, rust_get_breadth_code, rust_error_check
+                        "{}{}",
+                        rust_index_code, rust_get_breadth_code
                     );
 
                     self.rust_blocks.push(rust_block);
@@ -463,7 +459,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
         self.cpp_blocks.push(cpp_block);
 
         let key_value_block = match func.udf_type {
-            CppUdfType::Scalar => {
+            UdfType::Scalar => {
                 if func.return_type != CppType::String {
                     format!(
                         "value = std::to_string({result_cpp_var_id});",
@@ -476,7 +472,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                     )
                 }
             }
-            CppUdfType::Aggregation => {
+            UdfType::Aggregation => {
                 if func.return_type != CppType::String {
                     format!(
                         "std::tie(key, value) = std::make_pair({result_cpp_var_id}.first, std::to_string({result_cpp_var_id}.second));",
@@ -503,10 +499,8 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
         let rust_block = format!(
             "let {var_id}_state_ptr = self.filter_state.get_mut(\"{var_id}\").unwrap();\n
                 let {var_id}_obj_ptr = {var_id}_state_ptr.udf_{var_id}.as_mut().unwrap();\n
-                let {var_id}_value = {var_id}_obj_ptr.execute({arg}).to_string();\n
+                let {var_id} = {var_id}_obj_ptr.execute({arg}).to_string();\n",
 
-                let mut file = OpenOptions::new().append(true).open(\"result.txt\").unwrap();
-                file.write({var_id}_value.as_bytes());\n",
 
             var_id = var_id,
             arg = arg
@@ -514,7 +508,23 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
 
         self.rust_blocks.push(rust_block);
  
-
+        let key_value_block = match func.udf_type {
+            UdfType::Scalar => {
+                format!(
+                    "let mut file = OpenOptions::new().append(true).open(\"result.txt\").unwrap();
+                    file.write({var_id}.as_bytes());\n",
+                    var_id = var_id
+                )
+            }
+            UdfType::Aggregation => {
+                format!(
+                    "let mut file = OpenOptions::new().append(true).open(\"result.txt\").unwrap();
+                    file.write({var_id}.as_bytes());\n",
+                    var_id = var_id
+                )
+            }
+        };
+        self.rust_blocks.push(key_value_block);
 
     }
 
@@ -864,7 +874,7 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
         code_gen.config.cpp_udf_table.insert(
             String::from("max_response_size"),
             CppUdf {
-                udf_type: CppUdfType::Scalar,
+                udf_type: UdfType::Scalar,
                 id: String::from("max_response_size"),
                 func_impl: String::from("function_impl"),
                 return_type: CppType::Int64T,
@@ -886,7 +896,7 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
         assert_eq!(
             code_gen.cpp_udfs,
             vec![CppUdf {
-                udf_type: CppUdfType::Scalar,
+                udf_type: UdfType::Scalar,
                 id: String::from("max_response_size"),
                 func_impl: String::from("function_impl"),
                 return_type: CppType::Int64T,
@@ -904,7 +914,7 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
         code_gen.config.cpp_udf_table.insert(
             String::from("max"),
             CppUdf {
-                udf_type: CppUdfType::Aggregation,
+                udf_type: UdfType::Aggregation,
                 id: String::from("max"),
                 func_impl: String::from("function_impl"),
                 return_type: CppType::Int,
@@ -941,7 +951,7 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
             .cpp_udf_table
             .get(&String::from("max_response_size"))
             .unwrap();
-        assert_eq!(parsed_udf.udf_type, CppUdfType::Scalar);
+        assert_eq!(parsed_udf.udf_type, UdfType::Scalar);
         assert_eq!(parsed_udf.id, String::from("max_response_size"));
         assert_eq!(parsed_udf.return_type, CppType::Int);
         assert!(parsed_udf.func_impl.contains("class max_response_size"));

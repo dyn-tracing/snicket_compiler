@@ -51,7 +51,7 @@ impl Filter {
     pub fn new() -> *mut Filter {
          Box::into_raw(Box::new(Filter {
             filter_state: HashMap::new(),
-        }))
+         }))
     }
 
     #[no_mangle]
