@@ -66,7 +66,7 @@ impl Filter {
     #[no_mangle]
     pub fn execute(&mut self, x: &Rpc) -> Option<Rpc> {
         let mut to_return = Rpc { data: x.data, uid: x.uid, path: x.path.clone(), headers: x.headers.clone() };
-        // 0. Who am I?
+        // 0. Who am I, what is my path so far?
         let my_node_wrapped = self
             .filter_state
             .get("node.metadata.WORKLOAD_NAME");
@@ -80,6 +80,15 @@ impl Filter {
             .clone()
             .unwrap();
 
+        // add ourselves to the path now that we are done
+        if !self.filter_state.contains_key("path") {
+            if !to_return.headers.contains_key("path") {
+                to_return.headers.insert(String::from("path"), String::from(my_node.clone()));
+            }
+            else {
+                to_return.headers.get_mut("path").unwrap().push_str(&String::from(my_node.clone()));
+            }
+        }
 
         // 1. Do I need to put any udf variables/objects in?
         {{#each rust_udfs}}
@@ -128,6 +137,7 @@ impl Filter {
             // in ids_to_properties we have
             // ids_to_properties("a", { node.metadata.WORKLOAD_NAME = "productpage-v1" } )
             let mut ids_to_properties: HashMap<String, HashMap<String, String>> = HashMap::new();
+            {{#each vertices}} ids_to_properties.insert("{{this}}".to_string(), HashMap::new()); {{/each}}
 
             {{#each nodes_to_attributes}}
             let mut {{this.id}}_property_hashmap = HashMap::new();
@@ -138,10 +148,10 @@ impl Filter {
             let target = graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
             let trace;
             if x.headers.contains_key(&"properties".to_string()) {
-                trace = graph_utils::generate_trace_graph_from_headers(x.path.clone(), to_return.headers.get_mut(&"properties".to_string()).unwrap().to_string());
+                trace = graph_utils::generate_trace_graph_from_headers(x.headers["path"].clone(), to_return.headers.get_mut(&"properties".to_string()).unwrap().to_string());
             }
             else {
-                trace = graph_utils::generate_trace_graph_from_headers(x.path.clone(), String::new());
+                trace = graph_utils::generate_trace_graph_from_headers(x.headers["path"].clone(), String::new());
 
             }
             let mapping = isomorphic_subgraph_matching(
@@ -172,6 +182,7 @@ impl Filter {
 
             }
         }
+
 
         // 5.  Pass the rpc on
         Some(to_return)
