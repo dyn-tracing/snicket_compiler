@@ -109,7 +109,6 @@ impl Filter {
         {{#each node_attributes_to_fetch}}
 
         me = my_node.clone();
-        me.insert_str(0, " ");
         me.push_str(".");
 
         data_key = vec![ {{#each this.parts}} String::from("{{this}}"), {{/each}} ].join(".");
