@@ -506,6 +506,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
             UdfType::Scalar => {
                 format!(
                 "                    let mut file = OpenOptions::new().create(true).write(true).open(\"result.txt\").unwrap();
+
                 file.write({var_id}.as_bytes());\n",
                     var_id = var_id
                 )
