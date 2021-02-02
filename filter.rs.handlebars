@@ -84,9 +84,11 @@ impl Filter {
         if !self.filter_state.contains_key("path") {
             if !to_return.headers.contains_key("path") {
                 to_return.headers.insert(String::from("path"), String::from(my_node.clone()));
+                to_return.headers.get_mut("path").unwrap().push_str(",");
             }
             else {
                 to_return.headers.get_mut("path").unwrap().push_str(&String::from(my_node.clone()));
+                to_return.headers.get_mut("path").unwrap().push_str(",");
             }
         }
 
