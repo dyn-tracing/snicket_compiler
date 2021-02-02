@@ -497,7 +497,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
 
         // TODO: use func name
         let rust_block = format!(
-            "let {var_id}_state_ptr = self.filter_state.get_mut(\"{var_id}\").unwrap();\n
+            "                let {var_id}_state_ptr = self.filter_state.get_mut(\"{var_id}\").unwrap();\n
                 let {var_id}_obj_ptr = {var_id}_state_ptr.udf_{var_id}.as_mut().unwrap();\n
                 let {var_id} = {var_id}_obj_ptr.execute({arg}).to_string();\n",
 
@@ -511,15 +511,15 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
         let key_value_block = match func.udf_type {
             UdfType::Scalar => {
                 format!(
-                    "let mut file = OpenOptions::new().append(true).open(\"result.txt\").unwrap();
-                    file.write({var_id}.as_bytes());\n",
+                "                    let mut file = OpenOptions::new().append(true).open(\"result.txt\").unwrap();
+                file.write({var_id}.as_bytes());\n",
                     var_id = var_id
                 )
             }
             UdfType::Aggregation => {
                 format!(
-                    "let mut file = OpenOptions::new().append(true).open(\"result.txt\").unwrap();
-                    file.write({var_id}.as_bytes());\n",
+                    "                let mut file = OpenOptions::new().append(true).open(\"result.txt\").unwrap();
+                file.write({var_id}.as_bytes());\n",
                     var_id = var_id
                 )
             }
@@ -621,22 +621,22 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
 
                 let rust_conv = match &attribute.cpp_type.clone() {
                     CppType::Float => format!(
-                        "let {converted_id} : f64 = {cpp_var_id}.parse().unwrap();\n",
+                        "                let {converted_id} : f64 = {cpp_var_id}.parse().unwrap();\n",
                         converted_id = converted_id,
                         cpp_var_id = property_var_id
                     ),
                     CppType::Int => format!(
-                        "let {converted_id} : u64 = {cpp_var_id}.parse().unwrap();\n",
+                        "                let {converted_id} : u64 = {cpp_var_id}.parse().unwrap();\n",
                         converted_id = converted_id,
                         cpp_var_id = property_var_id
                     ),
                     CppType::Int64T => format!(
-                        "let {converted_id} : u64 = {cpp_var_id}.parse().unwrap();\n",
+                        "                let {converted_id} : u64 = {cpp_var_id}.parse().unwrap();\n",
                         converted_id = converted_id,
                         cpp_var_id = property_var_id
                     ),
                     CppType::String => format!(
-                        "let {converted_id} = {cpp_var_id}.to_string();\n",
+                        "                let {converted_id} = {cpp_var_id}.to_string();\n",
                         converted_id = converted_id,
                         cpp_var_id = property_var_id
                     ),
