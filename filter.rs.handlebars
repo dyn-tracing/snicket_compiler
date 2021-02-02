@@ -1,6 +1,7 @@
 use rpc_lib::rpc::Rpc;
 use std::collections::HashMap;
-use std::fs;
+use std::fs::OpenOptions;
+use std::io::Write;
 use petgraph::algo::isomorphic_subgraph_matching;
 use petgraph::graph::NodeIndex;
 use graph_utils::graph_utils;
@@ -50,7 +51,7 @@ impl Filter {
     pub fn new() -> *mut Filter {
          Box::into_raw(Box::new(Filter {
             filter_state: HashMap::new(),
-        }))
+         }))
     }
 
     #[no_mangle]
@@ -65,7 +66,7 @@ impl Filter {
     #[no_mangle]
     pub fn execute(&mut self, x: &Rpc) -> Option<Rpc> {
         let mut to_return = Rpc { data: x.data, uid: x.uid, path: x.path.clone(), headers: x.headers.clone() };
-        // 0. Who am I?
+        // 0. Who am I, what is my path so far?
         let my_node_wrapped = self
             .filter_state
             .get("node.metadata.WORKLOAD_NAME");
@@ -79,6 +80,15 @@ impl Filter {
             .clone()
             .unwrap();
 
+        // add ourselves to the path now that we are done
+        if !self.filter_state.contains_key("path") {
+            if !to_return.headers.contains_key("path") {
+                to_return.headers.insert(String::from("path"), String::from(my_node.clone()));
+            }
+            else {
+                to_return.headers.get_mut("path").unwrap().push_str(&String::from(my_node.clone()));
+            }
+        }
 
         // 1. Do I need to put any udf variables/objects in?
         {{#each rust_udfs}}
@@ -127,6 +137,7 @@ impl Filter {
             // in ids_to_properties we have
             // ids_to_properties("a", { node.metadata.WORKLOAD_NAME = "productpage-v1" } )
             let mut ids_to_properties: HashMap<String, HashMap<String, String>> = HashMap::new();
+            {{#each vertices}} ids_to_properties.insert("{{this}}".to_string(), HashMap::new()); {{/each}}
 
             {{#each nodes_to_attributes}}
             let mut {{this.id}}_property_hashmap = HashMap::new();
@@ -134,18 +145,18 @@ impl Filter {
             ids_to_properties.insert("{{this.id}}".to_string(), {{this.id}}_property_hashmap.clone());
             {{/each}}
 
-            let target_graph = graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
-            let trace_graph;
+            let target = graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
+            let trace;
             if x.headers.contains_key(&"properties".to_string()) {
-                trace_graph = graph_utils::generate_trace_graph_from_headers(x.path.clone(), to_return.headers.get_mut(&"properties".to_string()).unwrap().to_string());
+                trace = graph_utils::generate_trace_graph_from_headers(x.headers["path"].clone(), to_return.headers.get_mut(&"properties".to_string()).unwrap().to_string());
             }
             else {
-                trace_graph = graph_utils::generate_trace_graph_from_headers(x.path.clone(), String::new());
+                trace = graph_utils::generate_trace_graph_from_headers(x.headers["path"].clone(), String::new());
 
             }
             let mapping = isomorphic_subgraph_matching(
-                &target_graph,
-                &trace_graph,
+                &target,
+                &trace,
                 |x, y| {
                     for property in y.1.keys() {
                         if property != &"node.metadata.WORKLOAD_NAME".to_string() && &(x.1[property]) != &(y.1[property]) { return false; }
@@ -163,27 +174,14 @@ impl Filter {
 
                 {{#with result}}
                 {{#if this.Return}}{{#with this.Return}}
+
                 {{/with}}{{/if}}
                 {{/with}}
 
 
-                {{#each rust_udfs}}
-                let {{this.id}}_state_ptr = self.filter_state.get_mut("{{this.id}}").unwrap();
-                let {{this.id}}_obj_ptr = {{this.id}}_state_ptr.udf_{{this.id}}.as_mut().unwrap();
-                let {{this.id}}_value = {{this.id}}_obj_ptr.execute().to_string();
-
-                fs::write("result.txt", {{this.id}}_value).expect("Unable to write file");
-
-                {{/each}}
 
             }
         }
-        // 4.  Allow udfs to execute
-        {{#each rust_udfs}}
-        let {{this.id}}_state_ptr = self.filter_state.get_mut("{{this.id}}").unwrap();
-        let {{this.id}}_obj_ptr = {{this.id}}_state_ptr.udf_{{this.id}}.as_mut().unwrap();
-        {{this.id}}_obj_ptr.execute();
-        {{/each}}
 
 
         // 5.  Pass the rpc on

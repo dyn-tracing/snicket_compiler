@@ -1,1 +1,1 @@
-MATCH n-->m: e, WHERE a.service_name == "productpage-v1", RETURN count,
+MATCH n-->m: e, WHERE n.service_name == "productpage-v1", RETURN count,
