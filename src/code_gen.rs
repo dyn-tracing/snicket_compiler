@@ -505,14 +505,14 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
         let key_value_block = match func.udf_type {
             UdfType::Scalar => {
                 format!(
-                "                    let mut file = OpenOptions::new().create(true).write(true).open("result.txt").unwrap();
+                "                    let mut file = OpenOptions::new().create(true).write(true).open(\"result.txt\").unwrap();
                 file.write({var_id}.as_bytes());\n",
                     var_id = var_id
                 )
             }
             UdfType::Aggregation => {
                 format!(
-                    "                let mut file = OpenOptions::new().create(true).write(true).open("result.txt").unwrap();
+                    "                let mut file = OpenOptions::new().create(true).write(true).open(\"result.txt\").unwrap();
                 file.write({var_id}.as_bytes());\n",
                     var_id = var_id
                 )
