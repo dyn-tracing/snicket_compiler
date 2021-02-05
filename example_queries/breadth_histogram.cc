@@ -259,11 +259,11 @@ void BidiContext::onResponseHeadersInbound() {
     std::string key = b3_trace_id_;
     std::string value;
 
-    std::string x_height = std::to_string(get_out_degree(target, mapping->at("x")));int x_height_conv = std::atoi(x_height.c_str());auto histogram_udf_result = root_->histogram_udf_(x_height_conv);std::tie(key, value) = std::make_pair(histogram_udf_result.first, std::to_string(histogram_udf_result.second));
+    std::string x_breadth = std::to_string(get_out_degree(target, mapping->at("x")));int x_breadth_conv = std::atoi(x_breadth.c_str());auto histogram_udf_result = root_->histogram_udf_(x_breadth_conv);std::tie(key, value) = std::make_pair(histogram_udf_result.first, std::to_string(histogram_udf_result.second));
 
     
     
-    value = x_height;
+    value = x_breadth;
     
     
 

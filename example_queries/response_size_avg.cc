@@ -185,24 +185,6 @@ void BidiContext::onResponseHeadersInbound() {
   // From rust code, we'll pass down, a vector of vector of strings.
   // and generate following snippet for each of the inner vector.
   {
-  std::string value;
-  if (getValue({
-      "node","metadata","WORKLOAD_NAME",
-  }, &value)) {
-    std::string result = std::string(root_->getWorkloadName());
-    for (auto p : {
-        "node","metadata","WORKLOAD_NAME",
-    }) {
-      result += "." + std::string(p);
-    }
-    result += "==";
-    result += value;
-
-    properties.push_back(result);
-  } else {
-    LOG_WARN("failed to get property");
-  }
-  }{
   int64_t value;
   if (getValue({
       "response","total_size",
@@ -215,6 +197,24 @@ void BidiContext::onResponseHeadersInbound() {
     }
     result += "==";
     result += std::to_string(value);
+
+    properties.push_back(result);
+  } else {
+    LOG_WARN("failed to get property");
+  }
+  }{
+  std::string value;
+  if (getValue({
+      "node","metadata","WORKLOAD_NAME",
+  }, &value)) {
+    std::string result = std::string(root_->getWorkloadName());
+    for (auto p : {
+        "node","metadata","WORKLOAD_NAME",
+    }) {
+      result += "." + std::string(p);
+    }
+    result += "==";
+    result += value;
 
     properties.push_back(result);
   } else {
@@ -251,17 +251,15 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-      "d", "b", "a", "c", 
+      "b", "a", 
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
-         { "a", "b",  },  { "b", "c",  },  { "a", "d",  }, 
+         { "a", "b",  }, 
     };
 
     std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
-    ids_to_properties["a"][{ "node","metadata","WORKLOAD_NAME", }] = "recommendationservice";
-    ids_to_properties["b"][{ "node","metadata","WORKLOAD_NAME", }] = "shippingservice";
-    ids_to_properties["c"][{ "node","metadata","WORKLOAD_NAME", }] = "paymentservice";
+    ids_to_properties["a"][{ "node","metadata","WORKLOAD_NAME", }] = "recomendationservice-v1";
     
 
     trace_graph_t pattern =

@@ -504,17 +504,12 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
 
         let key_value_block = match func.udf_type {
             UdfType::Scalar => {
-                format!(
-                "        value = {var_id};\n",
-                    var_id = var_id
-                )
+                format!("        value = {var_id};\n", var_id = var_id)
             }
             UdfType::Aggregation => {
                 self.result = CppResult::GroupBy { id: var_id.clone() };
                 // no need for another value
-                format!(
-                    ""
-                )
+                format!("")
             }
         };
         self.rust_blocks.push(key_value_block);
