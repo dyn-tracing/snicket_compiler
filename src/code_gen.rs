@@ -507,7 +507,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                 format!("        value = {var_id};\n", var_id = var_id)
             }
             UdfType::Aggregation => {
-                self.result = CppResult::GroupBy { id: var_id.clone() };
+                self.result = CppResult::GroupBy { id: var_id };
                 // no need for another value
                 format!("")
             }
