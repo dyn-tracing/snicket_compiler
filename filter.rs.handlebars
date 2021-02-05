@@ -185,6 +185,10 @@ impl Filter {
                 {{#if this.Return}}{{#with this.Return}}
                 value = {{this.id}};
                 {{/with}}{{/if}}
+                {{#if this.GroupBy}}{{#with this.GroupBy}}
+                value = {{this.id}};
+                {{/with}}{{/if}}
+                
                 {{/with}}
 
                 let mut result_rpc = Rpc::new_rpc(&value);

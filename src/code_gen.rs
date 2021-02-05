@@ -98,7 +98,7 @@ pub struct RustUdf {
 #[derive(Serialize, PartialEq, Eq, Debug, Clone)]
 pub enum CppResult {
     Return { typ: CppType, id: String },
-    GroupBy { typ: CppType, id: String },
+    GroupBy { id: String },
     None,
 }
 
@@ -510,9 +510,10 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                 )
             }
             UdfType::Aggregation => {
+                self.result = CppResult::GroupBy { id: var_id.clone() };
+                // no need for another value
                 format!(
-                    "        value = {var_id};\n",
-                    var_id = var_id
+                    ""
                 )
             }
         };
