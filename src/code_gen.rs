@@ -354,7 +354,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
            "let node_ptr = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());
                if node_ptr.is_none() {{
                    print!(\"WARNING Node {node_id} not found\");
-                   return  Some(to_return);
+                   return  to_return;
                }}
                let trace_node_index = NodeIndex::new(m[node_ptr.unwrap().index()]);
                let {cpp_var_id} = &trace.node_weight(trace_node_index).unwrap().1[ &vec!{parts}.join(\".\") ];\n",
@@ -388,7 +388,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                         );
                     self.cpp_blocks.push(cpp_block);
 
-                    let rust_index_code = format!("let node_index = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());\n                if node_index.is_none() {{\n                    print!(\"WARNING: could not find node with id\");            return Some(to_return);\n                }}\n",
+                    let rust_index_code = format!("let node_index = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());\n                if node_index.is_none() {{\n                    print!(\"WARNING: could not find node with id\");            return to_return;\n                }}\n",
                             node_id = id.id_name);
                     let rust_get_tree_height_code = format!(
                             "               let trace_index = NodeIndex::new(m[node_index.unwrap().index()]);\n                    let {rust_var_id} = &(graph_utils::get_tree_height(&trace, Some(trace_index))+1).to_string(); // we add one for ourselves - the node we are on is not added to the path until after the filter is run\n",
@@ -413,7 +413,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
 
                     self.cpp_blocks.push(cpp_block);
 
-                    let rust_index_code = format!("let node_index = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());\n                if node_index.is_none() {{\n                    print!(\"WARNING: could not find node with id\");            return Some(to_return);\n                }}\n",
+                    let rust_index_code = format!("let node_index = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());\n                if node_index.is_none() {{\n                    print!(\"WARNING: could not find node with id\");            return to_return;\n                }}\n",
                             node_id = id.id_name);
                     let rust_get_breadth_code = format!(
                             "                    let trace_index = NodeIndex::new(m[node_index.unwrap().index()]);\n                    let {cpp_var_id} = &graph_utils::get_out_degree(&trace, Some(trace_index)).to_string(); // we add one for ourselves - the node we are on is not added to the path until after the filter is run\n",
@@ -493,7 +493,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
         let rust_block = format!(
             "                let {var_id}_state_ptr = self.filter_state.get_mut(\"{var_id}\").unwrap();\n
                 let {var_id}_obj_ptr = {var_id}_state_ptr.udf_{var_id}.as_mut().unwrap();\n
-                let {var_id} = {var_id}_obj_ptr.execute({arg}).to_string();\n",
+                let {var_id} = &{var_id}_obj_ptr.execute({arg}).to_string();\n",
 
 
             var_id = var_id,
@@ -505,16 +505,26 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
         let key_value_block = match func.udf_type {
             UdfType::Scalar => {
                 format!(
-                "                    let mut file = OpenOptions::new().create(true).write(true).open(\"result.txt\").unwrap();
+                "                                    let mut result_rpc = Rpc::new_rpc({var_id});
+                let mut dest = my_node.to_string().split(\"_\").next().unwrap().to_string(); // do not take the _plugin affix
+                dest.push_str(\"_storage\");
+                result_rpc
+                    .headers
+                    .insert(\"dest\".to_string(), dest);
+                to_return.push(result_rpc);",
 
-                file.write({var_id}.as_bytes());\n",
                     var_id = var_id
                 )
             }
             UdfType::Aggregation => {
                 format!(
-                    "                let mut file = OpenOptions::new().create(true).write(true).open(\"result.txt\").unwrap();
-                file.write({var_id}.as_bytes());\n",
+                    "                                let mut result_rpc = Rpc::new_rpc({var_id});
+                let mut dest = my_node.to_string().split(\"_\").next().unwrap().to_string(); // do not take the _plugin affix
+                dest.push_str(\"_storage\");
+                result_rpc
+                    .headers
+                    .insert(\"dest\".to_string(), dest);
+                to_return.push(result_rpc);",
                     var_id = var_id
                 )
             }

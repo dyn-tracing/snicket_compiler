@@ -64,15 +64,23 @@ impl Filter {
     }
 
     #[no_mangle]
-    pub fn execute(&mut self, x: &Rpc) -> Option<Rpc> {
-        let mut to_return = Rpc { data: x.data, uid: x.uid, path: x.path.clone(), headers: x.headers.clone() };
+    pub fn execute(&mut self, x: &Rpc) -> Vec<Rpc> {
+     let rpc_to_return = Rpc {
+            data: x.data.clone(),
+            uid: x.uid,
+            path: x.path.clone(),
+            headers: x.headers.clone(),
+        };
+        let mut to_return = vec![rpc_to_return];
+        let mod_rpc = &mut to_return[0];
+
         // 0. Who am I, what is my path so far?
         let my_node_wrapped = self
             .filter_state
             .get("node.metadata.WORKLOAD_NAME");
         if my_node_wrapped.is_none() {
             print!("WARNING: filter was initialized without envoy properties and thus cannot function");
-            return Some(to_return);
+            return to_return;
         }
         let my_node = my_node_wrapped
             .unwrap()
@@ -82,13 +90,13 @@ impl Filter {
 
         // add ourselves to the path now that we are done
         if !self.filter_state.contains_key("path") {
-            if !to_return.headers.contains_key("path") {
-                to_return.headers.insert(String::from("path"), String::from(my_node.clone()));
-                to_return.headers.get_mut("path").unwrap().push_str(",");
+            if !mod_rpc.headers.contains_key("path") {
+                mod_rpc.headers.insert(String::from("path"), String::from(my_node.clone()));
+                mod_rpc.headers.get_mut("path").unwrap().push_str(",");
             }
             else {
-                to_return.headers.get_mut("path").unwrap().push_str(&String::from(my_node.clone()));
-                to_return.headers.get_mut("path").unwrap().push_str(",");
+                mod_rpc.headers.get_mut("path").unwrap().push_str(&String::from(my_node.clone()));
+                mod_rpc.headers.get_mut("path").unwrap().push_str(",");
 
             }
         }
@@ -119,11 +127,11 @@ impl Filter {
         me.push_str(&data_to_append);
         me.push_str(",");
 
-        if to_return.headers.contains_key(&"properties".to_string()) {
-            to_return.headers.get_mut(&"properties".to_string()).unwrap().push_str(&me);
+        if mod_rpc.headers.contains_key(&"properties".to_string()) {
+            mod_rpc.headers.get_mut(&"properties".to_string()).unwrap().push_str(&me);
         }
         else {
-            to_return.headers.insert("properties".to_string(), me);
+            mod_rpc.headers.insert("properties".to_string(), me);
         }
         
         {{/each}}
@@ -149,11 +157,11 @@ impl Filter {
 
             let target = graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
             let trace;
-            if x.headers.contains_key(&"properties".to_string()) {
-                trace = graph_utils::generate_trace_graph_from_headers(x.headers["path"].clone(), to_return.headers.get_mut(&"properties".to_string()).unwrap().to_string());
+            if mod_rpc.headers.contains_key(&"properties".to_string()) {
+                trace = graph_utils::generate_trace_graph_from_headers(mod_rpc.headers["path"].clone(), mod_rpc.headers.get_mut(&"properties".to_string()).unwrap().to_string());
             }
             else {
-                trace = graph_utils::generate_trace_graph_from_headers(x.headers["path"].clone(), String::new());
+                trace = graph_utils::generate_trace_graph_from_headers(mod_rpc.headers["path"].clone(), String::new());
 
             }
             let mapping = isomorphic_subgraph_matching(
@@ -187,7 +195,7 @@ impl Filter {
 
 
         // 5.  Pass the rpc on
-        Some(to_return)
+        to_return
     }
 
 }
