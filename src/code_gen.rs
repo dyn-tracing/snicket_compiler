@@ -505,7 +505,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
         let key_value_block = match func.udf_type {
             UdfType::Scalar => {
                 format!(
-                "                                    let mut result_rpc = Rpc::new_rpc({var_id});
+                "                    let mut result_rpc = Rpc::new_rpc({var_id});
                 let mut dest = my_node.to_string().split(\"_\").next().unwrap().to_string(); // do not take the _plugin affix
                 dest.push_str(\"_storage\");
                 result_rpc
@@ -518,7 +518,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
             }
             UdfType::Aggregation => {
                 format!(
-                    "                                let mut result_rpc = Rpc::new_rpc({var_id});
+                    "                let mut result_rpc = Rpc::new_rpc({var_id});
                 let mut dest = my_node.to_string().split(\"_\").next().unwrap().to_string(); // do not take the _plugin affix
                 dest.push_str(\"_storage\");
                 result_rpc

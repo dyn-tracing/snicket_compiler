@@ -1,5 +1,3 @@
-MATCH a-->b : x, b-->c : y, a-->d: z,
-WHERE a.service_name == recommendationservice,
-    b.service_name == shippingservice,
-    c.service_name == paymentservice,
+MATCH a-->b : x,
+WHERE a.service_name == "recomendationservice-v1",
 GROUP a.response_size BY avg,
