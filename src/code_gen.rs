@@ -416,8 +416,8 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                     let rust_index_code = format!("let node_index = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());\n                if node_index.is_none() {{\n                    print!(\"WARNING: could not find node with id\");            return to_return;\n                }}\n",
                             node_id = id.id_name);
                     let rust_get_breadth_code = format!(
-                            "                    let trace_index = NodeIndex::new(m[node_index.unwrap().index()]);\n                    let {cpp_var_id} = &graph_utils::get_out_degree(&trace, Some(trace_index)).to_string(); // we add one for ourselves - the node we are on is not added to the path until after the filter is run\n",
-                            cpp_var_id = cpp_var_id,
+                            "                    let trace_index = NodeIndex::new(m[node_index.unwrap().index()]);\n                    let {rust_var_id} = &graph_utils::get_out_degree(&trace, Some(trace_index)).to_string(); // we add one for ourselves - the node we are on is not added to the path until after the filter is run\n",
+                            rust_var_id = cpp_var_id,
                         );
                     let rust_block = format!("{}{}", rust_index_code, rust_get_breadth_code);
 
@@ -505,26 +505,13 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
         let key_value_block = match func.udf_type {
             UdfType::Scalar => {
                 format!(
-                "                    let mut result_rpc = Rpc::new_rpc({var_id});
-                let mut dest = my_node.to_string().split(\"_\").next().unwrap().to_string(); // do not take the _plugin affix
-                dest.push_str(\"_storage\");
-                result_rpc
-                    .headers
-                    .insert(\"dest\".to_string(), dest);
-                to_return.push(result_rpc);",
-
+                "        value = {var_id};\n",
                     var_id = var_id
                 )
             }
             UdfType::Aggregation => {
                 format!(
-                    "                let mut result_rpc = Rpc::new_rpc({var_id});
-                let mut dest = my_node.to_string().split(\"_\").next().unwrap().to_string(); // do not take the _plugin affix
-                dest.push_str(\"_storage\");
-                result_rpc
-                    .headers
-                    .insert(\"dest\".to_string(), dest);
-                to_return.push(result_rpc);",
+                    "        value = {var_id};\n",
                     var_id = var_id
                 )
             }
