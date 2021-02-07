@@ -259,7 +259,7 @@ void BidiContext::onResponseHeadersInbound() {
     };
 
     std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
-    ids_to_properties["a"][{ "node","metadata","WORKLOAD_NAME", }] = "recomendationservice-v1";
+    ids_to_properties["a"][{ "node","metadata","WORKLOAD_NAME", }] = "productpage-v1";
     
 
     trace_graph_t pattern =

@@ -2,10 +2,25 @@ use crate::grammar::*;
 use crate::tree_fold::TreeFold;
 use regex::Regex;
 use serde::{Serialize, Serializer};
+use std::collections::BTreeSet;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::string::ToString;
 use strum_macros::EnumString;
+
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct ModifiedHashSet<'a> {
+    #[serde(serialize_with = "ordered_map")]
+    set: HashSet<&'a str>,
+}
+
+fn ordered_map<S>(value: &HashSet<&str>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let ordered: BTreeSet<_> = value.iter().collect();
+    ordered.serialize(serializer)
+}
 
 /// C++ type
 #[derive(Clone, Copy, Display, Debug, Eq, Hash, PartialEq, EnumString)]
@@ -269,7 +284,7 @@ impl<'a> Default for CodeGenConfig<'a> {
 pub struct CodeGen<'a> {
     // Graph structures
     pub root_id: &'a str,
-    pub vertices: HashSet<&'a str>,
+    pub vertices: ModifiedHashSet<'a>,
     pub edges: Vec<(&'a str, &'a str)>,
     pub nodes_to_attributes: Vec<NodeAttribute<'a>>,
 
@@ -546,8 +561,8 @@ impl<'a> TreeFold<'a> for CodeGen<'a> {
             Relationship::Path(_) => panic!("TODO: support EDGE relatipnship type"),
         };
 
-        self.vertices.insert(src_id);
-        self.vertices.insert(dst_id);
+        self.vertices.set.insert(src_id);
+        self.vertices.set.insert(dst_id);
         self.edges.push((src_id, dst_id));
     }
 
@@ -655,7 +670,10 @@ mod tests {
         let mut code_gen = CodeGen::new();
         code_gen.visit_prog(&parse_tree);
 
-        assert_eq!(code_gen.vertices, ["a", "b", "c"].iter().cloned().collect());
+        assert_eq!(
+            code_gen.vertices.set,
+            ["a", "b", "c"].iter().cloned().collect()
+        );
         assert_eq!(code_gen.edges, vec![("a", "b"), ("b", "c")]);
         assert!(code_gen.nodes_to_attributes.is_empty());
     }
@@ -669,7 +687,10 @@ mod tests {
         let mut code_gen = CodeGen::new();
         code_gen.visit_prog(&parse_tree);
 
-        assert_eq!(code_gen.vertices, ["a", "b", "c"].iter().cloned().collect());
+        assert_eq!(
+            code_gen.vertices.set,
+            ["a", "b", "c"].iter().cloned().collect()
+        );
         assert_eq!(code_gen.edges, vec![("b", "c"), ("a", "b")]);
         assert!(code_gen.nodes_to_attributes.is_empty());
     }
@@ -684,7 +705,7 @@ mod tests {
         code_gen.visit_prog(&parse_tree);
 
         assert_eq!(
-            code_gen.vertices,
+            code_gen.vertices.set,
             ["a", "b", "c", "d"].iter().cloned().collect()
         );
         assert_eq!(code_gen.edges, vec![("b", "c"), ("a", "b"), ("a", "d")]);
@@ -712,7 +733,7 @@ mod tests {
         });
         code_gen.visit_prog(&parse_tree);
 
-        assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
+        assert_eq!(code_gen.vertices.set, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.cpp_blocks,
@@ -766,7 +787,7 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
 
         code_gen.visit_prog(&parse_tree);
 
-        assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
+        assert_eq!(code_gen.vertices.set, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.cpp_blocks,
@@ -822,7 +843,7 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
 
         code_gen.visit_prog(&parse_tree);
 
-        assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
+        assert_eq!(code_gen.vertices.set, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.nodes_to_attributes,
@@ -868,7 +889,7 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
             },
         );
         code_gen.visit_prog(&parse_tree);
-        assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
+        assert_eq!(code_gen.vertices.set, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
 
         assert_eq!(
@@ -909,7 +930,7 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
         );
         code_gen.visit_prog(&parse_tree);
 
-        assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
+        assert_eq!(code_gen.vertices.set, ["n", "m"].iter().cloned().collect());
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.node_attributes_to_fetch,

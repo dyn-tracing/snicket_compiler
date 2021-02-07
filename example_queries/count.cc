@@ -232,7 +232,7 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-      "n", "m", 
+      "m", "n", 
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -240,7 +240,7 @@ void BidiContext::onResponseHeadersInbound() {
     };
 
     std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
-    ids_to_properties["n"][{ "node","metadata","WORKLOAD_NAME", }] = "frontend-v1";
+    ids_to_properties["a"][{ "node","metadata","WORKLOAD_NAME", }] = "productpage-v1";
     
 
     trace_graph_t pattern =

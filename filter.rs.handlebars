@@ -140,7 +140,7 @@ impl Filter {
         //     observed trace, and do return calls based on that info
         if my_node == String::from("{{root_id}}") {
             // we need to create the graph given by the query
-            let vertices = vec![ {{#each vertices}}String::from("{{this}}"), {{/each}}  ];
+            let vertices = vec![ {{#each vertices.set}}String::from("{{this}}"), {{/each}}  ];
             let edges = vec![ {{#each edges}} ( {{#each this}}String::from("{{this}}"), {{/each}} ), {{/each}} ];
             // ids_to_properties is a HashMap taking <(NodeName, Properties), Desired Value>, so if the query says
             // a.service_name == productpagev1"
