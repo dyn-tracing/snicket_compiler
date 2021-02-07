@@ -12,6 +12,7 @@ regex = "0.2.2"
 serde = { version = "1.0", features = ["derive"] }
 strum = "0.19"
 strum_macros = "0.19"
+indexmap = { version = "1.6.1", features = ["serde-1"] }
 
 [dev-dependencies]
 test-case = "1.1.0"
