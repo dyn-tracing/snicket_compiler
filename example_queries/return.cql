@@ -1,6 +1,3 @@
-MATCH a-->b : x, b-->c : y, a-->d: z,
+MATCH a-->b : x,
 WHERE a.service_name == "productpage-v1" ,
-    b.service_name == reviewsv2,
-    c.service_name == ratingsv1,
-    d.service_name == detailsv1,
 RETURN a.response_size,
