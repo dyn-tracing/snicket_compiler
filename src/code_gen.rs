@@ -1,5 +1,6 @@
 use crate::grammar::*;
 use crate::tree_fold::TreeFold;
+use indexmap::set::IndexSet;
 use regex::Regex;
 use serde::{Serialize, Serializer};
 use std::collections::{HashMap, HashSet};
@@ -98,7 +99,7 @@ pub struct RustUdf {
 #[derive(Serialize, PartialEq, Eq, Debug, Clone)]
 pub enum CppResult {
     Return { typ: CppType, id: String },
-    GroupBy { typ: CppType, id: String },
+    GroupBy { id: String },
     None,
 }
 
@@ -269,7 +270,7 @@ impl<'a> Default for CodeGenConfig<'a> {
 pub struct CodeGen<'a> {
     // Graph structures
     pub root_id: &'a str,
-    pub vertices: HashSet<&'a str>,
+    pub vertices: IndexSet<&'a str>,
     pub edges: Vec<(&'a str, &'a str)>,
     pub nodes_to_attributes: Vec<NodeAttribute<'a>>,
 
@@ -354,7 +355,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
            "let node_ptr = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());
                if node_ptr.is_none() {{
                    print!(\"WARNING Node {node_id} not found\");
-                   return  Some(to_return);
+                   return  to_return;
                }}
                let trace_node_index = NodeIndex::new(m[node_ptr.unwrap().index()]);
                let {cpp_var_id} = &trace.node_weight(trace_node_index).unwrap().1[ &vec!{parts}.join(\".\") ];\n",
@@ -388,7 +389,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
                         );
                     self.cpp_blocks.push(cpp_block);
 
-                    let rust_index_code = format!("let node_index = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());\n                if node_index.is_none() {{\n                    print!(\"WARNING: could not find node with id\");            return Some(to_return);\n                }}\n",
+                    let rust_index_code = format!("let node_index = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());\n                if node_index.is_none() {{\n                    print!(\"WARNING: could not find node with id\");            return to_return;\n                }}\n",
                             node_id = id.id_name);
                     let rust_get_tree_height_code = format!(
                             "               let trace_index = NodeIndex::new(m[node_index.unwrap().index()]);\n                    let {rust_var_id} = &(graph_utils::get_tree_height(&trace, Some(trace_index))+1).to_string(); // we add one for ourselves - the node we are on is not added to the path until after the filter is run\n",
@@ -413,11 +414,11 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
 
                     self.cpp_blocks.push(cpp_block);
 
-                    let rust_index_code = format!("let node_index = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());\n                if node_index.is_none() {{\n                    print!(\"WARNING: could not find node with id\");            return Some(to_return);\n                }}\n",
+                    let rust_index_code = format!("let node_index = graph_utils::get_node_with_id(&target, \"{node_id}\".to_string());\n                if node_index.is_none() {{\n                    print!(\"WARNING: could not find node with id\");            return to_return;\n                }}\n",
                             node_id = id.id_name);
                     let rust_get_breadth_code = format!(
-                            "                    let trace_index = NodeIndex::new(m[node_index.unwrap().index()]);\n                    let {cpp_var_id} = &graph_utils::get_out_degree(&trace, Some(trace_index)).to_string(); // we add one for ourselves - the node we are on is not added to the path until after the filter is run\n",
-                            cpp_var_id = cpp_var_id,
+                            "                    let trace_index = NodeIndex::new(m[node_index.unwrap().index()]);\n                    let {rust_var_id} = &graph_utils::get_out_degree(&trace, Some(trace_index)).to_string(); // we add one for ourselves - the node we are on is not added to the path until after the filter is run\n",
+                            rust_var_id = cpp_var_id,
                         );
                     let rust_block = format!("{}{}", rust_index_code, rust_get_breadth_code);
 
@@ -493,7 +494,7 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
         let rust_block = format!(
             "                let {var_id}_state_ptr = self.filter_state.get_mut(\"{var_id}\").unwrap();\n
                 let {var_id}_obj_ptr = {var_id}_state_ptr.udf_{var_id}.as_mut().unwrap();\n
-                let {var_id} = {var_id}_obj_ptr.execute({arg}).to_string();\n",
+                let {var_id} = &{var_id}_obj_ptr.execute({arg}).to_string();\n",
 
 
             var_id = var_id,
@@ -504,19 +505,12 @@ std::string {cpp_var_id} = node_ptr->properties.at({parts});",
 
         let key_value_block = match func.udf_type {
             UdfType::Scalar => {
-                format!(
-                "                    let mut file = OpenOptions::new().create(true).write(true).open(\"result.txt\").unwrap();
-
-                file.write({var_id}.as_bytes());\n",
-                    var_id = var_id
-                )
+                format!("        value = {var_id};\n", var_id = var_id)
             }
             UdfType::Aggregation => {
-                format!(
-                    "                let mut file = OpenOptions::new().create(true).write(true).open(\"result.txt\").unwrap();
-                file.write({var_id}.as_bytes());\n",
-                    var_id = var_id
-                )
+                self.result = CppResult::GroupBy { id: var_id };
+                // no need for another value
+                format!("")
             }
         };
         self.rust_blocks.push(key_value_block);
@@ -662,7 +656,12 @@ mod tests {
         let mut code_gen = CodeGen::new();
         code_gen.visit_prog(&parse_tree);
 
-        assert_eq!(code_gen.vertices, ["a", "b", "c"].iter().cloned().collect());
+        let mut correct_vertices = IndexSet::new();
+        correct_vertices.insert("a");
+        correct_vertices.insert("b");
+        correct_vertices.insert("c");
+
+        assert_eq!(code_gen.vertices, correct_vertices);
         assert_eq!(code_gen.edges, vec![("a", "b"), ("b", "c")]);
         assert!(code_gen.nodes_to_attributes.is_empty());
     }
@@ -676,7 +675,11 @@ mod tests {
         let mut code_gen = CodeGen::new();
         code_gen.visit_prog(&parse_tree);
 
-        assert_eq!(code_gen.vertices, ["a", "b", "c"].iter().cloned().collect());
+        let mut correct_vertices = IndexSet::new();
+        correct_vertices.insert("a");
+        correct_vertices.insert("b");
+        correct_vertices.insert("c");
+        assert_eq!(code_gen.vertices, correct_vertices);
         assert_eq!(code_gen.edges, vec![("b", "c"), ("a", "b")]);
         assert!(code_gen.nodes_to_attributes.is_empty());
     }
@@ -690,10 +693,13 @@ mod tests {
         let mut code_gen = CodeGen::new();
         code_gen.visit_prog(&parse_tree);
 
-        assert_eq!(
-            code_gen.vertices,
-            ["a", "b", "c", "d"].iter().cloned().collect()
-        );
+        let mut correct_vertices = IndexSet::new();
+        correct_vertices.insert("a");
+        correct_vertices.insert("b");
+        correct_vertices.insert("c");
+        correct_vertices.insert("d");
+
+        assert_eq!(code_gen.vertices, correct_vertices);
         assert_eq!(code_gen.edges, vec![("b", "c"), ("a", "b"), ("a", "d")]);
         assert!(code_gen.nodes_to_attributes.is_empty());
     }
@@ -719,7 +725,10 @@ mod tests {
         });
         code_gen.visit_prog(&parse_tree);
 
-        assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
+        let mut correct_vertices = IndexSet::new();
+        correct_vertices.insert("n");
+        correct_vertices.insert("m");
+        assert_eq!(code_gen.vertices, correct_vertices);
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.cpp_blocks,
@@ -773,7 +782,10 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
 
         code_gen.visit_prog(&parse_tree);
 
-        assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
+        let mut correct_vertices = IndexSet::new();
+        correct_vertices.insert("n");
+        correct_vertices.insert("m");
+        assert_eq!(code_gen.vertices, correct_vertices);
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.cpp_blocks,
@@ -829,7 +841,10 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
 
         code_gen.visit_prog(&parse_tree);
 
-        assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
+        let mut correct_vertices = IndexSet::new();
+        correct_vertices.insert("n");
+        correct_vertices.insert("m");
+        assert_eq!(code_gen.vertices, correct_vertices);
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.nodes_to_attributes,
@@ -875,7 +890,10 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
             },
         );
         code_gen.visit_prog(&parse_tree);
-        assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
+        let mut correct_vertices = IndexSet::new();
+        correct_vertices.insert("n");
+        correct_vertices.insert("m");
+        assert_eq!(code_gen.vertices, correct_vertices);
         assert_eq!(code_gen.edges, vec![("n", "m")]);
 
         assert_eq!(
@@ -916,7 +934,10 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
         );
         code_gen.visit_prog(&parse_tree);
 
-        assert_eq!(code_gen.vertices, ["n", "m"].iter().cloned().collect());
+        let mut correct_vertices = IndexSet::new();
+        correct_vertices.insert("n");
+        correct_vertices.insert("m");
+        assert_eq!(code_gen.vertices, correct_vertices);
         assert_eq!(code_gen.edges, vec![("n", "m")]);
         assert_eq!(
             code_gen.node_attributes_to_fetch,

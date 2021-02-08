@@ -216,7 +216,7 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-      "y", "x", 
+      "x", "y", 
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -243,11 +243,11 @@ void BidiContext::onResponseHeadersInbound() {
     std::string key = b3_trace_id_;
     std::string value;
 
-    std::string x_height = std::to_string(get_out_degree(target, mapping->at("x")));
+    std::string x_breadth = std::to_string(get_out_degree(target, mapping->at("x")));
 
     
     
-    value = x_height;
+    value = x_breadth;
     
     
 

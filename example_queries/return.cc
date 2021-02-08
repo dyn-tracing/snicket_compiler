@@ -234,18 +234,15 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-      "a", "c", "b", "d", 
+      "a", "b", 
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
-         { "a", "b",  },  { "b", "c",  },  { "a", "d",  }, 
+         { "a", "b",  }, 
     };
 
     std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
     ids_to_properties["a"][{ "node","metadata","WORKLOAD_NAME", }] = "productpage-v1";
-    ids_to_properties["b"][{ "node","metadata","WORKLOAD_NAME", }] = "reviewsv2";
-    ids_to_properties["c"][{ "node","metadata","WORKLOAD_NAME", }] = "ratingsv1";
-    ids_to_properties["d"][{ "node","metadata","WORKLOAD_NAME", }] = "detailsv1";
     
 
     trace_graph_t pattern =

@@ -232,7 +232,7 @@ void BidiContext::onResponseHeadersInbound() {
     // generated from request trace.
 
     std::set<std::string> vertices = {
-      "y", "x", 
+      "x", "y", 
     };
 
     std::vector<std::pair<std::string, std::string>> edges = {
@@ -240,7 +240,7 @@ void BidiContext::onResponseHeadersInbound() {
     };
 
     std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
-    ids_to_properties["x"][{ "node","metadata","WORKLOAD_NAME", }] = "frontend";
+    ids_to_properties["x"][{ "node","metadata","WORKLOAD_NAME", }] = "productpage-v1";
     
 
     trace_graph_t pattern =
@@ -259,11 +259,11 @@ void BidiContext::onResponseHeadersInbound() {
     std::string key = b3_trace_id_;
     std::string value;
 
-    std::string x_height = std::to_string(get_out_degree(target, mapping->at("x")));int x_height_conv = std::atoi(x_height.c_str());auto histogram_udf_result = root_->histogram_udf_(x_height_conv);std::tie(key, value) = std::make_pair(histogram_udf_result.first, std::to_string(histogram_udf_result.second));
+    std::string x_breadth = std::to_string(get_out_degree(target, mapping->at("x")));int x_breadth_conv = std::atoi(x_breadth.c_str());auto histogram_udf_result = root_->histogram_udf_(x_breadth_conv);std::tie(key, value) = std::make_pair(histogram_udf_result.first, std::to_string(histogram_udf_result.second));
 
     
     
-    value = x_height;
+    value = x_breadth;
     
     
 
