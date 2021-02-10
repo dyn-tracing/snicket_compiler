@@ -13,6 +13,8 @@ serde = { version = "1.0", features = ["derive"] }
 strum = "0.19"
 strum_macros = "0.19"
 indexmap = { version = "1.6.1", features = ["serde-1"] }
+antlr-rust = "=0.2"
+input-stream = "0.3.0"
 
 [dev-dependencies]
 test-case = "1.1.0"
@@ -22,8 +24,8 @@ diffy = "*"
 
 [lib]
 name = "dyntracing"
-path = "src/lib.rs"
+path = "rewrite/lib.rs"
 
 [[bin]]
 name = "dtc"
-path = "src/main.rs"
+path = "rewrite/main.rs"
