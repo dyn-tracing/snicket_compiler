@@ -10,6 +10,7 @@ use antlr_rust::tree::ParseTreeVisitor;
 use antlr_rust::tree::TerminalNode;
 use antlr_rust::tree::Visitable;
 use std::rc::Rc;
+use crate::parser::OC_MatchContextAttrs;
 
 pub struct MyCypherVisitor<'i> {
     data: Vec<&'i str>,
@@ -17,13 +18,13 @@ pub struct MyCypherVisitor<'i> {
 
 impl<'i> ParseTreeVisitor<'i, CypherParserContextType> for MyCypherVisitor<'i> {
     fn visit_terminal(&mut self, _node: &TerminalNode<'i, CypherParserContextType>) {
-        println!("{:?}", _node);
     }
 }
 
 impl<'i> CypherVisitor<'i> for MyCypherVisitor<'i> {
     fn visit_oC_Match(&mut self, ctx: &OC_MatchContext<'i>) {
         self.visit_children(ctx);
+        println!("{:?}", ctx.oC_Pattern().unwrap());
     }
 }
 

@@ -4,17 +4,14 @@ extern crate handlebars;
 extern crate input_stream;
 extern crate serde;
 
-use dyntracing::parser::OC_CypherContextAll;
-use std::rc::Rc;
-use antlr_rust::errors::ANTLRError;
-use antlr_rust::tree::Visitable;
-use antlr_rust::token_factory::CommonTokenFactory;
 use antlr_rust::common_token_stream::CommonTokenStream;
+use antlr_rust::token_factory::CommonTokenFactory;
 use antlr_rust::InputStream;
 use clap::{App, Arg};
 use dyntracing::lexer::CypherLexer;
 use dyntracing::parser::CypherParser;
-use dyntracing::codegen::MyCypherVisitor;
+
+
 use std::fs;
 use std::path::Path;
 
@@ -73,7 +70,6 @@ fn main() {
     let mut _lexer = CypherLexer::new_with_token_factory(query_stream, &tf);
     let token_source = CommonTokenStream::new(_lexer);
     let mut parser = CypherParser::new(token_source);
-    let result : Rc<OC_CypherContextAll> = parser.oC_Cypher().expect("parsed unsuccessfully");
+    let result = parser.oC_Cypher().expect("parsed unsuccessfully");
     dyntracing::codegen::visit_result(result);
-
 }
