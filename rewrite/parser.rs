@@ -1284,7 +1284,7 @@ where
                 recog.base.set_state(226);
                 recog.err_handler.sync(&mut recog.base)?;
                 _alt = recog.interpreter.adaptive_predict(6, &mut recog.base)?;
-                while { _alt != 2 && _alt != INVALID_ALT } {
+                while _alt != 2 && _alt != INVALID_ALT {
                     if _alt == 1 {
                         {
                             {
@@ -1769,13 +1769,13 @@ where
                             recog.base.set_state(253);
                             recog.err_handler.sync(&mut recog.base)?;
                             _la = recog.base.input.la(1);
-                            while (((_la) & !0x3f) == 0
+                            while ((_la) & !0x3f) == 0
                                 && ((1usize << _la)
                                     & ((1usize << OPTIONAL)
                                         | (1usize << MATCH)
                                         | (1usize << UNWIND)
                                         | (1usize << CALL)))
-                                    != 0)
+                                    != 0
                             {
                                 {
                                     {
@@ -1814,13 +1814,13 @@ where
                             recog.base.set_state(263);
                             recog.err_handler.sync(&mut recog.base)?;
                             _la = recog.base.input.la(1);
-                            while (((_la) & !0x3f) == 0
+                            while ((_la) & !0x3f) == 0
                                 && ((1usize << _la)
                                     & ((1usize << OPTIONAL)
                                         | (1usize << MATCH)
                                         | (1usize << UNWIND)
                                         | (1usize << CALL)))
-                                    != 0)
+                                    != 0
                             {
                                 {
                                     {
@@ -1852,7 +1852,7 @@ where
                             recog.base.set_state(273);
                             recog.err_handler.sync(&mut recog.base)?;
                             _alt = recog.interpreter.adaptive_predict(16, &mut recog.base)?;
-                            while { _alt != 2 && _alt != INVALID_ALT } {
+                            while _alt != 2 && _alt != INVALID_ALT {
                                 if _alt == 1 {
                                     {
                                         {
@@ -2073,13 +2073,13 @@ where
                                 recog.base.set_state(290);
                                 recog.err_handler.sync(&mut recog.base)?;
                                 _la = recog.base.input.la(1);
-                                while (((_la) & !0x3f) == 0
+                                while ((_la) & !0x3f) == 0
                                     && ((1usize << _la)
                                         & ((1usize << OPTIONAL)
                                             | (1usize << MATCH)
                                             | (1usize << UNWIND)
                                             | (1usize << CALL)))
-                                        != 0)
+                                        != 0
                                 {
                                     {
                                         {
@@ -2107,7 +2107,7 @@ where
                                 recog.base.set_state(299);
                                 recog.err_handler.sync(&mut recog.base)?;
                                 _la = recog.base.input.la(1);
-                                while (((_la) & !0x3f) == 0
+                                while ((_la) & !0x3f) == 0
                                     && ((1usize << _la)
                                         & ((1usize << MERGE)
                                             | (1usize << CREATE)
@@ -2115,7 +2115,7 @@ where
                                             | (1usize << DETACH)
                                             | (1usize << DELETE)
                                             | (1usize << REMOVE)))
-                                        != 0)
+                                        != 0
                                 {
                                     {
                                         {
@@ -2999,7 +2999,7 @@ where
                 recog.base.set_state(358);
                 recog.err_handler.sync(&mut recog.base)?;
                 _alt = recog.interpreter.adaptive_predict(34, &mut recog.base)?;
-                while { _alt != 2 && _alt != INVALID_ALT } {
+                while _alt != 2 && _alt != INVALID_ALT {
                     if _alt == 1 {
                         {
                             {
@@ -3927,7 +3927,7 @@ where
                 recog.base.set_state(448);
                 recog.err_handler.sync(&mut recog.base)?;
                 _alt = recog.interpreter.adaptive_predict(51, &mut recog.base)?;
-                while { _alt != 2 && _alt != INVALID_ALT } {
+                while _alt != 2 && _alt != INVALID_ALT {
                     if _alt == 1 {
                         {
                             {
@@ -4104,7 +4104,7 @@ where
                 recog.base.set_state(464);
                 recog.err_handler.sync(&mut recog.base)?;
                 _alt = recog.interpreter.adaptive_predict(54, &mut recog.base)?;
-                while { _alt != 2 && _alt != INVALID_ALT } {
+                while _alt != 2 && _alt != INVALID_ALT {
                     if _alt == 1 {
                         {
                             {
@@ -4810,7 +4810,7 @@ where
                                 recog.base.set_state(508);
                                 recog.err_handler.sync(&mut recog.base)?;
                                 _alt = recog.interpreter.adaptive_predict(62, &mut recog.base)?;
-                                while { _alt != 2 && _alt != INVALID_ALT } {
+                                while _alt != 2 && _alt != INVALID_ALT {
                                     if _alt == 1 {
                                         {
                                             {
@@ -5654,7 +5654,7 @@ where
                             recog.base.set_state(570);
                             recog.err_handler.sync(&mut recog.base)?;
                             _alt = recog.interpreter.adaptive_predict(76, &mut recog.base)?;
-                            while { _alt != 2 && _alt != INVALID_ALT } {
+                            while _alt != 2 && _alt != INVALID_ALT {
                                 if _alt == 1 {
                                     {
                                         {
@@ -5738,7 +5738,7 @@ where
                             recog.base.set_state(584);
                             recog.err_handler.sync(&mut recog.base)?;
                             _alt = recog.interpreter.adaptive_predict(79, &mut recog.base)?;
-                            while { _alt != 2 && _alt != INVALID_ALT } {
+                            while _alt != 2 && _alt != INVALID_ALT {
                                 if _alt == 1 {
                                     {
                                         {
@@ -6801,7 +6801,7 @@ where
                 recog.base.set_state(643);
                 recog.err_handler.sync(&mut recog.base)?;
                 _alt = recog.interpreter.adaptive_predict(88, &mut recog.base)?;
-                while { _alt != 2 && _alt != INVALID_ALT } {
+                while _alt != 2 && _alt != INVALID_ALT {
                     if _alt == 1 {
                         {
                             {
@@ -7284,7 +7284,7 @@ where
                             recog.base.set_state(668);
                             recog.err_handler.sync(&mut recog.base)?;
                             _alt = recog.interpreter.adaptive_predict(93, &mut recog.base)?;
-                            while { _alt != 2 && _alt != INVALID_ALT } {
+                            while _alt != 2 && _alt != INVALID_ALT {
                                 if _alt == 1 {
                                     {
                                         {
@@ -7476,7 +7476,7 @@ where
                 recog.base.set_state(685);
                 recog.err_handler.sync(&mut recog.base)?;
                 _la = recog.base.input.la(1);
-                if (((_la - 83) & !0x3f) == 0
+                if ((_la - 83) & !0x3f) == 0
                     && ((1usize << (_la - 83))
                         & ((1usize << (COUNT - 83))
                             | (1usize << (ANY - 83))
@@ -7487,7 +7487,7 @@ where
                             | (1usize << (EXTRACT - 83))
                             | (1usize << (UnescapedSymbolicName - 83))
                             | (1usize << (EscapedSymbolicName - 83))))
-                        != 0)
+                        != 0
                 {
                     {
                         /*InvokeRule oC_Variable*/
@@ -8232,7 +8232,7 @@ where
                 recog.base.set_state(781);
                 recog.err_handler.sync(&mut recog.base)?;
                 _la = recog.base.input.la(1);
-                if (((_la - 83) & !0x3f) == 0
+                if ((_la - 83) & !0x3f) == 0
                     && ((1usize << (_la - 83))
                         & ((1usize << (COUNT - 83))
                             | (1usize << (ANY - 83))
@@ -8243,7 +8243,7 @@ where
                             | (1usize << (EXTRACT - 83))
                             | (1usize << (UnescapedSymbolicName - 83))
                             | (1usize << (EscapedSymbolicName - 83))))
-                        != 0)
+                        != 0
                 {
                     {
                         /*InvokeRule oC_Variable*/
@@ -8593,7 +8593,7 @@ where
                 recog.base.set_state(822);
                 recog.err_handler.sync(&mut recog.base)?;
                 _alt = recog.interpreter.adaptive_predict(133, &mut recog.base)?;
-                while { _alt != 2 && _alt != INVALID_ALT } {
+                while _alt != 2 && _alt != INVALID_ALT {
                     if _alt == 1 {
                         {
                             {
@@ -8770,7 +8770,7 @@ where
                 recog.base.set_state(832);
                 recog.err_handler.sync(&mut recog.base)?;
                 _alt = recog.interpreter.adaptive_predict(135, &mut recog.base)?;
-                while { _alt != 2 && _alt != INVALID_ALT } {
+                while _alt != 2 && _alt != INVALID_ALT {
                     if _alt == 1 {
                         {
                             {
@@ -9056,12 +9056,12 @@ where
                 recog.base.set_state(849);
                 recog.err_handler.sync(&mut recog.base)?;
                 _la = recog.base.input.la(1);
-                if (((_la - 97) & !0x3f) == 0
+                if ((_la - 97) & !0x3f) == 0
                     && ((1usize << (_la - 97))
                         & ((1usize << (HexInteger - 97))
                             | (1usize << (DecimalInteger - 97))
                             | (1usize << (OctalInteger - 97))))
-                        != 0)
+                        != 0
                 {
                     {
                         /*InvokeRule oC_IntegerLiteral*/
@@ -9101,12 +9101,12 @@ where
                         recog.base.set_state(859);
                         recog.err_handler.sync(&mut recog.base)?;
                         _la = recog.base.input.la(1);
-                        if (((_la - 97) & !0x3f) == 0
+                        if ((_la - 97) & !0x3f) == 0
                             && ((1usize << (_la - 97))
                                 & ((1usize << (HexInteger - 97))
                                     | (1usize << (DecimalInteger - 97))
                                     | (1usize << (OctalInteger - 97))))
-                                != 0)
+                                != 0
                         {
                             {
                                 /*InvokeRule oC_IntegerLiteral*/
@@ -9578,7 +9578,7 @@ where
                 recog.base.set_state(876);
                 recog.err_handler.sync(&mut recog.base)?;
                 _alt = recog.interpreter.adaptive_predict(144, &mut recog.base)?;
-                while { _alt != 2 && _alt != INVALID_ALT } {
+                while _alt != 2 && _alt != INVALID_ALT {
                     if _alt == 1 {
                         {
                             {
@@ -9747,7 +9747,7 @@ where
                 recog.base.set_state(886);
                 recog.err_handler.sync(&mut recog.base)?;
                 _alt = recog.interpreter.adaptive_predict(145, &mut recog.base)?;
-                while { _alt != 2 && _alt != INVALID_ALT } {
+                while _alt != 2 && _alt != INVALID_ALT {
                     if _alt == 1 {
                         {
                             {
@@ -9916,7 +9916,7 @@ where
                 recog.base.set_state(896);
                 recog.err_handler.sync(&mut recog.base)?;
                 _alt = recog.interpreter.adaptive_predict(146, &mut recog.base)?;
-                while { _alt != 2 && _alt != INVALID_ALT } {
+                while _alt != 2 && _alt != INVALID_ALT {
                     if _alt == 1 {
                         {
                             {
@@ -10249,7 +10249,7 @@ where
                 recog.base.set_state(917);
                 recog.err_handler.sync(&mut recog.base)?;
                 _alt = recog.interpreter.adaptive_predict(150, &mut recog.base)?;
-                while { _alt != 2 && _alt != INVALID_ALT } {
+                while _alt != 2 && _alt != INVALID_ALT {
                     if _alt == 1 {
                         {
                             {
@@ -10417,7 +10417,7 @@ where
                 recog.base.set_state(939);
                 recog.err_handler.sync(&mut recog.base)?;
                 _alt = recog.interpreter.adaptive_predict(156, &mut recog.base)?;
-                while { _alt != 2 && _alt != INVALID_ALT } {
+                while _alt != 2 && _alt != INVALID_ALT {
                     if _alt == 1 {
                         {
                             recog.base.set_state(937);
@@ -10652,7 +10652,7 @@ where
                 recog.base.set_state(969);
                 recog.err_handler.sync(&mut recog.base)?;
                 _alt = recog.interpreter.adaptive_predict(164, &mut recog.base)?;
-                while { _alt != 2 && _alt != INVALID_ALT } {
+                while _alt != 2 && _alt != INVALID_ALT {
                     if _alt == 1 {
                         {
                             recog.base.set_state(967);
@@ -10918,7 +10918,7 @@ where
                 recog.base.set_state(983);
                 recog.err_handler.sync(&mut recog.base)?;
                 _alt = recog.interpreter.adaptive_predict(167, &mut recog.base)?;
-                while { _alt != 2 && _alt != INVALID_ALT } {
+                while _alt != 2 && _alt != INVALID_ALT {
                     if _alt == 1 {
                         {
                             {
@@ -11093,7 +11093,7 @@ where
                         {
                             recog.base.set_state(986);
                             _la = recog.base.input.la(1);
-                            if { !(_la == T__12 || _la == T__13) } {
+                            if !(_la == T__12 || _la == T__13) {
                                 recog.err_handler.recover_inline(&mut recog.base)?;
                             } else {
                                 if recog.base.input.la(1) == TOKEN_EOF {
@@ -11291,7 +11291,7 @@ where
                 recog.base.set_state(1003);
                 recog.err_handler.sync(&mut recog.base)?;
                 _alt = recog.interpreter.adaptive_predict(171, &mut recog.base)?;
-                while { _alt != 2 && _alt != INVALID_ALT } {
+                while _alt != 2 && _alt != INVALID_ALT {
                     if _alt == 1 {
                         {
                             recog.base.set_state(1001);
@@ -12199,7 +12199,7 @@ where
                 recog.base.set_state(1069);
                 recog.err_handler.sync(&mut recog.base)?;
                 _alt = recog.interpreter.adaptive_predict(182, &mut recog.base)?;
-                while { _alt != 2 && _alt != INVALID_ALT } {
+                while _alt != 2 && _alt != INVALID_ALT {
                     if _alt == 1 {
                         {
                             {
@@ -13095,7 +13095,7 @@ where
             {
                 recog.base.set_state(1166);
                 _la = recog.base.input.la(1);
-                if { !(_la == TRUE || _la == FALSE) } {
+                if !(_la == TRUE || _la == FALSE) {
                     recog.err_handler.recover_inline(&mut recog.base)?;
                 } else {
                     if recog.base.input.la(1) == TOKEN_EOF {
@@ -15380,7 +15380,7 @@ where
                 recog.base.set_state(1339);
                 recog.err_handler.sync(&mut recog.base)?;
                 _alt = recog.interpreter.adaptive_predict(238, &mut recog.base)?;
-                while { _alt != 2 && _alt != INVALID_ALT } {
+                while _alt != 2 && _alt != INVALID_ALT {
                     if _alt == 1 {
                         {
                             {
@@ -15755,7 +15755,7 @@ where
                 recog.base.set_state(1374);
                 recog.err_handler.sync(&mut recog.base)?;
                 _la = recog.base.input.la(1);
-                if (((_la - 83) & !0x3f) == 0
+                if ((_la - 83) & !0x3f) == 0
                     && ((1usize << (_la - 83))
                         & ((1usize << (COUNT - 83))
                             | (1usize << (ANY - 83))
@@ -15766,7 +15766,7 @@ where
                             | (1usize << (EXTRACT - 83))
                             | (1usize << (UnescapedSymbolicName - 83))
                             | (1usize << (EscapedSymbolicName - 83))))
-                        != 0)
+                        != 0
                 {
                     {
                         /*InvokeRule oC_Variable*/
@@ -17747,7 +17747,7 @@ where
             {
                 recog.base.set_state(1524);
                 _la = recog.base.input.la(1);
-                if { !(_la == ExponentDecimalReal || _la == RegularDecimalReal) } {
+                if !(_la == ExponentDecimalReal || _la == RegularDecimalReal) {
                     recog.err_handler.recover_inline(&mut recog.base)?;
                 } else {
                     if recog.base.input.la(1) == TOKEN_EOF {
