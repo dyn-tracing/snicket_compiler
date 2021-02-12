@@ -9,6 +9,7 @@ use antlr_rust::tree::ParseTree;
 use antlr_rust::tree::ParseTreeVisitor;
 use antlr_rust::tree::TerminalNode;
 use antlr_rust::tree::Visitable;
+use antlr_rust::tree::Tree;
 use std::rc::Rc;
 
 pub struct MyCypherVisitor<'i> {
@@ -34,15 +35,29 @@ impl<'i> CypherVisitor<'i> for MyCypherVisitor<'i> {
     // an element of MATCH
     fn visit_oC_PatternElement(&mut self, ctx: &OC_PatternElementContext<'i>) {
         self.visit_children(ctx);
-        println!("{:?}", ctx.oC_NodePattern().unwrap().get_text());
-        println!("{:?}", ctx.oC_PatternElementChain(0).unwrap().get_text());
+        println!("PATTERN BEGIN");
+        println!("FULL: {:?}", ctx.get_text());
+        println!("NODE: {:?}", ctx.oC_NodePattern().unwrap().get_text());
+        println!("TAIL: {:?}", ctx.oC_PatternElementChain(0).unwrap().get_text());
+        println!("PATTERN END");
         get_filters(ctx, &self.struct_filters, &self.prop_filters);
     }
 
     // RETURN
     fn visit_oC_ProjectionBody(&mut self, ctx: &OC_ProjectionBodyContext<'i>) {
         self.visit_children(ctx);
+        println!("RETURN BEGIN");
         println!("{:?}", ctx.oC_ProjectionItems().unwrap().get_text());
+        println!("RETURN END");
+    }
+
+    // Properties
+    fn visit_oC_PropertyLookup(&mut self, ctx: &OC_PropertyLookupContext<'i>) {
+        self.visit_children(ctx);
+        println!("PROPERTY BEGIN");
+        println!("{:?}", ctx.get_text());
+        println!("{:?}", ctx.get_parent().unwrap().get_text());
+        println!("PROPERTY END");
     }
 }
 
