@@ -46,7 +46,7 @@ trace_graph_t generate_trace_graph_from_headers(std::string paths_header,
 
     std::vector<std::pair<std::string, std::string>> edges;
     for (const std::string &path : paths) {
-        std::vector<std::string> vertices_vec = str_split(path, "-", true);
+        std::vector<std::string> vertices_vec = str_split(path, ";", true);
         for (int i = 0; i < vertices_vec.size(); ++i) {
             vertices.insert(vertices_vec[i]);
             if (i + 1 < vertices_vec.size()) {

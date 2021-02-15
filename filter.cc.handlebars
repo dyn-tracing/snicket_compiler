@@ -148,7 +148,7 @@ void BidiContext::onResponseHeadersInbound() {
 
     // Prepend current workload name to paths.
     for (auto &w : paths) {
-      w = std::string(root_->getWorkloadName()) + "-" + w;
+      w = std::string(root_->getWorkloadName()) + ";" + w;
     }
 
     // Join them all to a single string.
