@@ -62,12 +62,15 @@ rules_proto_dependencies()
 rules_proto_toolchains()
 
 
-# Built against ABI 0_2_0
+# Pulls proxy wasm cpp SDK with a specific SHA
+PROXY_WASM_CPP_SDK_SHA = "956f0d500c380cc1656a2d861b7ee12c2515a664"
+PROXY_WASM_CPP_SDK_SHA256 = "b97e3e716b1f38dc601487aa0bde72490bbc82b8f3ad73f1f3e69733984955df"
+
 http_archive(
-        sha256 = "d81c316d567fa5780862c5a9c879bdb189e94e587e981839806c8ce1d78d1957",
-        strip_prefix = "proxy-wasm-cpp-sdk-a23dadb0187780e0b72db5b7a8e1ad2e1f159430",
-        urls = ["https://github.com/proxy-wasm/proxy-wasm-cpp-sdk/archive/a23dadb0187780e0b72db5b7a8e1ad2e1f159430.tar.gz"],
-        name = "proxy_wasm_cpp_sdk",
+    name = "proxy_wasm_cpp_sdk",
+    sha256 = PROXY_WASM_CPP_SDK_SHA256,
+    strip_prefix = "proxy-wasm-cpp-sdk-" + PROXY_WASM_CPP_SDK_SHA,
+    url = "https://github.com/proxy-wasm/proxy-wasm-cpp-sdk/archive/" + PROXY_WASM_CPP_SDK_SHA + ".tar.gz",
 )
 
 git_repository(    name = "com_github_taegyunkim_rules_emscripten_boost",

@@ -4,3 +4,5 @@ src/proto/treenode.rs
 .vscode/settings.json
 .vscode/
 bin/
+example_queries/*.cc
+example_queries/*.rs
