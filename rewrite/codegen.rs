@@ -52,9 +52,17 @@ pub struct IRReturn<'a> {
 }
 
 #[derive(Clone, Debug)]
-pub struct Aggregate<'a> {
-    udf_id: &'a str,
-    property_to_aggregate: &'a str,
+pub struct Aggregate {
+    udf_id: String,
+    property_to_aggregate: String,
+}
+impl Aggregate {
+    pub fn new() -> Self {
+        Aggregate { udf_id: String::new(), property_to_aggregate: String::new()}
+    }
+    pub fn new_with_items(property: String, udf: String) -> Self {
+        Aggregate { udf_id: udf, property_to_aggregate: property }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -73,17 +81,21 @@ pub struct CodeGen {
     ir_blocks: Vec<IrFunction>
 }
 
-pub struct MyCypherVisitor<'i> {
+pub struct MyCypherVisitor <'i>{
     struct_filters: Vec<StructuralFilter>,
     prop_filters: Vec<AttributeFilter>,
-    return_expr: Vec<&'i str>,
+    return_expr: String,
+    aggregate: Aggregate,
+    other_data: Vec<&'i str>,
 }
 impl <'i> MyCypherVisitor<'i> {
     pub fn new() -> MyCypherVisitor<'i> {
         MyCypherVisitor {
             struct_filters: Vec::new(),
             prop_filters: Vec::new(),
-            return_expr: Vec::new(),
+            return_expr: String::new(),
+            aggregate: Aggregate::new(),
+            other_data: Vec::new(),
         }
     }
 }
@@ -164,11 +176,20 @@ impl<'i> CypherVisitor<'i> for MyCypherVisitor<'i> {
         }
     }
 
-    // RETURN
+    // RETURN and group by/aggregate, which in opencypher is just RETURN value, func
     fn visit_oC_ProjectionBody(&mut self, ctx: &OC_ProjectionBodyContext<'i>) {
         self.visit_children(ctx);
         println!("RETURN BEGIN");
-        println!("{:?}", ctx.oC_ProjectionItems().unwrap().get_text());
+        let return_items = ctx.oC_ProjectionItems().unwrap().oC_ProjectionItem_all();
+        if return_items.len() == 1 {
+            // return a value
+            self.return_expr = return_items[0].get_text();
+        }
+        else if return_items.len() == 2 {
+            // make a group by
+            self.aggregate = Aggregate::new_with_items(return_items[0].get_text(), return_items[1].get_text());
+
+        }
         println!("RETURN END");
     }
 
@@ -183,11 +204,7 @@ impl<'i> CypherVisitor<'i> for MyCypherVisitor<'i> {
 }
 
 pub fn visit_result(result: Rc<OC_CypherContextAll>) {
-    let mut visitor = MyCypherVisitor {
-        struct_filters: Vec::new(),
-        prop_filters: Vec::new(),
-        return_expr: Vec::new(),
-    };
+    let mut visitor = MyCypherVisitor::new();
     let _res = result.accept(&mut visitor);
     println!("{:?}", visitor.struct_filters);
     println!("{:?}", visitor.prop_filters);
@@ -261,6 +278,25 @@ mod tests {
         assert!(!visitor.struct_filters.is_empty());
         assert!(visitor.prop_filters[0].attributes[0] == ("trace.latency".to_string(), "500".to_string()));
         assert!(visitor.prop_filters[0].attributes[1] == ("trace.client".to_string(), "xyz".to_string()));
+    }
+
+    #[test]
+    fn test_return() {
+        let tf = CommonTokenFactory::default();
+        let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.request_size");
+        let mut visitor = MyCypherVisitor::new();
+        let _res = result.accept(&mut visitor);
+        assert!(visitor.return_expr == "a.request_size");
+    }
+
+    #[test]
+    fn test_aggregate() {
+        let tf = CommonTokenFactory::default();
+        let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.request_size, histogram(*)");
+        let mut visitor = MyCypherVisitor::new();
+        let _res = result.accept(&mut visitor);
+        assert!(visitor.aggregate.udf_id == "histogram(*)");
+        assert!(visitor.aggregate.property_to_aggregate == "a.request_size");
     }
 
 }
