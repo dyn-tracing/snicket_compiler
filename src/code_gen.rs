@@ -1,9 +1,9 @@
 use crate::grammar::*;
 use crate::tree_fold::TreeFold;
+use indexmap::map::IndexMap;
 use indexmap::set::IndexSet;
 use regex::Regex;
 use serde::{Serialize, Serializer};
-use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::string::ToString;
 use strum_macros::EnumString;
@@ -114,10 +114,10 @@ pub struct CodeGenConfig<'a> {
     // This map is used to keep track of which attribute corresponds to which Envoy property.
     // e.g. service_name -> {"node", "metadata", "WORKLOAD_NAME"}
     // Was introduced to simplify the query language.
-    pub attributes_to_property_parts: HashMap<&'static str, AttributeDef<'a>>,
+    pub attributes_to_property_parts: IndexMap<&'static str, AttributeDef<'a>>,
     pub am_cpp: bool,
-    pub cpp_udf_table: HashMap<String, CppUdf>,
-    pub rust_udf_table: HashMap<String, RustUdf>,
+    pub cpp_udf_table: IndexMap<String, CppUdf>,
+    pub rust_udf_table: IndexMap<String, RustUdf>,
 }
 
 impl<'a> CodeGenConfig<'a> {
@@ -209,7 +209,7 @@ impl<'a> CodeGenConfig<'a> {
 
 impl<'a> Default for CodeGenConfig<'a> {
     fn default() -> Self {
-        let mut attributes_to_property_parts = HashMap::new();
+        let mut attributes_to_property_parts = IndexMap::new();
         attributes_to_property_parts.insert(
             "service_name",
             AttributeDef {
@@ -258,8 +258,8 @@ impl<'a> Default for CodeGenConfig<'a> {
         CodeGenConfig {
             attributes_to_property_parts,
             am_cpp: true,
-            cpp_udf_table: HashMap::new(),
-            rust_udf_table: HashMap::new(),
+            cpp_udf_table: IndexMap::new(),
+            rust_udf_table: IndexMap::new(),
         }
     }
 }
@@ -275,7 +275,7 @@ pub struct CodeGen<'a> {
     pub nodes_to_attributes: Vec<NodeAttribute<'a>>,
 
     // Envoy node attribute initializer lists.
-    pub node_attributes_to_fetch: HashSet<AttributeDef<'a>>,
+    pub node_attributes_to_fetch: IndexSet<AttributeDef<'a>>,
 
     // Intermediate computations necessary for computing result
     pub cpp_blocks: Vec<String>,
@@ -854,24 +854,18 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
                 value: String::from("k"),
             }]
         );
-        assert_eq!(
-            code_gen.node_attributes_to_fetch,
-            vec![
-                AttributeDef {
-                    cpp_type: CppType::String,
-                    attribute_type: AttributeType::Envoy,
-                    parts: vec!["x"]
-                },
-                AttributeDef {
-                    cpp_type: CppType::Int64T,
-                    attribute_type: AttributeType::Envoy,
-                    parts: vec!["y"]
-                }
-            ]
-            .iter()
-            .cloned()
-            .collect()
-        );
+        let mut correct_atrs = IndexSet::new();
+        correct_atrs.insert(AttributeDef {
+            cpp_type: CppType::String,
+            attribute_type: AttributeType::Envoy,
+            parts: vec!["x"],
+        });
+        correct_atrs.insert(AttributeDef {
+            cpp_type: CppType::Int64T,
+            attribute_type: AttributeType::Envoy,
+            parts: vec!["y"],
+        });
+        assert_eq!(code_gen.node_attributes_to_fetch, correct_atrs);
     }
 
     #[test]
@@ -939,17 +933,14 @@ std::string n_x_str = node_ptr->properties.at({\"x\"});"
         correct_vertices.insert("m");
         assert_eq!(code_gen.vertices, correct_vertices);
         assert_eq!(code_gen.edges, vec![("n", "m")]);
-        assert_eq!(
-            code_gen.node_attributes_to_fetch,
-            vec![AttributeDef {
-                cpp_type: CppType::Int64T,
-                attribute_type: AttributeType::Envoy,
-                parts: vec!["response", "total_size"]
-            }]
-            .iter()
-            .cloned()
-            .collect()
-        );
+
+        let mut correct_attrs = IndexSet::new();
+        correct_attrs.insert(AttributeDef {
+            cpp_type: CppType::Int64T,
+            attribute_type: AttributeType::Envoy,
+            parts: vec!["response", "total_size"],
+        });
+        assert_eq!(code_gen.node_attributes_to_fetch, correct_attrs);
     }
 
     #[test]
