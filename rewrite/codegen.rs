@@ -30,8 +30,14 @@ impl StructuralFilter {
 
 }
 #[derive(Clone, Debug)]
-pub struct AttributeFilter<'a> {
-    attributes: Vec<(&'a str, &'a str)>
+pub struct AttributeFilter {
+    attributes: Vec<(String, String)>
+}
+
+impl AttributeFilter {
+    pub fn new() -> Self {
+       AttributeFilter { attributes : Vec::new() }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -69,7 +75,7 @@ pub struct CodeGen {
 
 pub struct MyCypherVisitor<'i> {
     struct_filters: Vec<StructuralFilter>,
-    prop_filters: Vec<&'i str>,
+    prop_filters: Vec<AttributeFilter>,
     return_expr: Vec<&'i str>,
 }
 impl <'i> MyCypherVisitor<'i> {
@@ -108,10 +114,7 @@ impl<'i> CypherVisitor<'i> for MyCypherVisitor<'i> {
             let pattern_element = p.oC_AnonymousPatternPart().unwrap().oC_PatternElement().unwrap();
             let mut first_node = pattern_element.oC_NodePattern().unwrap().oC_Variable().unwrap().get_text();
             struct_filter.vertices.push(first_node.clone());
-            let mut i = 0;
-            while !pattern_element.oC_PatternElementChain(i).is_none() {
-                let pattern_element_i = pattern_element.oC_PatternElementChain(i).unwrap();
-
+            for pattern_element_i in pattern_element.oC_PatternElementChain_all() {
                 let relationship = pattern_element_i.oC_RelationshipPattern().unwrap();
                 let node_pattern = pattern_element_i.oC_NodePattern().unwrap();
 
@@ -127,26 +130,44 @@ impl<'i> CypherVisitor<'i> for MyCypherVisitor<'i> {
                     let map_literal = prop.clone().unwrap().oC_MapLiteral().unwrap();
                     let mut prop_hashmap = HashMap::new();
                     let mut j = 0;
-                    while !map_literal.oC_PropertyKeyName(j).is_none() {
-                        let property_key_name = map_literal.oC_PropertyKeyName(j as usize).unwrap();
-                        let expression = map_literal.oC_Expression(j as usize).unwrap();
+                    while !map_literal.oC_PropertyKeyName(j).is_none() && !map_literal.oC_Expression(j).is_none() {
+                        let property_key_name = map_literal.oC_PropertyKeyName(j).unwrap();
+                        let expression = map_literal.oC_Expression(j).unwrap();
                         prop_hashmap.insert(property_key_name.get_text(), expression.get_text());
                         j += 1;
                     }
                     struct_filter.properties.insert(first_node.clone(), prop_hashmap);
                 }
-                i += 1;
             }
         }
         self.struct_filters.push(struct_filter);
-        assert!(!self.struct_filters.is_empty());
+
+        if !where_clause.is_none() {
+            let mut prop_filter = AttributeFilter::new();
+            let exp = where_clause.unwrap().oC_Expression().unwrap();
+            let or = exp.oC_OrExpression().unwrap();
+            // we do not have any xors, etc, in the language.  So we ignore them for now
+            for xor in or.oC_XorExpression_all() {
+                for and in xor.oC_AndExpression_all() {
+                    for not in and.oC_NotExpression_all() {
+                        let comparison = not.oC_ComparisonExpression().unwrap();
+                        let key = comparison.oC_AddOrSubtractExpression().unwrap();
+                        for partial in comparison.oC_PartialComparisonExpression_all() {
+                            let value = partial.oC_AddOrSubtractExpression().unwrap();
+                            prop_filter.attributes.push((key.get_text(), value.get_text()));
+                        }
+
+                    }
+                }
+            }
+            self.prop_filters.push(prop_filter);
+        }
     }
 
     // RETURN
     fn visit_oC_ProjectionBody(&mut self, ctx: &OC_ProjectionBodyContext<'i>) {
         self.visit_children(ctx);
         println!("RETURN BEGIN");
-        //println!("ret: {:?}\n", ctx.oC_NodePattern().unwrap().get_text());
         println!("{:?}", ctx.oC_ProjectionItems().unwrap().get_text());
         println!("RETURN END");
     }
@@ -218,6 +239,28 @@ mod tests {
         assert!(visitor.struct_filters[0].properties["b"].contains_key("service_name"));
         assert!(visitor.struct_filters[0].properties["b"]["service_name"] == "reviews-v1");
 
+    }
+
+    #[test]
+    fn test_match_where() {
+        let tf = CommonTokenFactory::default();
+        let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) WHERE trace.latency = 500 RETURN a.request_size");
+        let mut visitor = MyCypherVisitor::new();
+        let _res = result.accept(&mut visitor);
+        assert!(!visitor.struct_filters.is_empty());
+        assert!(!visitor.prop_filters.is_empty());
+        assert!(visitor.prop_filters[0].attributes[0] == ("trace.latency".to_string(), "500".to_string()));
+    }
+
+    #[test]
+    fn test_match_multiple_where() {
+        let tf = CommonTokenFactory::default();
+        let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) WHERE trace.latency = 500 AND trace.client = xyz RETURN a.request_size");
+        let mut visitor = MyCypherVisitor::new();
+        let _res = result.accept(&mut visitor);
+        assert!(!visitor.struct_filters.is_empty());
+        assert!(visitor.prop_filters[0].attributes[0] == ("trace.latency".to_string(), "500".to_string()));
+        assert!(visitor.prop_filters[0].attributes[1] == ("trace.client".to_string(), "xyz".to_string()));
     }
 
 }
