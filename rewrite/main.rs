@@ -70,5 +70,5 @@ fn main() {
     let token_source = CommonTokenStream::new(_lexer);
     let mut parser = CypherParser::new(token_source);
     let result = parser.oC_Cypher().expect("parsed unsuccessfully");
-    dyntracing::codegen::visit_result(result);
+    dyntracing::to_ir::visit_result(result);
 }
