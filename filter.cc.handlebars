@@ -170,18 +170,23 @@ void BidiContext::onResponseHeadersInbound() {
   // and generate following snippet for each of the inner vector.
   {{#each node_attributes_to_fetch}}{
   {{this.cpp_type}} value;
-    if (getValue({{{#each this.parts}}"{{this}}",{{/each}}}, &value)) {
-        std::string result = std::string(root_->getWorkloadName());
-        for (auto p : {{{#each this.parts}}"{{this}}",{{/each}}}) {
-            result += "." + std::string(p);
-        }
-        result += "==";
-        {{#if (eq this.cpp_type "int64_t")}}result += std::to_string(value);{{else}}result += value;{{/if}}
-        properties.push_back(result);
-    } else {
-        LOG_WARN("failed to get property");
-    }
-    }{{/each}}
+if (getValue({
+  {{#each this.parts}}"{{this}}",{{/each}}
+}, &value)) {
+std::string result = std::string(root_->getWorkloadName());
+for (auto p : {
+    {{#each this.parts}}"{{this}}",{{/each}}
+}) {
+  result += "." + std::string(p);
+}
+result += "==";
+{{#if (eq this.cpp_type "int64_t")}}result += std::to_string(value);{{else}}result += value;{{/if}}
+
+properties.push_back(result);
+} else {
+LOG_WARN("failed to get property");
+}
+}{{/each}}
 
     LOG_WARN("number of properties collected " +
            std::to_string(properties.size()));
@@ -220,8 +225,7 @@ void BidiContext::onResponseHeadersInbound() {
         };
 
         std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
-        {{#each nodes_to_attributes}}ids_to_properties["{{this.id}}"][{ {{#each this.parts}}"{{this}}",{{/each}} }] = "{{this.value}}";
-        {{/each}}
+        {{#each nodes_to_attributes}}ids_to_properties["{{this.id}}"][{ {{#each this.parts}}"{{this}}",{{/each}} }] = "{{this.value}}";{{/each}}
 
         trace_graph_t pattern =
             generate_trace_graph(vertices, edges, ids_to_properties);
@@ -239,13 +243,13 @@ void BidiContext::onResponseHeadersInbound() {
         std::string key = b3_trace_id_;
         std::string value;
 
-        {{#each cpp_blocks}}{{{this}}}{{/each}}
+        {{#each cpp_blocks}}
+        {{{this}}}{{/each}}
 
         {{#with result}}
         {{#if this.Return}}{{#with this.Return}}
         value = {{this.id}};
-        {{/with}}{{/if}}
-        {{/with}}
+        {{/with}}{{/if}}{{/with}}
 
         LOG_WARN("Value to store: " + value);
 
@@ -258,11 +262,11 @@ void BidiContext::onResponseHeadersInbound() {
         };
 
         auto result = root()->httpCall("storage-upstream",
-                                       {{":method", "GET"},
+                                       { {":method", "GET"},
                                         {":path", "/store"},
                                         {":authority", "storage-upstream"},
                                         {"key", key},
-                                        {"value", value}},
+                                        {"value", value} },
                                        "", {}, 1000, callback);
         if (result != WasmResult::Ok) {
             LOG_WARN("Failed to make a call to storage-upstream: " +
