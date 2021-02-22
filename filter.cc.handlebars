@@ -217,11 +217,11 @@ LOG_WARN("failed to get property");
         // generated from request trace.
 
         std::set<std::string> vertices = {
-          {{#each vertices}}"{{this}}", {{/each}}
+          {{#each vertices}}"{{this}}",{{/each}}
         };
 
         std::vector<std::pair<std::string, std::string>> edges = {
-            {{#each edges}} { {{#each this}}"{{this}}", {{/each}} }, {{/each}}
+            {{#each edges}} { {{#each this}}"{{this}}",{{/each}} },{{/each}}
         };
 
         std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
@@ -242,14 +242,11 @@ LOG_WARN("failed to get property");
 
         std::string key = b3_trace_id_;
         std::string value;
-
-        {{#each cpp_blocks}}
+{{#each cpp_blocks}}
         {{{this}}}{{/each}}
 
-        {{#with result}}
-        {{#if this.Return}}{{#with this.Return}}
-        value = {{this.id}};
-        {{/with}}{{/if}}{{/with}}
+{{#with result}}{{#if this.Return}}{{#with this.Return}}
+        value = {{this.id}};{{/with}}{{/if}}{{/with}}
 
         LOG_WARN("Value to store: " + value);
 

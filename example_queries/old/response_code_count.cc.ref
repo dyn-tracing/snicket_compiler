@@ -252,16 +252,15 @@ LOG_WARN("failed to get property");
         // generated from request trace.
 
         std::set<std::string> vertices = {
-          "x", "y",
+          "x","y",
         };
 
         std::vector<std::pair<std::string, std::string>> edges = {
-             { "x", "y",  },
+             { "x","y", },
         };
 
         std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
         ids_to_properties["y"][{ "response","code", }] = "500";
-
 
         trace_graph_t pattern =
             generate_trace_graph(vertices, edges, ids_to_properties);
@@ -279,9 +278,8 @@ LOG_WARN("failed to get property");
         std::string key = b3_trace_id_;
         std::string value;
 
-        auto count_udf_result = root_->count_udf_(target);value = std::to_string(count_udf_result);
-
-
+        auto count_udf_result = root_->count_udf_(target);
+        value = std::to_string(count_udf_result);
 
 
 

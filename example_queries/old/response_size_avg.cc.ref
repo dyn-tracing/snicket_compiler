@@ -250,16 +250,15 @@ LOG_WARN("failed to get property");
         // generated from request trace.
 
         std::set<std::string> vertices = {
-          "a", "b",
+          "a","b",
         };
 
         std::vector<std::pair<std::string, std::string>> edges = {
-             { "a", "b",  },
+             { "a","b", },
         };
 
         std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
         ids_to_properties["a"][{ "node","metadata","WORKLOAD_NAME", }] = "productpage-v1";
-
 
         trace_graph_t pattern =
             generate_trace_graph(vertices, edges, ids_to_properties);
@@ -282,13 +281,13 @@ if (node_ptr == nullptr || node_ptr->properties.find({"response", "total_size"})
     LOG_WARN("Node a not found");
     return;
 }
-std::string a_response_total_size_str = node_ptr->properties.at({"response", "total_size"});int64_t a_response_total_size_str_conv = std::atoll(a_response_total_size_str.c_str());auto avg_udf_result = root_->avg_udf_(a_response_total_size_str_conv);std::tie(key, value) = std::make_pair(avg_udf_result.first, std::to_string(avg_udf_result.second));
-
+std::string a_response_total_size_str = node_ptr->properties.at({"response", "total_size"});
+        int64_t a_response_total_size_str_conv = std::atoll(a_response_total_size_str.c_str());
+        auto avg_udf_result = root_->avg_udf_(a_response_total_size_str_conv);
+        std::tie(key, value) = std::make_pair(avg_udf_result.first, std::to_string(avg_udf_result.second));
 
 
         value = a_response_total_size_str;
-
-
 
         LOG_WARN("Value to store: " + value);
 

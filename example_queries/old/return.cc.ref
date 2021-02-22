@@ -233,11 +233,11 @@ LOG_WARN("failed to get property");
         // generated from request trace.
 
         std::set<std::string> vertices = {
-          "a", "b",
+          "a","b",
         };
 
         std::vector<std::pair<std::string, std::string>> edges = {
-             { "a", "b",  },
+             { "a","b", },
         };
 
         std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
@@ -267,10 +267,7 @@ if (node_ptr == nullptr || node_ptr->properties.find({"response", "total_size"})
 std::string a_response_total_size_str = node_ptr->properties.at({"response", "total_size"});
 
 
-
         value = a_response_total_size_str;
-
-
 
         LOG_WARN("Value to store: " + value);
 

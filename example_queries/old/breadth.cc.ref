@@ -215,16 +215,15 @@ LOG_WARN("failed to get property");
         // generated from request trace.
 
         std::set<std::string> vertices = {
-          "x", "y",
+          "x","y",
         };
 
         std::vector<std::pair<std::string, std::string>> edges = {
-             { "x", "y",  },
+             { "x","y", },
         };
 
         std::map<std::string, std::map<std::vector<std::string>, std::string>> ids_to_properties;
         ids_to_properties["x"][{ "node","metadata","WORKLOAD_NAME", }] = "frontend";
-
 
         trace_graph_t pattern =
             generate_trace_graph(vertices, edges, ids_to_properties);
@@ -245,10 +244,7 @@ LOG_WARN("failed to get property");
         std::string x_breadth = std::to_string(get_out_degree(target, mapping->at("x")));
 
 
-
         value = x_breadth;
-
-
 
         LOG_WARN("Value to store: " + value);
 
