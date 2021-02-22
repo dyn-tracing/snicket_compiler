@@ -78,40 +78,40 @@ impl Aggregate {
 // MyCypherVisitor:  visits tree and fills out structs with information for code gen
 /***********************************/
 
-pub struct MyCypherVisitor <'i>{
+pub struct MyCypherVisitor {
     struct_filters: Vec<StructuralFilter>,
     prop_filters: Vec<AttributeFilter>,
     maps: Vec<String>,
     return_expr: Option<IRReturn>,
     aggregate: Option<Aggregate>,
-    other_data: Vec<&'i str>,
+    // other_data: Vec<&'i str>,
 }
 
-impl <'i> MyCypherVisitor<'i> {
-    pub fn new() -> MyCypherVisitor<'i> {
+impl MyCypherVisitor {
+    pub fn new() -> MyCypherVisitor {
         MyCypherVisitor {
             struct_filters: Vec::new(),
             prop_filters: Vec::new(),
             maps: Vec::new(),
             return_expr: None,
             aggregate: None,
-            other_data: Vec::new(), // unused for now
+            // other_data: Vec::new(), // unused for now
         }
     }
 }
 
-impl<'i> ParseTreeVisitor<'i, CypherParserContextType> for MyCypherVisitor<'i> {
+impl<'i> ParseTreeVisitor<'i, CypherParserContextType> for MyCypherVisitor {
     fn visit_terminal(&mut self, _node: &TerminalNode<'i, CypherParserContextType>) {}
 }
 
 
 
-impl<'i> CypherVisitor<'i> for MyCypherVisitor<'i> {
+impl<'i> CypherVisitor<'i> for MyCypherVisitor {
     fn visit_oC_Match(&mut self, ctx: &OC_MatchContext<'i>) {
         self.visit_children(ctx);
         let pattern = ctx.oC_Pattern().unwrap();
         let mut struct_filter = StructuralFilter::new();
-        let where_clause = ctx.oC_Where(); //TODO
+        let where_clause = ctx.oC_Where();
 
         pattern.oC_PatternPart_all();
         for p in pattern.oC_PatternPart_all() {
@@ -263,7 +263,6 @@ pub fn visit_result(result: Rc<OC_CypherContextAll>) {
     let mut visitor = MyCypherVisitor::new();
     let _res = result.accept(&mut visitor);
     visitor = get_map_functions(visitor);
-    // TODO: now we should iterate through for unknown fields - these are map functions
 }
 
 
@@ -373,8 +372,8 @@ mod tests {
         visitor = get_map_functions(visitor);
         assert!(visitor.maps.len() == 2);
         print!("maps 0: {:?} maps 1: {:?}\n", visitor.maps[0], visitor.maps[1]);
-        assert!(visitor.maps[0] == "service_name");
-        assert!(visitor.maps[1] == ".request_size");
+        assert!(visitor.maps.contains(&"service_name".to_string()));
+        assert!(visitor.maps.contains(&".request_size".to_string()));
     }
 
 }
