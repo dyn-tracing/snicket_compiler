@@ -9,6 +9,9 @@ use antlr_rust::tree::ParseTree;
 use antlr_rust::tree::ParseTreeVisitor;
 use antlr_rust::tree::TerminalNode;
 use antlr_rust::tree::Visitable;
+use std::process;
+// use antlr_rust::tree::Tree;
+// use antlr_rust::rule_context::CustomRuleContext;
 // use antlr_rust::tree::Tree; // TODO: do we need this import?
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -247,13 +250,29 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
         &mut self,
         ctx: &OC_PropertyOrLabelsExpressionContext<'i>,
     ) {
-        println!("{:?}", ctx.get_text());
-        let node = ctx.oC_Atom().unwrap().oC_FunctionInvocation().unwrap().get_text();
-
-        println!("{:?}", node);
-        let property = ctx.oC_PropertyLookup(0).unwrap().get_text();
-        println!("{:?}", property );
-        self.return_items.push(ReturnItem { node, property })
+        let atom = ctx.oC_Atom().unwrap();
+        // println!("{:?}", ruleNames[atom.get_child(0).unwrap().get_rule_index()] );
+        let node: String;
+        if let Some(func) = atom.oC_FunctionInvocation() {
+            node = func.get_text();
+            println!("Storing udf: {:?}", node);
+        } else if let Some(var) = atom.oC_Variable() {
+            node = var.get_text();
+            println!("Storing var: {:?}", node);
+        } else {
+            eprintln!("Unsupported expression {:?}", atom.get_text());
+            process::exit(1);
+        }
+        let mut property_str = String::new();
+        for property in ctx.oC_PropertyLookup_all() {
+            // this includes the dots
+            property_str.push_str(&property.get_text())
+        }
+        println!("Property String {:?}", property_str);
+        self.return_items.push(ReturnItem {
+            node,
+            property: property_str,
+        })
     }
 
     fn visit_oC_ProjectionItems(&mut self, ctx: &OC_ProjectionItemsContext<'i>) {
@@ -266,10 +285,7 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
     /// aggregation function if applicable.  All this information is stored in self, which is a ReturnVisitor.
     fn visit_oC_ProjectionBody(&mut self, ctx: &OC_ProjectionBodyContext<'i>) {
         ctx.oC_ProjectionItems().unwrap().accept(self);
-        // let return_items = ctx.oC_ProjectionItems().unwrap().oC_ProjectionItem_all();
-        // let exp = return_items[0].oC_Expression().unwrap();
-        // let or = exp.oC_OrExpression().unwrap();
-        // we do not have any xors, etc, in the language.  So we ignore them for now, if needed can come back later
+
         if self.return_items.len() == 1 {
             let return_item = &self.return_items[0];
             // return a value
@@ -279,10 +295,6 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
             ));
         } else if self.return_items.len() == 2 {
             let return_item = &self.return_items[0];
-            self.return_expr = Some(IrReturn::new_with_items(
-                return_item.node.clone(),
-                return_item.property.clone(),
-            ));
             self.aggregate = Some(Aggregate::new_with_items(
                 return_item.node.clone(),
                 return_item.property.clone(),

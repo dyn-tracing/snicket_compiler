@@ -66,9 +66,12 @@ fn main() {
     let query_file = matches.value_of("query").unwrap();
     let query: String = fs::read_to_string(query_file).unwrap();
     let query_stream = InputStream::new_owned(query.into_boxed_str());
-    let mut _lexer = CypherLexer::new_with_token_factory(query_stream, &tf);
-    let token_source = CommonTokenStream::new(_lexer);
+    let lexer = CypherLexer::new_with_token_factory(query_stream, &tf);
+    let token_source = CommonTokenStream::new(lexer);
     let mut parser = CypherParser::new(token_source);
-    let result = parser.oC_Cypher().expect("parsed unsuccessfully");
-    dyntracing::to_ir::visit_result(result);
+    let result = parser.oC_Cypher();
+    match result {
+        Err(e) => {eprintln!("error parsing header: {:?}", e);},
+        Ok(v) => {dyntracing::to_ir::visit_result(v);},
+    }
 }
