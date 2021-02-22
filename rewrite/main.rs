@@ -11,7 +11,6 @@ use clap::{App, Arg};
 use dyntracing::lexer::CypherLexer;
 use dyntracing::parser::CypherParser;
 
-
 use std::fs;
 use std::path::Path;
 
