@@ -35,7 +35,6 @@ pub struct AttributeFilter {
     node: String,
     property: String,
     value: String,
-    // attributes: Vec<(String, String, String)>
 }
 
 impl AttributeFilter {
@@ -87,6 +86,7 @@ pub struct MyCypherVisitor <'i>{
     aggregate: Option<Aggregate>,
     other_data: Vec<&'i str>,
 }
+
 impl <'i> MyCypherVisitor<'i> {
     pub fn new() -> MyCypherVisitor<'i> {
         MyCypherVisitor {
@@ -219,32 +219,51 @@ impl<'i> CypherVisitor<'i> for MyCypherVisitor<'i> {
 
 }
 
-pub fn visit_result(result: Rc<OC_CypherContextAll>) {
-    let mut visitor = MyCypherVisitor::new();
-    let _res = result.accept(&mut visitor);
-    // TODO: now we should iterate through for unknown fields - these are map functions
+// TODO: clean up Strings vs &str in this function
+pub fn get_map_functions(mut visitor: MyCypherVisitor) -> MyCypherVisitor {
     let mut unknown_properties : HashSet<String> = HashSet::new();
     let mut known_properties : HashSet<String> = HashSet::new();
     known_properties.insert(".id".to_string()); // TODO:  are there any other built in properties besides id?
-/*
-    for struct_filter in visitor.struct_filters {
+    for struct_filter in &visitor.struct_filters {
         for node in struct_filter.properties.keys() {
             for property in struct_filter.properties[node].keys() {
-                if !known_properties.contains(property) && !unknown_properties.contains(property) {
+                print!("considering property {:?}\n", property);
+                if !known_properties.contains(property.as_str()) && !unknown_properties.contains(property.as_str()) {
                     unknown_properties.insert(property.to_string());
                 }
             }
         }
     }
-    for attribute_filter in visitor.prop_filters {
-        for attr in attribute_filter.attributes {
-            if !known_properties.contains(&attr.1) && !unknown_properties.contains(&attr.1) {
-                unknown_properties.insert(attr.1);
-            }
+    for attribute_filter in &visitor.prop_filters {
+        print!("considering property {:?}\n", attribute_filter.property);
+        if !known_properties.contains(attribute_filter.property.as_str()) && !unknown_properties.contains(attribute_filter.property.as_str()) {
+            unknown_properties.insert(attribute_filter.property.to_string());
         }
     }
-    // visitor.maps.new_attributes.extend(unknown_properties);
-*/
+
+    if !visitor.return_expr.is_none() {
+        let prop : &str  = visitor.return_expr.as_ref().unwrap().property.as_str();
+        print!("considering property {:?}\n", prop.to_string());
+        if !known_properties.contains(prop) && !unknown_properties.contains(prop) {
+            unknown_properties.insert(prop.to_string());
+        }
+    }
+    if !visitor.aggregate.is_none() {
+        let prop : &str = visitor.aggregate.as_ref().unwrap().property.as_str();
+        print!("considering property {:?}\n", prop.to_string());
+        if !known_properties.contains(prop) && !unknown_properties.contains(prop) {
+            unknown_properties.insert(prop.to_string());
+        }
+    }
+    visitor.maps.extend(unknown_properties);
+    visitor
+}
+
+pub fn visit_result(result: Rc<OC_CypherContextAll>) {
+    let mut visitor = MyCypherVisitor::new();
+    let _res = result.accept(&mut visitor);
+    visitor = get_map_functions(visitor);
+    // TODO: now we should iterate through for unknown fields - these are map functions
 }
 
 
@@ -351,8 +370,11 @@ mod tests {
         let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.request_size, histogram(*) ");
         let mut visitor = MyCypherVisitor::new();
         let _res = result.accept(&mut visitor);
-        print!("maps len: {:?}", visitor.maps.len());
+        visitor = get_map_functions(visitor);
         assert!(visitor.maps.len() == 2);
+        print!("maps 0: {:?} maps 1: {:?}\n", visitor.maps[0], visitor.maps[1]);
+        assert!(visitor.maps[0] == "service_name");
+        assert!(visitor.maps[1] == ".request_size");
     }
 
 }
