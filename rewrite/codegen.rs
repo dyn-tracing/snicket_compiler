@@ -9,9 +9,10 @@ use antlr_rust::tree::ParseTree;
 use antlr_rust::tree::ParseTreeVisitor;
 use antlr_rust::tree::TerminalNode;
 use antlr_rust::tree::Visitable;
-use antlr_rust::tree::Tree;
+// use antlr_rust::tree::Tree; // TODO: do we need this import?
 use std::rc::Rc;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 /***********************************/
 // IR Structs
@@ -31,19 +32,23 @@ impl StructuralFilter {
 }
 #[derive(Clone, Debug)]
 pub struct AttributeFilter {
-    attributes: Vec<(String, String)>
+    node: String,
+    property: String,
+    value: String,
+    // attributes: Vec<(String, String, String)>
 }
 
 impl AttributeFilter {
     pub fn new() -> Self {
-       AttributeFilter { attributes : Vec::new() }
+       AttributeFilter { node: String::new(), property: String::new(), value: String::new() }
+    }
+    pub fn insert_values(&mut self, node: String, property: String, value: String) {
+        self.node = node;
+        self.property = property;
+        self.value = value;
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct MapAttribute {
-    new_attributes: Vec<String>,
-}
 
 #[derive(Clone, Debug)]
 pub struct IRReturn {
@@ -77,7 +82,7 @@ impl Aggregate {
 pub struct MyCypherVisitor <'i>{
     struct_filters: Vec<StructuralFilter>,
     prop_filters: Vec<AttributeFilter>,
-    maps: Vec<MapAttribute>,
+    maps: Vec<String>,
     return_expr: Option<IRReturn>,
     aggregate: Option<Aggregate>,
     other_data: Vec<&'i str>,
@@ -150,18 +155,29 @@ impl<'i> CypherVisitor<'i> for MyCypherVisitor<'i> {
                 for and in xor.oC_AndExpression_all() {
                     for not in and.oC_NotExpression_all() {
                         let comparison = not.oC_ComparisonExpression().unwrap();
-                        let key = comparison.oC_AddOrSubtractExpression().unwrap();
-                        for partial in comparison.oC_PartialComparisonExpression_all() {
-                            let value = partial.oC_AddOrSubtractExpression().unwrap();
-                            prop_filter.attributes.push((key.get_text(), value.get_text()));
+                        let add_sub = comparison.oC_AddOrSubtractExpression().unwrap();
+                        for mod_div in add_sub.oC_MultiplyDivideModuloExpression_all() {
+                            for power in mod_div.oC_PowerOfExpression_all() {
+                                for unary in power.oC_UnaryAddOrSubtractExpression_all() {
+                                    let prop_exp = unary.oC_StringListNullOperatorExpression().unwrap().oC_PropertyOrLabelsExpression().unwrap();
+                                    let node = prop_exp.oC_Atom().unwrap().get_text();
+                                    let property = prop_exp.oC_PropertyLookup(0).unwrap().get_text();
+                                    for partial in comparison.oC_PartialComparisonExpression_all() {
+                                        let value = partial.oC_AddOrSubtractExpression().unwrap();
+                                        prop_filter.insert_values(node.clone(), property.clone(), value.get_text());
+                                        self.prop_filters.push(prop_filter.clone());
+                                    }
+                                }
+                                                       
+                            }
                         }
 
                     }
                 }
             }
-            self.prop_filters.push(prop_filter);
         }
     }
+
 
     // RETURN and group by/aggregate, which in opencypher is just RETURN value, func
     fn visit_oC_ProjectionBody(&mut self, ctx: &OC_ProjectionBodyContext<'i>) {
@@ -207,6 +223,28 @@ pub fn visit_result(result: Rc<OC_CypherContextAll>) {
     let mut visitor = MyCypherVisitor::new();
     let _res = result.accept(&mut visitor);
     // TODO: now we should iterate through for unknown fields - these are map functions
+    let mut unknown_properties : HashSet<String> = HashSet::new();
+    let mut known_properties : HashSet<String> = HashSet::new();
+    known_properties.insert(".id".to_string()); // TODO:  are there any other built in properties besides id?
+/*
+    for struct_filter in visitor.struct_filters {
+        for node in struct_filter.properties.keys() {
+            for property in struct_filter.properties[node].keys() {
+                if !known_properties.contains(property) && !unknown_properties.contains(property) {
+                    unknown_properties.insert(property.to_string());
+                }
+            }
+        }
+    }
+    for attribute_filter in visitor.prop_filters {
+        for attr in attribute_filter.attributes {
+            if !known_properties.contains(&attr.1) && !unknown_properties.contains(&attr.1) {
+                unknown_properties.insert(attr.1);
+            }
+        }
+    }
+    // visitor.maps.new_attributes.extend(unknown_properties);
+*/
 }
 
 
@@ -264,7 +302,9 @@ mod tests {
         let _res = result.accept(&mut visitor);
         assert!(!visitor.struct_filters.is_empty());
         assert!(!visitor.prop_filters.is_empty());
-        assert!(visitor.prop_filters[0].attributes[0] == ("trace.latency".to_string(), "500".to_string()));
+        assert!(visitor.prop_filters[0].node == "trace".to_string());
+        assert!(visitor.prop_filters[0].property == ".latency".to_string());
+        assert!(visitor.prop_filters[0].value == "500".to_string());
     }
 
     #[test]
@@ -274,8 +314,15 @@ mod tests {
         let mut visitor = MyCypherVisitor::new();
         let _res = result.accept(&mut visitor);
         assert!(!visitor.struct_filters.is_empty());
-        assert!(visitor.prop_filters[0].attributes[0] == ("trace.latency".to_string(), "500".to_string()));
-        assert!(visitor.prop_filters[0].attributes[1] == ("trace.client".to_string(), "xyz".to_string()));
+        assert!(visitor.prop_filters.len() == 2);
+        assert!(visitor.prop_filters[0].node == "trace".to_string());
+        assert!(visitor.prop_filters[0].property == ".latency".to_string());
+        assert!(visitor.prop_filters[0].value == "500".to_string());
+
+        assert!(visitor.prop_filters[1].node == "trace".to_string());
+        assert!(visitor.prop_filters[1].property == ".client".to_string());
+        assert!(visitor.prop_filters[1].value == "xyz".to_string());
+       
     }
 
     #[test]
@@ -296,6 +343,16 @@ mod tests {
         assert!(visitor.aggregate.as_ref().unwrap().udf_id == "histogram(*)");
         assert!(visitor.aggregate.as_ref().unwrap().entity == "a");
         assert!(visitor.aggregate.as_ref().unwrap().property == ".request_size");
+    }
+
+    #[test]
+    fn test_map() {
+        let tf = CommonTokenFactory::default();
+        let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.request_size, histogram(*) ");
+        let mut visitor = MyCypherVisitor::new();
+        let _res = result.accept(&mut visitor);
+        print!("maps len: {:?}", visitor.maps.len());
+        assert!(visitor.maps.len() == 2);
     }
 
 }
