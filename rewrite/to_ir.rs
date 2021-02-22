@@ -226,7 +226,7 @@ impl Default for ReturnVisitor {
         ReturnVisitor {
             return_expr: None,
             aggregate: None,
-            return_items : Vec::new(),
+            return_items: Vec::new(),
         }
     }
 }
@@ -236,23 +236,27 @@ impl<'i> ParseTreeVisitor<'i, CypherParserContextType> for ReturnVisitor {
 }
 
 impl<'i> CypherVisitor<'i> for ReturnVisitor {
-    fn visit_oC_UnaryAddOrSubtractExpression(
+    // we do not want to visit matches in this case, ignore that part of the tree
+    fn visit_oC_Match(&mut self, _ctx: &OC_MatchContext<'i>) {}
+
+    fn visit_oC_FunctionInvocation(&mut self, ctx: &OC_FunctionInvocationContext<'i>) {
+        self.visit_children(ctx)
+    }
+
+    fn visit_oC_PropertyOrLabelsExpression(
         &mut self,
-        ctx: &OC_UnaryAddOrSubtractExpressionContext<'i>,
+        ctx: &OC_PropertyOrLabelsExpressionContext<'i>,
     ) {
-        let prop_exp = ctx
-            .oC_StringListNullOperatorExpression()
-            .unwrap()
-            .oC_PropertyOrLabelsExpression()
-            .unwrap();
-        println!("{:?}", ctx.get_text() );
-        let node = prop_exp.oC_Atom().unwrap().get_text();
-        let property = prop_exp.oC_PropertyLookup(0).unwrap().get_text();
-        self.return_items.push(ReturnItem {node, property})
+        println!("{:?}", ctx.get_text());
+        let node = ctx.oC_Atom().unwrap().oC_FunctionInvocation().unwrap().get_text();
+
+        println!("{:?}", node);
+        let property = ctx.oC_PropertyLookup(0).unwrap().get_text();
+        println!("{:?}", property );
+        self.return_items.push(ReturnItem { node, property })
     }
 
     fn visit_oC_ProjectionItems(&mut self, ctx: &OC_ProjectionItemsContext<'i>) {
-        println!("SDAASDASDASDASDASDASDa");
         self.visit_children(ctx);
     }
 
@@ -269,10 +273,16 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
         if self.return_items.len() == 1 {
             let return_item = &self.return_items[0];
             // return a value
-            self.return_expr = Some(IrReturn::new_with_items(return_item.node.clone(), return_item.property.clone()));
+            self.return_expr = Some(IrReturn::new_with_items(
+                return_item.node.clone(),
+                return_item.property.clone(),
+            ));
         } else if self.return_items.len() == 2 {
             let return_item = &self.return_items[0];
-            self.return_expr = Some(IrReturn::new_with_items(return_item.node.clone(), return_item.property.clone()));
+            self.return_expr = Some(IrReturn::new_with_items(
+                return_item.node.clone(),
+                return_item.property.clone(),
+            ));
             self.aggregate = Some(Aggregate::new_with_items(
                 return_item.node.clone(),
                 return_item.property.clone(),
