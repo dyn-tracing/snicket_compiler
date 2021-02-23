@@ -9,6 +9,9 @@ use antlr_rust::tree::ParseTree;
 use antlr_rust::tree::ParseTreeVisitor;
 use antlr_rust::tree::TerminalNode;
 use antlr_rust::tree::Visitable;
+use std::process;
+// use antlr_rust::tree::Tree;
+// use antlr_rust::rule_context::CustomRuleContext;
 // use antlr_rust::tree::Tree; // TODO: do we need this import?
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -85,35 +88,37 @@ impl Aggregate {
     }
 }
 
-/***********************************/
-// MyCypherVisitor:  visits tree and fills out structs with information for code gen
-/***********************************/
-
-pub struct MyCypherVisitor {
+pub struct VisitorResults {
     struct_filters: Vec<StructuralFilter>,
     prop_filters: Vec<AttributeFilter>,
-    maps: Vec<String>,
     return_expr: Option<IrReturn>,
     aggregate: Option<Aggregate>,
+    maps: Vec<String>,
 }
 
-impl Default for MyCypherVisitor {
+/***********************************/
+// FilterVisitor:  visits tree and fills out structs with information for code gen
+/***********************************/
+
+pub struct FilterVisitor {
+    struct_filters: Vec<StructuralFilter>,
+    prop_filters: Vec<AttributeFilter>,
+}
+
+impl Default for FilterVisitor {
     fn default() -> Self {
-        MyCypherVisitor {
+        FilterVisitor {
             struct_filters: Vec::new(),
             prop_filters: Vec::new(),
-            maps: Vec::new(),
-            return_expr: None,
-            aggregate: None,
         }
     }
 }
 
-impl<'i> ParseTreeVisitor<'i, CypherParserContextType> for MyCypherVisitor {
+impl<'i> ParseTreeVisitor<'i, CypherParserContextType> for FilterVisitor {
     fn visit_terminal(&mut self, _node: &TerminalNode<'i, CypherParserContextType>) {}
 }
 
-impl<'i> CypherVisitor<'i> for MyCypherVisitor {
+impl<'i> CypherVisitor<'i> for FilterVisitor {
     /// This function visits a match clause.  It extracts the graph inside, complete with any
     /// node attributes, and stores that information in a struct_filter.  It then extracts any information
     /// in the where clause, which pertains to the whole graph, and stores that in an attribute_filter.
@@ -206,51 +211,104 @@ impl<'i> CypherVisitor<'i> for MyCypherVisitor {
             }
         }
     }
+}
+
+struct ReturnItem {
+    node: String,
+    property: String,
+}
+
+pub struct ReturnVisitor {
+    return_expr: Option<IrReturn>,
+    aggregate: Option<Aggregate>,
+    return_items: Vec<ReturnItem>,
+}
+
+impl Default for ReturnVisitor {
+    fn default() -> Self {
+        ReturnVisitor {
+            return_expr: None,
+            aggregate: None,
+            return_items: Vec::new(),
+        }
+    }
+}
+
+impl<'i> ParseTreeVisitor<'i, CypherParserContextType> for ReturnVisitor {
+    fn visit_terminal(&mut self, _node: &TerminalNode<'i, CypherParserContextType>) {}
+}
+
+impl<'i> CypherVisitor<'i> for ReturnVisitor {
+    // we do not want to visit matches in this case, ignore that part of the tree
+    // TODO: Apply the visitor directly to the RETURN body instead
+    fn visit_oC_Match(&mut self, _ctx: &OC_MatchContext<'i>) {}
+
+    fn visit_oC_FunctionInvocation(&mut self, ctx: &OC_FunctionInvocationContext<'i>) {
+        self.visit_children(ctx)
+    }
+
+    fn visit_oC_PropertyOrLabelsExpression(
+        &mut self,
+        ctx: &OC_PropertyOrLabelsExpressionContext<'i>,
+    ) {
+        let atom = ctx.oC_Atom().unwrap();
+        // println!("{:?}", ruleNames[atom.get_child(0).unwrap().get_rule_index()] );
+        let node: String;
+        if let Some(func) = atom.oC_FunctionInvocation() {
+            node = func.get_text();
+            // TODO: We can make this UDF more precise
+            println!("Storing UDF: {:?}", node);
+        } else if let Some(var) = atom.oC_Variable() {
+            node = var.get_text();
+            println!("Storing var: {:?}", node);
+        } else {
+            eprintln!("Unsupported expression {:?}", atom.get_text());
+            process::exit(1);
+        }
+        let mut property_str = String::new();
+        for property in ctx.oC_PropertyLookup_all() {
+            // this includes the dots
+            property_str.push_str(&property.get_text())
+        }
+        println!("Property String {:?}", property_str);
+        self.return_items.push(ReturnItem {
+            node,
+            property: property_str,
+        })
+    }
+
+    fn visit_oC_ProjectionItems(&mut self, ctx: &OC_ProjectionItemsContext<'i>) {
+        self.visit_children(ctx);
+        // For now we assume that a single element implies a return expression
+        // Two elements imply an aggregation
+        // FIXME: Make this more explicit
+        if self.return_items.len() == 1 {
+            let return_item = &self.return_items[0];
+            // return a value
+            self.return_expr = Some(IrReturn::new_with_items(
+                return_item.node.clone(),
+                return_item.property.clone(),
+            ));
+        } else if self.return_items.len() == 2 {
+            let return_item = &self.return_items[0];
+            let udf = &self.return_items[1];
+            self.aggregate = Some(Aggregate::new_with_items(
+                return_item.node.clone(),
+                return_item.property.clone(),
+                udf.node.clone(),
+            ));
+        } else {
+            eprintln!("More than two return items not supported");
+            process::exit(1);
+        }
+    }
 
     /// The only two things we allow that have projection bodies are returns and aggregations
     /// In opencypher, an aggregation takes the form of RETURN node.property, aggregation_function(*)
     /// So this function finds the node/property for both return and aggregation, and finds the
-    /// aggregation function if applicable.  All this information is stored in self, which is a MyCypherVisitor.
+    /// aggregation function if applicable.  All this information is stored in self, which is a ReturnVisitor.
     fn visit_oC_ProjectionBody(&mut self, ctx: &OC_ProjectionBodyContext<'i>) {
-        self.visit_children(ctx);
-        let mut node = String::new();
-        let mut property = String::new();
-
-        let return_items = ctx.oC_ProjectionItems().unwrap().oC_ProjectionItem_all();
-        let exp = return_items[0].oC_Expression().unwrap();
-        let or = exp.oC_OrExpression().unwrap();
-        // we do not have any xors, etc, in the language.  So we ignore them for now, if needed can come back later
-        for xor in or.oC_XorExpression_all() {
-            for and in xor.oC_AndExpression_all() {
-                for not in and.oC_NotExpression_all() {
-                    let comparison = not.oC_ComparisonExpression().unwrap();
-                    let add_sub = comparison.oC_AddOrSubtractExpression().unwrap();
-                    for mod_div in add_sub.oC_MultiplyDivideModuloExpression_all() {
-                        for power in mod_div.oC_PowerOfExpression_all() {
-                            for unary in power.oC_UnaryAddOrSubtractExpression_all() {
-                                let prop_exp = unary
-                                    .oC_StringListNullOperatorExpression()
-                                    .unwrap()
-                                    .oC_PropertyOrLabelsExpression()
-                                    .unwrap();
-                                node = prop_exp.oC_Atom().unwrap().get_text();
-                                property = prop_exp.oC_PropertyLookup(0).unwrap().get_text();
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if return_items.len() == 1 {
-            // return a value
-            self.return_expr = Some(IrReturn::new_with_items(node, property));
-        } else if return_items.len() == 2 {
-            self.aggregate = Some(Aggregate::new_with_items(
-                node,
-                property,
-                return_items[1].get_text(),
-            ));
-        }
+        ctx.oC_ProjectionItems().unwrap().accept(self);
     }
 }
 
@@ -259,11 +317,11 @@ impl<'i> CypherVisitor<'i> for MyCypherVisitor {
 /// It records those maps in the visitor's map field.
 /// # Arguments
 /// * `visitor` - A visitor that already has its filters, returns, and aggregations filled in
-pub fn get_map_functions(mut visitor: MyCypherVisitor) -> MyCypherVisitor {
+pub fn get_map_functions(mut results: VisitorResults) -> VisitorResults {
     let mut unknown_properties: HashSet<String> = HashSet::new();
     let mut known_properties: HashSet<String> = HashSet::new();
     known_properties.insert(".id".to_string()); // TODO:  are there any other built in properties besides id?
-    for struct_filter in &visitor.struct_filters {
+    for struct_filter in &results.struct_filters {
         for node in struct_filter.properties.keys() {
             for property in struct_filter.properties[node].keys() {
                 if !known_properties.contains(property.as_str())
@@ -274,7 +332,7 @@ pub fn get_map_functions(mut visitor: MyCypherVisitor) -> MyCypherVisitor {
             }
         }
     }
-    for attribute_filter in &visitor.prop_filters {
+    for attribute_filter in &results.prop_filters {
         if !known_properties.contains(attribute_filter.property.as_str())
             && !unknown_properties.contains(attribute_filter.property.as_str())
         {
@@ -282,28 +340,37 @@ pub fn get_map_functions(mut visitor: MyCypherVisitor) -> MyCypherVisitor {
         }
     }
 
-    if visitor.return_expr.is_some() {
-        let prop: &str = visitor.return_expr.as_ref().unwrap().property.as_str();
+    if results.return_expr.is_some() {
+        let prop: &str = results.return_expr.as_ref().unwrap().property.as_str();
         if !known_properties.contains(prop) && !unknown_properties.contains(prop) {
             unknown_properties.insert(prop.to_string());
         }
     }
-    if visitor.aggregate.is_some() {
-        let prop: &str = visitor.aggregate.as_ref().unwrap().property.as_str();
+    if results.aggregate.is_some() {
+        let prop: &str = results.aggregate.as_ref().unwrap().property.as_str();
         if !known_properties.contains(prop) && !unknown_properties.contains(prop) {
             unknown_properties.insert(prop.to_string());
         }
     }
-    visitor.maps.extend(unknown_properties);
-    visitor
+    results.maps.extend(unknown_properties);
+    results
 }
 
 /// This is a function that aggregates all the functionality above;  it makes a visitor,
 /// visits everything in the query via accept, and then finds the map functions.
-pub fn visit_result(result: Rc<OC_CypherContextAll>) -> MyCypherVisitor {
-    let mut visitor = MyCypherVisitor::default();
-    let _res = result.accept(&mut visitor);
-    get_map_functions(visitor)
+pub fn visit_result(result: Rc<OC_CypherContextAll>) -> VisitorResults {
+    let mut filter_visitor = FilterVisitor::default();
+    let mut return_visitor = ReturnVisitor::default();
+    let _res = result.accept(&mut filter_visitor);
+    let _res = result.accept(&mut return_visitor);
+    let results = VisitorResults {
+        struct_filters: filter_visitor.struct_filters,
+        prop_filters: filter_visitor.prop_filters,
+        return_expr: return_visitor.return_expr,
+        aggregate: return_visitor.aggregate,
+        maps: Vec::new(),
+    };
+    get_map_functions(results)
 }
 
 #[cfg(test)]
@@ -331,7 +398,7 @@ mod tests {
             &tf,
             "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.request_size",
         );
-        let mut visitor = MyCypherVisitor::default();
+        let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
         assert!(!visitor.struct_filters.is_empty());
     }
@@ -343,7 +410,7 @@ mod tests {
             &tf,
             "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.request_size",
         );
-        let mut visitor = MyCypherVisitor::default();
+        let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
         assert!(visitor.struct_filters[0].vertices == vec!["a", "b", "c"]);
         assert!(
@@ -362,7 +429,7 @@ mod tests {
     fn test_match_where() {
         let tf = CommonTokenFactory::default();
         let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) WHERE trace.latency = 500 RETURN a.request_size");
-        let mut visitor = MyCypherVisitor::default();
+        let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
         assert!(!visitor.struct_filters.is_empty());
         assert!(!visitor.prop_filters.is_empty());
@@ -375,7 +442,7 @@ mod tests {
     fn test_match_multiple_where() {
         let tf = CommonTokenFactory::default();
         let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) WHERE trace.latency = 500 AND trace.client = xyz RETURN a.request_size");
-        let mut visitor = MyCypherVisitor::default();
+        let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
         assert!(!visitor.struct_filters.is_empty());
         assert!(visitor.prop_filters.len() == 2);
@@ -395,7 +462,7 @@ mod tests {
             &tf,
             "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.request_size",
         );
-        let mut visitor = MyCypherVisitor::default();
+        let mut visitor = ReturnVisitor::default();
         let _res = result.accept(&mut visitor);
         assert!(visitor.return_expr.unwrap().entity == "a");
     }
@@ -403,23 +470,32 @@ mod tests {
     #[test]
     fn test_aggregate() {
         let tf = CommonTokenFactory::default();
-        let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.request_size, histogram(*) ");
-        let mut visitor = MyCypherVisitor::default();
+        let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.return_code, histogram(a.request_size) ");
+        let mut visitor = ReturnVisitor::default();
         let _res = result.accept(&mut visitor);
-        assert!(visitor.aggregate.as_ref().unwrap().udf_id == "histogram(*)");
+        assert!(visitor.aggregate.as_ref().unwrap().udf_id == "histogram(a.request_size)");
         assert!(visitor.aggregate.as_ref().unwrap().entity == "a");
-        assert!(visitor.aggregate.as_ref().unwrap().property == ".request_size");
+        assert!(visitor.aggregate.as_ref().unwrap().property == ".return_code");
     }
 
     #[test]
     fn test_map() {
         let tf = CommonTokenFactory::default();
-        let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.request_size, histogram(*) ");
-        let mut visitor = MyCypherVisitor::default();
-        let _res = result.accept(&mut visitor);
-        visitor = get_map_functions(visitor);
-        assert!(visitor.maps.len() == 2);
-        assert!(visitor.maps.contains(&"service_name".to_string()));
-        assert!(visitor.maps.contains(&".request_size".to_string()));
+        let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.return_code, histogram(a.request_size) ");
+        let mut filter_visitor = FilterVisitor::default();
+        let mut return_visitor = ReturnVisitor::default();
+        let _res = result.accept(&mut filter_visitor);
+        let _res = result.accept(&mut return_visitor);
+        let mut results = VisitorResults {
+            struct_filters: filter_visitor.struct_filters,
+            prop_filters: filter_visitor.prop_filters,
+            return_expr: return_visitor.return_expr,
+            aggregate: return_visitor.aggregate,
+            maps: Vec::new(),
+        };
+        results = get_map_functions(results);
+        assert!(results.maps.len() == 2);
+        assert!(results.maps.contains(&"service_name".to_string()));
+        assert!(results.maps.contains(&".return_code".to_string()));
     }
 }
