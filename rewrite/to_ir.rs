@@ -240,6 +240,7 @@ impl<'i> ParseTreeVisitor<'i, CypherParserContextType> for ReturnVisitor {
 
 impl<'i> CypherVisitor<'i> for ReturnVisitor {
     // we do not want to visit matches in this case, ignore that part of the tree
+    // TODO: Apply the visitor directly to the RETURN body instead
     fn visit_oC_Match(&mut self, _ctx: &OC_MatchContext<'i>) {}
 
     fn visit_oC_FunctionInvocation(&mut self, ctx: &OC_FunctionInvocationContext<'i>) {
@@ -255,7 +256,8 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
         let node: String;
         if let Some(func) = atom.oC_FunctionInvocation() {
             node = func.get_text();
-            println!("Storing udf: {:?}", node);
+            // TODO: We can make this UDF more precise
+            println!("Storing UDF: {:?}", node);
         } else if let Some(var) = atom.oC_Variable() {
             node = var.get_text();
             println!("Storing var: {:?}", node);
@@ -295,6 +297,9 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
                 return_item.property.clone(),
                 udf.node.clone(),
             ));
+        } else {
+            eprintln!("More than two return items not supported");
+            process::exit(1);
         }
     }
 
@@ -304,7 +309,6 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
     /// aggregation function if applicable.  All this information is stored in self, which is a ReturnVisitor.
     fn visit_oC_ProjectionBody(&mut self, ctx: &OC_ProjectionBodyContext<'i>) {
         ctx.oC_ProjectionItems().unwrap().accept(self);
-
     }
 }
 

@@ -71,7 +71,11 @@ fn main() {
     let mut parser = CypherParser::new(token_source);
     let result = parser.oC_Cypher();
     match result {
-        Err(e) => {eprintln!("error parsing header: {:?}", e);},
-        Ok(v) => {dyntracing::to_ir::visit_result(v);},
+        Err(e) => {
+            eprintln!("error parsing header: {:?}", e);
+        }
+        Ok(v) => {
+            dyntracing::to_ir::visit_result(v);
+        }
     }
 }
