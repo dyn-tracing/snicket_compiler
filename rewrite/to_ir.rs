@@ -277,15 +277,9 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
 
     fn visit_oC_ProjectionItems(&mut self, ctx: &OC_ProjectionItemsContext<'i>) {
         self.visit_children(ctx);
-    }
-
-    /// The only two things we allow that have projection bodies are returns and aggregations
-    /// In opencypher, an aggregation takes the form of RETURN node.property, aggregation_function(*)
-    /// So this function finds the node/property for both return and aggregation, and finds the
-    /// aggregation function if applicable.  All this information is stored in self, which is a ReturnVisitor.
-    fn visit_oC_ProjectionBody(&mut self, ctx: &OC_ProjectionBodyContext<'i>) {
-        ctx.oC_ProjectionItems().unwrap().accept(self);
-
+        // For now we assume that a single element implies a return expression
+        // Two elements imply an aggregation
+        // FIXME: Make this more explicit
         if self.return_items.len() == 1 {
             let return_item = &self.return_items[0];
             // return a value
@@ -295,12 +289,22 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
             ));
         } else if self.return_items.len() == 2 {
             let return_item = &self.return_items[0];
+            let udf = &self.return_items[1];
             self.aggregate = Some(Aggregate::new_with_items(
                 return_item.node.clone(),
                 return_item.property.clone(),
-                "".to_string(),
+                udf.node.clone(),
             ));
         }
+    }
+
+    /// The only two things we allow that have projection bodies are returns and aggregations
+    /// In opencypher, an aggregation takes the form of RETURN node.property, aggregation_function(*)
+    /// So this function finds the node/property for both return and aggregation, and finds the
+    /// aggregation function if applicable.  All this information is stored in self, which is a ReturnVisitor.
+    fn visit_oC_ProjectionBody(&mut self, ctx: &OC_ProjectionBodyContext<'i>) {
+        ctx.oC_ProjectionItems().unwrap().accept(self);
+
     }
 }
 
@@ -462,18 +466,18 @@ mod tests {
     #[test]
     fn test_aggregate() {
         let tf = CommonTokenFactory::default();
-        let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.request_size, histogram(*) ");
+        let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.return_code, histogram(a.request_size) ");
         let mut visitor = ReturnVisitor::default();
         let _res = result.accept(&mut visitor);
-        assert!(visitor.aggregate.as_ref().unwrap().udf_id == "histogram(*)");
+        assert!(visitor.aggregate.as_ref().unwrap().udf_id == "histogram(a.request_size)");
         assert!(visitor.aggregate.as_ref().unwrap().entity == "a");
-        assert!(visitor.aggregate.as_ref().unwrap().property == ".request_size");
+        assert!(visitor.aggregate.as_ref().unwrap().property == ".return_code");
     }
 
     #[test]
     fn test_map() {
         let tf = CommonTokenFactory::default();
-        let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.request_size, histogram(*) ");
+        let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.return_code, histogram(a.request_size) ");
         let mut filter_visitor = FilterVisitor::default();
         let mut return_visitor = ReturnVisitor::default();
         let _res = result.accept(&mut filter_visitor);
@@ -488,6 +492,6 @@ mod tests {
         results = get_map_functions(results);
         assert!(results.maps.len() == 2);
         assert!(results.maps.contains(&"service_name".to_string()));
-        assert!(results.maps.contains(&".request_size".to_string()));
+        assert!(results.maps.contains(&".return_code".to_string()));
     }
 }
