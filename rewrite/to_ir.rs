@@ -108,14 +108,6 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
         self.prop_filters.push(attr_filter);
     }
 
-    fn visit_oC_Where(&mut self, ctx: &OC_WhereContext<'i>) {
-        self.visit_children(ctx);
-    }
-
-    fn visit_oC_NodePattern(&mut self, ctx: &OC_NodePatternContext<'i>) {
-        self.visit_children(ctx);
-    }
-
     fn visit_oC_PatternElement(&mut self, ctx: &OC_PatternElementContext<'i>) {
         let mut struct_filter = StructuralFilter::default();
 
@@ -156,9 +148,6 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
         self.struct_filters.push(struct_filter);
     }
 
-    fn visit_oC_PatternPart(&mut self, ctx: &OC_PatternPartContext<'i>) {
-        self.visit_children(ctx);
-    }
     /// This function visits a match clause.  It extracts the graph inside, complete with any
     /// node attributes, and stores that information in a struct_filter.  It then extracts any information
     /// in the where clause, which pertains to the whole graph, and stores that in an attribute_filter.
@@ -200,10 +189,6 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
     // we do not want to visit matches in this case, ignore that part of the tree
     // TODO: Apply the visitor directly to the RETURN body instead
     fn visit_oC_Match(&mut self, _ctx: &OC_MatchContext<'i>) {}
-
-    fn visit_oC_FunctionInvocation(&mut self, ctx: &OC_FunctionInvocationContext<'i>) {
-        self.visit_children(ctx)
-    }
 
     fn visit_oC_PropertyOrLabelsExpression(
         &mut self,
