@@ -8,11 +8,10 @@ use crate::visitor::CypherVisitor;
 use antlr_rust::tree::ParseTree;
 use antlr_rust::tree::ParseTreeVisitor;
 use antlr_rust::tree::TerminalNode;
+use antlr_rust::tree::Tree;
 use antlr_rust::tree::Visitable;
 use std::process;
-// use antlr_rust::tree::Tree;
 // use antlr_rust::rule_context::CustomRuleContext;
-// use antlr_rust::tree::Tree; // TODO: do we need this import?
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::rc::Rc;
@@ -96,6 +95,11 @@ pub struct VisitorResults {
     maps: Vec<String>,
 }
 
+struct ReturnItem {
+    node: String,
+    property: String,
+}
+
 /***********************************/
 // FilterVisitor:  visits tree and fills out structs with information for code gen
 /***********************************/
@@ -103,6 +107,7 @@ pub struct VisitorResults {
 pub struct FilterVisitor {
     struct_filters: Vec<StructuralFilter>,
     prop_filters: Vec<AttributeFilter>,
+    return_items: Vec<ReturnItem>,
 }
 
 impl Default for FilterVisitor {
@@ -110,6 +115,7 @@ impl Default for FilterVisitor {
         FilterVisitor {
             struct_filters: Vec::new(),
             prop_filters: Vec::new(),
+            return_items: Vec::new(),
         }
     }
 }
@@ -119,15 +125,77 @@ impl<'i> ParseTreeVisitor<'i, CypherParserContextType> for FilterVisitor {
 }
 
 impl<'i> CypherVisitor<'i> for FilterVisitor {
+    // we do not want to visit returns in this case, ignore that part of the tree
+    // TODO: Apply the visitor directly to the MATCH body instead
+    fn visit_oC_Return(&mut self, _ctx: &OC_ReturnContext<'i>) {}
+
+    fn visit_oC_PropertyOrLabelsExpression(
+        &mut self,
+        ctx: &OC_PropertyOrLabelsExpressionContext<'i>,
+    ) {
+        let atom = ctx.oC_Atom().unwrap();
+        // println!(
+        //     "{:?}",
+        //     ruleNames[atom.get_child(0).unwrap().get_rule_index()]
+        // );
+        let node: String;
+        if let Some(func) = atom.oC_FunctionInvocation() {
+            node = func.get_text();
+            // TODO: We can make this UDF more precise
+            println!("Storing UDF: {:?}", node);
+        } else if let Some(var) = atom.oC_Variable() {
+            node = var.get_text();
+            println!("Storing var: {:?}", node);
+        } else if let Some(var) = atom.oC_Literal() {
+            node = var.get_text();
+            println!("Storing literal: {:?}", node);
+        } else {
+            eprintln!("Unsupported expression {:?}", atom.get_text());
+            process::exit(1);
+        }
+        let mut property_str = String::new();
+        for property in ctx.oC_PropertyLookup_all() {
+            // this includes the dots
+            property_str.push_str(&property.get_text())
+        }
+        println!("Property String {:?}", property_str);
+        self.return_items.push(ReturnItem {
+            node,
+            property: property_str,
+        })
+    }
+
+    fn visit_oC_ComparisonExpression(&mut self, ctx: &OC_ComparisonExpressionContext<'i>) {
+        println!("{:?}", ctx.get_text() );
+        ctx.oC_AddOrSubtractExpression().unwrap().accept(self);
+        let node = self.return_items[0].node.clone();
+        let property = self.return_items[0].property.clone();
+        self.return_items.clear();
+        let mut value =  "".to_string();
+        if let Some(right_clause) =  ctx.oC_PartialComparisonExpression(0) {
+            right_clause.accept(self);
+            value = self.return_items[0].node.clone();
+        }
+        self.return_items.clear();
+        let attr_filter = AttributeFilter {
+            node,
+            property,
+            value,
+        };
+        self.prop_filters.push(attr_filter);
+    }
+
+    fn visit_oC_Where(&mut self, ctx: &OC_WhereContext<'i>) {
+        self.visit_children(ctx);
+    }
+
     /// This function visits a match clause.  It extracts the graph inside, complete with any
     /// node attributes, and stores that information in a struct_filter.  It then extracts any information
     /// in the where clause, which pertains to the whole graph, and stores that in an attribute_filter.
     fn visit_oC_Match(&mut self, ctx: &OC_MatchContext<'i>) {
-        self.visit_children(ctx);
         let pattern = ctx.oC_Pattern().unwrap();
         let mut struct_filter = StructuralFilter::default();
 
-        pattern.oC_PatternPart_all();
         for p in pattern.oC_PatternPart_all() {
             let pattern_element = p
                 .oC_AnonymousPatternPart()
@@ -172,50 +240,10 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
             }
         }
         self.struct_filters.push(struct_filter);
-
         if let Some(where_clause) = ctx.oC_Where() {
-            let mut prop_filter = AttributeFilter::default();
-            let exp = where_clause.oC_Expression().unwrap();
-            let or = exp.oC_OrExpression().unwrap();
-            // we do not have any xors, etc, in the language.  So we ignore them for now
-            for xor in or.oC_XorExpression_all() {
-                for and in xor.oC_AndExpression_all() {
-                    for not in and.oC_NotExpression_all() {
-                        let comparison = not.oC_ComparisonExpression().unwrap();
-                        let add_sub = comparison.oC_AddOrSubtractExpression().unwrap();
-                        for mod_div in add_sub.oC_MultiplyDivideModuloExpression_all() {
-                            for power in mod_div.oC_PowerOfExpression_all() {
-                                for unary in power.oC_UnaryAddOrSubtractExpression_all() {
-                                    let prop_exp = unary
-                                        .oC_StringListNullOperatorExpression()
-                                        .unwrap()
-                                        .oC_PropertyOrLabelsExpression()
-                                        .unwrap();
-                                    let node = prop_exp.oC_Atom().unwrap().get_text();
-                                    let property =
-                                        prop_exp.oC_PropertyLookup(0).unwrap().get_text();
-                                    for partial in comparison.oC_PartialComparisonExpression_all() {
-                                        let value = partial.oC_AddOrSubtractExpression().unwrap();
-                                        prop_filter.insert_values(
-                                            node.clone(),
-                                            property.clone(),
-                                            value.get_text(),
-                                        );
-                                        self.prop_filters.push(prop_filter.clone());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            where_clause.accept(self);
         }
     }
-}
-
-struct ReturnItem {
-    node: String,
-    property: String,
 }
 
 pub struct ReturnVisitor {
