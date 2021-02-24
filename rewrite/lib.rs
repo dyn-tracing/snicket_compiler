@@ -10,7 +10,7 @@ pub mod lexer;
 #[allow(clippy::all)]
 pub mod parser;
 
+pub mod ir;
 pub mod listener;
 pub mod to_ir;
-pub mod ir;
 pub mod visitor;

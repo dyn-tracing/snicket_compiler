@@ -79,7 +79,7 @@ fn main() {
     let result = parser.oC_Cypher();
     match result {
         Err(e) => {
-            eprintln!("Error parsing query: {:?}", e);
+            log::error!("Error parsing query: {:?}", e);
         }
         Ok(v) => {
             dyntracing::to_ir::visit_result(v);
