@@ -166,13 +166,13 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
     }
 
     fn visit_oC_ComparisonExpression(&mut self, ctx: &OC_ComparisonExpressionContext<'i>) {
-        println!("{:?}", ctx.get_text() );
+        println!("{:?}", ctx.get_text());
         ctx.oC_AddOrSubtractExpression().unwrap().accept(self);
         let node = self.return_items[0].node.clone();
         let property = self.return_items[0].property.clone();
         self.return_items.clear();
-        let mut value =  "".to_string();
-        if let Some(right_clause) =  ctx.oC_PartialComparisonExpression(0) {
+        let mut value = "".to_string();
+        if let Some(right_clause) = ctx.oC_PartialComparisonExpression(0) {
             right_clause.accept(self);
             value = self.return_items[0].node.clone();
         }
@@ -189,57 +189,62 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
         self.visit_children(ctx);
     }
 
+    fn visit_oC_NodePattern(&mut self, ctx: &OC_NodePatternContext<'i>) {
+        self.visit_children(ctx);
+    }
+
+    fn visit_oC_PatternElement(&mut self, ctx: &OC_PatternElementContext<'i>) {
+        let mut struct_filter = StructuralFilter::default();
+
+        let mut left_node = ctx
+            .oC_NodePattern()
+            .unwrap()
+            .oC_Variable()
+            .unwrap()
+            .get_text();
+        struct_filter.vertices.push(left_node.clone());
+        for pattern_element_i in ctx.oC_PatternElementChain_all() {
+            let relationship = pattern_element_i.oC_RelationshipPattern().unwrap();
+            let node_pattern = pattern_element_i.oC_NodePattern().unwrap();
+
+            let var = node_pattern.oC_Variable().unwrap().get_text();
+            struct_filter.vertices.push(var.clone());
+
+            if relationship.oC_RightArrowHead().is_some() {
+                struct_filter.edges.push((left_node.clone(), var.clone()));
+            }
+            left_node = var.clone();
+            let prop = node_pattern.oC_Properties();
+            if prop.is_some() {
+                let map_literal = prop.clone().unwrap().oC_MapLiteral().unwrap();
+                let mut prop_hashmap = HashMap::new();
+                let mut j = 0;
+                while map_literal.oC_PropertyKeyName(j).is_some()
+                    && map_literal.oC_Expression(j).is_some()
+                {
+                    let property_key_name = map_literal.oC_PropertyKeyName(j).unwrap();
+                    let expression = map_literal.oC_Expression(j).unwrap();
+                    prop_hashmap.insert(property_key_name.get_text(), expression.get_text());
+                    j += 1;
+                }
+                struct_filter
+                    .properties
+                    .insert(left_node.clone(), prop_hashmap);
+            }
+        }
+        self.struct_filters.push(struct_filter);
+    }
+
+    fn visit_oC_PatternPart(&mut self, ctx: &OC_PatternPartContext<'i>) {
+        self.visit_children(ctx);
+    }
     /// This function visits a match clause.  It extracts the graph inside, complete with any
     /// node attributes, and stores that information in a struct_filter.  It then extracts any information
     /// in the where clause, which pertains to the whole graph, and stores that in an attribute_filter.
     fn visit_oC_Match(&mut self, ctx: &OC_MatchContext<'i>) {
-        let pattern = ctx.oC_Pattern().unwrap();
-        let mut struct_filter = StructuralFilter::default();
-
-        for p in pattern.oC_PatternPart_all() {
-            let pattern_element = p
-                .oC_AnonymousPatternPart()
-                .unwrap()
-                .oC_PatternElement()
-                .unwrap();
-            let mut first_node = pattern_element
-                .oC_NodePattern()
-                .unwrap()
-                .oC_Variable()
-                .unwrap()
-                .get_text();
-            struct_filter.vertices.push(first_node.clone());
-            for pattern_element_i in pattern_element.oC_PatternElementChain_all() {
-                let relationship = pattern_element_i.oC_RelationshipPattern().unwrap();
-                let node_pattern = pattern_element_i.oC_NodePattern().unwrap();
-
-                let var = node_pattern.oC_Variable().unwrap().get_text();
-                struct_filter.vertices.push(var.clone());
-
-                if relationship.oC_RightArrowHead().is_some() {
-                    struct_filter.edges.push((first_node.clone(), var.clone()));
-                }
-                first_node = var.clone();
-                let prop = node_pattern.oC_Properties();
-                if prop.is_some() {
-                    let map_literal = prop.clone().unwrap().oC_MapLiteral().unwrap();
-                    let mut prop_hashmap = HashMap::new();
-                    let mut j = 0;
-                    while map_literal.oC_PropertyKeyName(j).is_some()
-                        && map_literal.oC_Expression(j).is_some()
-                    {
-                        let property_key_name = map_literal.oC_PropertyKeyName(j).unwrap();
-                        let expression = map_literal.oC_Expression(j).unwrap();
-                        prop_hashmap.insert(property_key_name.get_text(), expression.get_text());
-                        j += 1;
-                    }
-                    struct_filter
-                        .properties
-                        .insert(first_node.clone(), prop_hashmap);
-                }
-            }
+        for p in ctx.oC_Pattern().unwrap().oC_PatternPart_all() {
+            p.accept(self);
         }
-        self.struct_filters.push(struct_filter);
         if let Some(where_clause) = ctx.oC_Where() {
             where_clause.accept(self);
         }
