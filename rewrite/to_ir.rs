@@ -140,11 +140,11 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
             if let Some(prop) = node_pattern.oC_Properties() {
                 let map_literal = prop.oC_MapLiteral().unwrap();
                 let mut prop_hashmap = HashMap::new();
-                let mut j = 0;
-                for prop_key_name in map_literal.oC_PropertyKeyName_all() {
+                for (j, prop_key_name) in
+                    map_literal.oC_PropertyKeyName_all().into_iter().enumerate()
+                {
                     let expression = map_literal.oC_Expression(j).unwrap();
                     prop_hashmap.insert(prop_key_name.get_text(), expression.get_text());
-                    j += 1;
                 }
                 struct_filter
                     .properties
@@ -288,7 +288,7 @@ pub fn get_map_functions(mut results: VisitorResults) -> VisitorResults {
     let mut known_properties: HashSet<String> = HashSet::new();
     known_properties.insert(".id".to_string()); // TODO:  are there any other built in properties besides id?
     for struct_filter in &results.struct_filters {
-        for (_node, property_map) in &struct_filter.properties {
+        for property_map in struct_filter.properties.values() {
             for property in property_map.keys() {
                 if !known_properties.contains(property.as_str()) {
                     unknown_properties.insert(property.to_string());
