@@ -23,7 +23,7 @@ use std::rc::Rc;
 pub struct FilterVisitor {
     struct_filters: Vec<StructuralFilter>,
     prop_filters: Vec<AttributeFilter>,
-    return_items: Vec<IRReturn>,
+    return_items: Vec<IrReturn>,
 }
 
 impl Default for FilterVisitor {
@@ -49,7 +49,7 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
         &mut self,
         ctx: &OC_PropertyOrLabelsExpressionContext<'i>,
     ) {
-        log::info!("Generating IRReturn");
+        log::info!("Generating IrReturn");
         let atom = ctx.oC_Atom().unwrap();
         let entity: String;
         if let Some(func) = atom.oC_FunctionInvocation() {
@@ -77,7 +77,7 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
             property_str.push_str(&property.get_text())
         }
         log::info!("Property String {:?}", property_str);
-        self.return_items.push(IRReturn {
+        self.return_items.push(IrReturn {
             entity,
             property: property_str,
         })
@@ -177,9 +177,9 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
 /***********************************/
 
 pub struct ReturnVisitor {
-    return_expr: Option<IRReturn>,
+    return_expr: Option<IrReturn>,
     aggregate: Option<Aggregate>,
-    return_items: Vec<IRReturn>,
+    return_items: Vec<IrReturn>,
 }
 
 impl Default for ReturnVisitor {
@@ -209,7 +209,7 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
         &mut self,
         ctx: &OC_PropertyOrLabelsExpressionContext<'i>,
     ) {
-        log::info!("Generating IRReturn");
+        log::info!("Generating IrReturn");
         let atom = ctx.oC_Atom().unwrap();
         let entity: String;
         if let Some(func) = atom.oC_FunctionInvocation() {
@@ -237,7 +237,7 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
             property_str.push_str(&property.get_text())
         }
         log::info!("Property String {:?}", property_str);
-        self.return_items.push(IRReturn {
+        self.return_items.push(IrReturn {
             entity,
             property: property_str,
         })
@@ -251,7 +251,7 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
         if self.return_items.len() == 1 {
             let return_item = &self.return_items[0];
             // return a value
-            self.return_expr = Some(IRReturn::new_with_items(
+            self.return_expr = Some(IrReturn::new_with_items(
                 return_item.entity.clone(),
                 return_item.property.clone(),
             ));

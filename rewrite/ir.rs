@@ -44,21 +44,21 @@ impl AttributeFilter {
 }
 
 #[derive(Clone, Debug)]
-pub struct IRReturn {
+pub struct IrReturn {
     pub entity: String,
     pub property: String,
 }
 
-impl IRReturn {
+impl IrReturn {
     pub fn new_with_items(entity: String, property: String) -> Self {
-        IRReturn { entity, property }
+        IrReturn { entity, property }
     }
 }
 
 pub struct VisitorResults {
     pub struct_filters: Vec<StructuralFilter>,
     pub prop_filters: Vec<AttributeFilter>,
-    pub return_expr: Option<IRReturn>,
+    pub return_expr: Option<IrReturn>,
     pub aggregate: Option<Aggregate>,
     pub maps: Vec<String>,
 }
