@@ -5,6 +5,8 @@ authors = ["Anirudh Sivaraman <sk.anirudh@gmail.com>", "Jessica Berg <jb7399@nyu
 edition = "2018"
 
 [dependencies]
+log = "*"
+env_logger = "0.6.*"
 clap = "~2.27.0"
 handlebars = "3.1.0"
 lazy_static = "1.4.0"

@@ -7,8 +7,10 @@ extern crate strum_macros;
 
 #[allow(clippy::all)]
 pub mod lexer;
-pub mod listener;
 #[allow(clippy::all)]
 pub mod parser;
+
+pub mod listener;
 pub mod to_ir;
+pub mod ir;
 pub mod visitor;

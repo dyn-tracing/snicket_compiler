@@ -1,105 +1,21 @@
 extern crate clap;
 extern crate handlebars;
 extern crate input_stream;
+extern crate log;
 extern crate serde;
 
+use crate::ir::*;
 use crate::parser::*;
 use crate::visitor::CypherVisitor;
 use antlr_rust::tree::ParseTree;
 use antlr_rust::tree::ParseTreeVisitor;
 use antlr_rust::tree::TerminalNode;
-use antlr_rust::tree::Tree;
 use antlr_rust::tree::Visitable;
 use std::process;
 // use antlr_rust::rule_context::CustomRuleContext;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::rc::Rc;
-
-/***********************************/
-// IR Structs
-/***********************************/
-#[derive(Clone, Debug)]
-pub struct StructuralFilter {
-    vertices: Vec<String>,
-    edges: Vec<(String, String)>,
-    properties: HashMap<String, HashMap<String, String>>, // attribute, value
-}
-impl Default for StructuralFilter {
-    fn default() -> Self {
-        StructuralFilter {
-            vertices: Vec::new(),
-            edges: Vec::new(),
-            properties: HashMap::new(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct AttributeFilter {
-    node: String,
-    property: String,
-    value: String,
-}
-impl Default for AttributeFilter {
-    fn default() -> Self {
-        AttributeFilter {
-            node: String::new(),
-            property: String::new(),
-            value: String::new(),
-        }
-    }
-}
-
-impl AttributeFilter {
-    pub fn insert_values(&mut self, node: String, property: String, value: String) {
-        self.node = node;
-        self.property = property;
-        self.value = value;
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct IrReturn {
-    entity: String,
-    property: String,
-}
-
-impl IrReturn {
-    pub fn new_with_items(entity: String, property: String) -> Self {
-        IrReturn { entity, property }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Aggregate {
-    udf_id: String,
-    entity: String,
-    property: String,
-}
-impl Aggregate {
-    pub fn new_with_items(entity: String, property: String, udf: String) -> Self {
-        Aggregate {
-            udf_id: udf,
-            entity,
-            property,
-        }
-    }
-}
-
-pub struct VisitorResults {
-    struct_filters: Vec<StructuralFilter>,
-    prop_filters: Vec<AttributeFilter>,
-    return_expr: Option<IrReturn>,
-    aggregate: Option<Aggregate>,
-    maps: Vec<String>,
-}
-
-struct ReturnItem {
-    node: String,
-    property: String,
-}
-
 /***********************************/
 // FilterVisitor:  visits tree and fills out structs with information for code gen
 /***********************************/
@@ -134,7 +50,7 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
         ctx: &OC_PropertyOrLabelsExpressionContext<'i>,
     ) {
         let atom = ctx.oC_Atom().unwrap();
-        // println!(
+        // log::info!(
         //     "{:?}",
         //     ruleNames[atom.get_child(0).unwrap().get_rule_index()]
         // );
@@ -142,15 +58,15 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
         if let Some(func) = atom.oC_FunctionInvocation() {
             node = func.get_text();
             // TODO: We can make this UDF more precise
-            println!("Storing UDF: {:?}", node);
+            log::info!("Storing UDF: {:?}", node);
         } else if let Some(var) = atom.oC_Variable() {
             node = var.get_text();
-            println!("Storing var: {:?}", node);
+            log::info!("Storing var: {:?}", node);
         } else if let Some(var) = atom.oC_Literal() {
             node = var.get_text();
-            println!("Storing literal: {:?}", node);
+            log::info!("Storing literal: {:?}", node);
         } else {
-            eprintln!("Unsupported expression {:?}", atom.get_text());
+            log::error!("Unsupported expression {:?}", atom.get_text());
             process::exit(1);
         }
         let mut property_str = String::new();
@@ -158,7 +74,7 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
             // this includes the dots
             property_str.push_str(&property.get_text())
         }
-        println!("Property String {:?}", property_str);
+        log::info!("Property String {:?}", property_str);
         self.return_items.push(ReturnItem {
             node,
             property: property_str,
@@ -166,7 +82,6 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
     }
 
     fn visit_oC_ComparisonExpression(&mut self, ctx: &OC_ComparisonExpressionContext<'i>) {
-        println!("{:?}", ctx.get_text());
         ctx.oC_AddOrSubtractExpression().unwrap().accept(self);
         let node = self.return_items[0].node.clone();
         let property = self.return_items[0].property.clone();
@@ -196,40 +111,38 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
     fn visit_oC_PatternElement(&mut self, ctx: &OC_PatternElementContext<'i>) {
         let mut struct_filter = StructuralFilter::default();
 
-        let mut left_node = ctx
-            .oC_NodePattern()
-            .unwrap()
-            .oC_Variable()
-            .unwrap()
-            .get_text();
-        struct_filter.vertices.push(left_node.clone());
+        let mut left_node = ctx.oC_NodePattern().unwrap().oC_Variable().unwrap();
+        struct_filter.vertices.push(left_node.get_text());
         for pattern_element_i in ctx.oC_PatternElementChain_all() {
             let relationship = pattern_element_i.oC_RelationshipPattern().unwrap();
             let node_pattern = pattern_element_i.oC_NodePattern().unwrap();
 
-            let var = node_pattern.oC_Variable().unwrap().get_text();
-            struct_filter.vertices.push(var.clone());
+            let right_node = node_pattern.oC_Variable().unwrap();
+            struct_filter.vertices.push(right_node.get_text());
 
+            // only add right-side edges for now
             if relationship.oC_RightArrowHead().is_some() {
-                struct_filter.edges.push((left_node.clone(), var.clone()));
+                struct_filter
+                    .edges
+                    .push((left_node.get_text(), right_node.get_text()));
+            } else {
+                log::error!("Unsupported direction");
+                process::exit(1);
             }
-            left_node = var.clone();
-            let prop = node_pattern.oC_Properties();
-            if prop.is_some() {
-                let map_literal = prop.clone().unwrap().oC_MapLiteral().unwrap();
+            if let Some(prop) = node_pattern.oC_Properties() {
+                let map_literal = prop.oC_MapLiteral().unwrap();
                 let mut prop_hashmap = HashMap::new();
                 let mut j = 0;
-                while map_literal.oC_PropertyKeyName(j).is_some()
-                    && map_literal.oC_Expression(j).is_some()
-                {
-                    let property_key_name = map_literal.oC_PropertyKeyName(j).unwrap();
+                for prop_key_name in map_literal.oC_PropertyKeyName_all() {
                     let expression = map_literal.oC_Expression(j).unwrap();
-                    prop_hashmap.insert(property_key_name.get_text(), expression.get_text());
+                    prop_hashmap.insert(prop_key_name.get_text(), expression.get_text());
                     j += 1;
                 }
                 struct_filter
                     .properties
-                    .insert(left_node.clone(), prop_hashmap);
+                    .insert(right_node.get_text(), prop_hashmap);
+                // update the left node
+                left_node = right_node;
             }
         }
         self.struct_filters.push(struct_filter);
@@ -285,17 +198,17 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
         ctx: &OC_PropertyOrLabelsExpressionContext<'i>,
     ) {
         let atom = ctx.oC_Atom().unwrap();
-        // println!("{:?}", ruleNames[atom.get_child(0).unwrap().get_rule_index()] );
+        // log::info!("{:?}", ruleNames[atom.get_child(0).unwrap().get_rule_index()] );
         let node: String;
         if let Some(func) = atom.oC_FunctionInvocation() {
             node = func.get_text();
             // TODO: We can make this UDF more precise
-            println!("Storing UDF: {:?}", node);
+            log::info!("Storing UDF: {:?}", node);
         } else if let Some(var) = atom.oC_Variable() {
             node = var.get_text();
-            println!("Storing var: {:?}", node);
+            log::info!("Storing var: {:?}", node);
         } else {
-            eprintln!("Unsupported expression {:?}", atom.get_text());
+            log::error!("Unsupported expression {:?}", atom.get_text());
             process::exit(1);
         }
         let mut property_str = String::new();
@@ -303,7 +216,7 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
             // this includes the dots
             property_str.push_str(&property.get_text())
         }
-        println!("Property String {:?}", property_str);
+        log::info!("Property String {:?}", property_str);
         self.return_items.push(ReturnItem {
             node,
             property: property_str,
@@ -331,7 +244,7 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
                 udf.node.clone(),
             ));
         } else {
-            eprintln!("More than two return items not supported");
+            log::error!("More than two return items not supported");
             process::exit(1);
         }
     }
