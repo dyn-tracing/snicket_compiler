@@ -3,106 +3,27 @@ extern crate handlebars;
 extern crate input_stream;
 extern crate serde;
 
+use crate::ir::*;
 use crate::parser::*;
 use crate::visitor::CypherVisitor;
 use antlr_rust::tree::ParseTree;
 use antlr_rust::tree::ParseTreeVisitor;
 use antlr_rust::tree::TerminalNode;
+use antlr_rust::tree::Tree;
 use antlr_rust::tree::Visitable;
-use std::process;
-// use antlr_rust::tree::Tree;
-// use antlr_rust::rule_context::CustomRuleContext;
-// use antlr_rust::tree::Tree; // TODO: do we need this import?
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::process;
 use std::rc::Rc;
 
 /***********************************/
-// IR Structs
-/***********************************/
-#[derive(Clone, Debug)]
-pub struct StructuralFilter {
-    vertices: Vec<String>,
-    edges: Vec<(String, String)>,
-    properties: HashMap<String, HashMap<String, String>>, // attribute, value
-}
-impl Default for StructuralFilter {
-    fn default() -> Self {
-        StructuralFilter {
-            vertices: Vec::new(),
-            edges: Vec::new(),
-            properties: HashMap::new(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct AttributeFilter {
-    node: String,
-    property: String,
-    value: String,
-}
-impl Default for AttributeFilter {
-    fn default() -> Self {
-        AttributeFilter {
-            node: String::new(),
-            property: String::new(),
-            value: String::new(),
-        }
-    }
-}
-
-impl AttributeFilter {
-    pub fn insert_values(&mut self, node: String, property: String, value: String) {
-        self.node = node;
-        self.property = property;
-        self.value = value;
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct IrReturn {
-    entity: String,
-    property: String,
-}
-
-impl IrReturn {
-    pub fn new_with_items(entity: String, property: String) -> Self {
-        IrReturn { entity, property }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Aggregate {
-    udf_id: String,
-    entity: String,
-    property: String,
-}
-impl Aggregate {
-    pub fn new_with_items(entity: String, property: String, udf: String) -> Self {
-        Aggregate {
-            udf_id: udf,
-            entity,
-            property,
-        }
-    }
-}
-
-pub struct VisitorResults {
-    struct_filters: Vec<StructuralFilter>,
-    prop_filters: Vec<AttributeFilter>,
-    return_expr: Option<IrReturn>,
-    aggregate: Option<Aggregate>,
-    maps: Vec<String>,
-}
-
-/***********************************/
-// FilterVisitor:  visits tree and fills out structs with information for code gen
+// FilterVisitor:  visits tree and fills out structural and property filters
 /***********************************/
 
 pub struct FilterVisitor {
     struct_filters: Vec<StructuralFilter>,
     prop_filters: Vec<AttributeFilter>,
+    return_items: Vec<IrReturn>,
 }
 
 impl Default for FilterVisitor {
@@ -110,6 +31,7 @@ impl Default for FilterVisitor {
         FilterVisitor {
             struct_filters: Vec::new(),
             prop_filters: Vec::new(),
+            return_items: Vec::new(),
         }
     }
 }
@@ -119,109 +41,134 @@ impl<'i> ParseTreeVisitor<'i, CypherParserContextType> for FilterVisitor {
 }
 
 impl<'i> CypherVisitor<'i> for FilterVisitor {
+    // we do not want to visit returns in this case, ignore that part of the tree
+    // TODO: Apply the visitor directly to the MATCH body instead
+    fn visit_oC_Return(&mut self, _ctx: &OC_ReturnContext<'i>) {}
+
+    fn visit_oC_PropertyOrLabelsExpression(
+        &mut self,
+        ctx: &OC_PropertyOrLabelsExpressionContext<'i>,
+    ) {
+        log::info!("Generating IrReturn");
+        let atom = ctx.oC_Atom().unwrap();
+        let entity: String;
+        if let Some(func) = atom.oC_FunctionInvocation() {
+            entity = func.get_text();
+            // TODO: We can make this UDF more precise
+            log::info!("Storing UDF: {:?}", entity);
+        } else if let Some(var) = atom.oC_Variable() {
+            entity = var.get_text();
+            log::info!("Storing var: {:?}", entity);
+        } else if let Some(var) = atom.oC_Literal() {
+            entity = var.get_text();
+            log::info!("Storing literal: {:?}", entity);
+        } else {
+            log::error!(
+                "Unsupported expression {:?}. Has type {:?}",
+                atom.get_text(),
+                ruleNames[atom.get_child(0).unwrap().get_rule_index()]
+            );
+            process::exit(1);
+        }
+
+        let mut property_str = String::new();
+        for property in ctx.oC_PropertyLookup_all() {
+            // this includes the dots
+            property_str.push_str(&property.get_text())
+        }
+        log::info!("Property String {:?}", property_str);
+        self.return_items.push(IrReturn {
+            entity,
+            property: property_str,
+        })
+    }
+
+    fn visit_oC_ComparisonExpression(&mut self, ctx: &OC_ComparisonExpressionContext<'i>) {
+        // get the left node
+        ctx.oC_AddOrSubtractExpression().unwrap().accept(self);
+        let node = self.return_items[0].entity.clone();
+        let property = self.return_items[0].property.clone();
+        self.return_items.clear();
+
+        // process the right node
+        let value;
+        if let Some(right_clause) = ctx.oC_PartialComparisonExpression(0) {
+            right_clause.accept(self);
+            value = self.return_items[0].entity.clone();
+        } else {
+            log::error!("Expected a right-hand side expression.");
+            process::exit(1);
+        }
+        self.return_items.clear();
+        let attr_filter = AttributeFilter {
+            node,
+            property,
+            value,
+        };
+        self.prop_filters.push(attr_filter);
+    }
+
+    fn visit_oC_PatternElement(&mut self, ctx: &OC_PatternElementContext<'i>) {
+        let mut struct_filter = StructuralFilter::default();
+
+        let mut left_node = ctx.oC_NodePattern().unwrap().oC_Variable().unwrap();
+        struct_filter.vertices.push(left_node.get_text());
+        for pattern_element_i in ctx.oC_PatternElementChain_all() {
+            let relationship = pattern_element_i.oC_RelationshipPattern().unwrap();
+            let node_pattern = pattern_element_i.oC_NodePattern().unwrap();
+
+            let right_node = node_pattern.oC_Variable().unwrap();
+            struct_filter.vertices.push(right_node.get_text());
+
+            // only add right-side edges for now
+            if relationship.oC_RightArrowHead().is_some() {
+                struct_filter
+                    .edges
+                    .push((left_node.get_text(), right_node.get_text()));
+            } else {
+                log::error!("Unsupported direction");
+                process::exit(1);
+            }
+            if let Some(prop) = node_pattern.oC_Properties() {
+                let map_literal = prop.oC_MapLiteral().unwrap();
+                let mut prop_hashmap = HashMap::new();
+                for (j, prop_key_name) in
+                    map_literal.oC_PropertyKeyName_all().into_iter().enumerate()
+                {
+                    let expression = map_literal.oC_Expression(j).unwrap();
+                    prop_hashmap.insert(prop_key_name.get_text(), expression.get_text());
+                }
+                struct_filter
+                    .properties
+                    .insert(right_node.get_text(), prop_hashmap);
+                // update the left node
+                left_node = right_node;
+            }
+        }
+        self.struct_filters.push(struct_filter);
+    }
+
     /// This function visits a match clause.  It extracts the graph inside, complete with any
     /// node attributes, and stores that information in a struct_filter.  It then extracts any information
     /// in the where clause, which pertains to the whole graph, and stores that in an attribute_filter.
     fn visit_oC_Match(&mut self, ctx: &OC_MatchContext<'i>) {
-        self.visit_children(ctx);
-        let pattern = ctx.oC_Pattern().unwrap();
-        let mut struct_filter = StructuralFilter::default();
-
-        pattern.oC_PatternPart_all();
-        for p in pattern.oC_PatternPart_all() {
-            let pattern_element = p
-                .oC_AnonymousPatternPart()
-                .unwrap()
-                .oC_PatternElement()
-                .unwrap();
-            let mut first_node = pattern_element
-                .oC_NodePattern()
-                .unwrap()
-                .oC_Variable()
-                .unwrap()
-                .get_text();
-            struct_filter.vertices.push(first_node.clone());
-            for pattern_element_i in pattern_element.oC_PatternElementChain_all() {
-                let relationship = pattern_element_i.oC_RelationshipPattern().unwrap();
-                let node_pattern = pattern_element_i.oC_NodePattern().unwrap();
-
-                let var = node_pattern.oC_Variable().unwrap().get_text();
-                struct_filter.vertices.push(var.clone());
-
-                if relationship.oC_RightArrowHead().is_some() {
-                    struct_filter.edges.push((first_node.clone(), var.clone()));
-                }
-                first_node = var.clone();
-                let prop = node_pattern.oC_Properties();
-                if prop.is_some() {
-                    let map_literal = prop.clone().unwrap().oC_MapLiteral().unwrap();
-                    let mut prop_hashmap = HashMap::new();
-                    let mut j = 0;
-                    while map_literal.oC_PropertyKeyName(j).is_some()
-                        && map_literal.oC_Expression(j).is_some()
-                    {
-                        let property_key_name = map_literal.oC_PropertyKeyName(j).unwrap();
-                        let expression = map_literal.oC_Expression(j).unwrap();
-                        prop_hashmap.insert(property_key_name.get_text(), expression.get_text());
-                        j += 1;
-                    }
-                    struct_filter
-                        .properties
-                        .insert(first_node.clone(), prop_hashmap);
-                }
-            }
+        for p in ctx.oC_Pattern().unwrap().oC_PatternPart_all() {
+            p.accept(self);
         }
-        self.struct_filters.push(struct_filter);
-
         if let Some(where_clause) = ctx.oC_Where() {
-            let mut prop_filter = AttributeFilter::default();
-            let exp = where_clause.oC_Expression().unwrap();
-            let or = exp.oC_OrExpression().unwrap();
-            // we do not have any xors, etc, in the language.  So we ignore them for now
-            for xor in or.oC_XorExpression_all() {
-                for and in xor.oC_AndExpression_all() {
-                    for not in and.oC_NotExpression_all() {
-                        let comparison = not.oC_ComparisonExpression().unwrap();
-                        let add_sub = comparison.oC_AddOrSubtractExpression().unwrap();
-                        for mod_div in add_sub.oC_MultiplyDivideModuloExpression_all() {
-                            for power in mod_div.oC_PowerOfExpression_all() {
-                                for unary in power.oC_UnaryAddOrSubtractExpression_all() {
-                                    let prop_exp = unary
-                                        .oC_StringListNullOperatorExpression()
-                                        .unwrap()
-                                        .oC_PropertyOrLabelsExpression()
-                                        .unwrap();
-                                    let node = prop_exp.oC_Atom().unwrap().get_text();
-                                    let property =
-                                        prop_exp.oC_PropertyLookup(0).unwrap().get_text();
-                                    for partial in comparison.oC_PartialComparisonExpression_all() {
-                                        let value = partial.oC_AddOrSubtractExpression().unwrap();
-                                        prop_filter.insert_values(
-                                            node.clone(),
-                                            property.clone(),
-                                            value.get_text(),
-                                        );
-                                        self.prop_filters.push(prop_filter.clone());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            where_clause.accept(self);
         }
     }
 }
 
-struct ReturnItem {
-    node: String,
-    property: String,
-}
+/***********************************/
+// ReturnVisitor: Visits tree and fills out the return functions
+/***********************************/
 
 pub struct ReturnVisitor {
     return_expr: Option<IrReturn>,
     aggregate: Option<Aggregate>,
-    return_items: Vec<ReturnItem>,
+    return_items: Vec<IrReturn>,
 }
 
 impl Default for ReturnVisitor {
@@ -243,36 +190,40 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
     // TODO: Apply the visitor directly to the RETURN body instead
     fn visit_oC_Match(&mut self, _ctx: &OC_MatchContext<'i>) {}
 
-    fn visit_oC_FunctionInvocation(&mut self, ctx: &OC_FunctionInvocationContext<'i>) {
-        self.visit_children(ctx)
-    }
-
     fn visit_oC_PropertyOrLabelsExpression(
         &mut self,
         ctx: &OC_PropertyOrLabelsExpressionContext<'i>,
     ) {
+        log::info!("Generating IrReturn");
         let atom = ctx.oC_Atom().unwrap();
-        // println!("{:?}", ruleNames[atom.get_child(0).unwrap().get_rule_index()] );
-        let node: String;
+        let entity: String;
         if let Some(func) = atom.oC_FunctionInvocation() {
-            node = func.get_text();
+            entity = func.get_text();
             // TODO: We can make this UDF more precise
-            println!("Storing UDF: {:?}", node);
+            log::info!("Storing UDF: {:?}", entity);
         } else if let Some(var) = atom.oC_Variable() {
-            node = var.get_text();
-            println!("Storing var: {:?}", node);
+            entity = var.get_text();
+            log::info!("Storing var: {:?}", entity);
+        } else if let Some(var) = atom.oC_Literal() {
+            entity = var.get_text();
+            log::info!("Storing literal: {:?}", entity);
         } else {
-            eprintln!("Unsupported expression {:?}", atom.get_text());
+            log::error!(
+                "Unsupported expression {:?}. Has type {:?}",
+                atom.get_text(),
+                ruleNames[atom.get_child(0).unwrap().get_rule_index()]
+            );
             process::exit(1);
         }
+
         let mut property_str = String::new();
         for property in ctx.oC_PropertyLookup_all() {
             // this includes the dots
             property_str.push_str(&property.get_text())
         }
-        println!("Property String {:?}", property_str);
-        self.return_items.push(ReturnItem {
-            node,
+        log::info!("Property String {:?}", property_str);
+        self.return_items.push(IrReturn {
+            entity,
             property: property_str,
         })
     }
@@ -286,19 +237,19 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
             let return_item = &self.return_items[0];
             // return a value
             self.return_expr = Some(IrReturn::new_with_items(
-                return_item.node.clone(),
+                return_item.entity.clone(),
                 return_item.property.clone(),
             ));
         } else if self.return_items.len() == 2 {
             let return_item = &self.return_items[0];
             let udf = &self.return_items[1];
             self.aggregate = Some(Aggregate::new_with_items(
-                return_item.node.clone(),
+                return_item.entity.clone(),
                 return_item.property.clone(),
-                udf.node.clone(),
+                udf.entity.clone(),
             ));
         } else {
-            eprintln!("More than two return items not supported");
+            log::error!("More than two return items not supported");
             process::exit(1);
         }
     }
@@ -322,33 +273,30 @@ pub fn get_map_functions(mut results: VisitorResults) -> VisitorResults {
     let mut known_properties: HashSet<String> = HashSet::new();
     known_properties.insert(".id".to_string()); // TODO:  are there any other built in properties besides id?
     for struct_filter in &results.struct_filters {
-        for node in struct_filter.properties.keys() {
-            for property in struct_filter.properties[node].keys() {
-                if !known_properties.contains(property.as_str())
-                    && !unknown_properties.contains(property.as_str())
-                {
+        for property_map in struct_filter.properties.values() {
+            for property in property_map.keys() {
+                if !known_properties.contains(property.as_str()) {
                     unknown_properties.insert(property.to_string());
                 }
             }
         }
     }
+
     for attribute_filter in &results.prop_filters {
-        if !known_properties.contains(attribute_filter.property.as_str())
-            && !unknown_properties.contains(attribute_filter.property.as_str())
-        {
+        if !known_properties.contains(&attribute_filter.property) {
             unknown_properties.insert(attribute_filter.property.to_string());
         }
     }
 
-    if results.return_expr.is_some() {
-        let prop: &str = results.return_expr.as_ref().unwrap().property.as_str();
-        if !known_properties.contains(prop) && !unknown_properties.contains(prop) {
+    // aggregate and return expression are exclusive
+    if let Some(ref return_expr) = results.return_expr {
+        let prop = &return_expr.property;
+        if !known_properties.contains(prop) {
             unknown_properties.insert(prop.to_string());
         }
-    }
-    if results.aggregate.is_some() {
-        let prop: &str = results.aggregate.as_ref().unwrap().property.as_str();
-        if !known_properties.contains(prop) && !unknown_properties.contains(prop) {
+    } else if let Some(ref aggregate) = results.aggregate {
+        let prop = &aggregate.property;
+        if !known_properties.contains(prop) {
             unknown_properties.insert(prop.to_string());
         }
     }

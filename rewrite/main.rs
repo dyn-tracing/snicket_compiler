@@ -3,7 +3,6 @@ extern crate dyntracing;
 extern crate handlebars;
 extern crate input_stream;
 extern crate serde;
-
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::token_factory::CommonTokenFactory;
 use antlr_rust::InputStream;
@@ -15,6 +14,14 @@ use std::fs;
 use std::path::Path;
 
 fn main() {
+    // Set up logging
+    let mut builder = env_logger::Builder::from_default_env();
+    // do not want timestamp for now
+    builder.default_format_timestamp(false);
+    // Set default log level to info
+    builder.filter_level(log::LevelFilter::Trace);
+    builder.init();
+
     let bin_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let def_filter_dir = bin_dir.join("cpp_filter/filter.cc");
     let compile_vals = ["sim", "cpp"];
@@ -72,7 +79,7 @@ fn main() {
     let result = parser.oC_Cypher();
     match result {
         Err(e) => {
-            eprintln!("Error parsing query: {:?}", e);
+            log::error!("Error parsing query: {:?}", e);
         }
         Ok(v) => {
             dyntracing::to_ir::visit_result(v);
