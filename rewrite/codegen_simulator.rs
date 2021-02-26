@@ -96,32 +96,27 @@ impl CodeGenSimulator {
         }
     }
 
+    fn collect_envoy_property(&mut self, property: &String) {
+        let block = format!("let prop_str = format!(\"{{whoami}}.{{property}}=={{value}},\",
+                                                      whoami=&self.whoami,
+                                                      property=\"{property}\",
+                                                      value=self.filter_state&[{property}].string_data.as_ref().unwrap().to_string());
+                                            ", property=property);
+        self.request_blocks.push(block);
+    }
+
     fn get_maps(&mut self) {
-        for map in &mut self.ir.maps {
+        for map in &mut self.ir.maps.clone() {
             let mut map_name = map.clone();
-            print!("map is {:?}\n", map);
             if map_name.chars().next().unwrap() == ".".chars().next().unwrap() {
-                map_name.remove(0);
-            }
-            for key in self.udf_table.keys() {
-                print!("key is {:?}\n", key);
-            }
-            for key in self.envoy_properties_to_access_names.keys() {
-                print!("envoy key is {:?}\n", key);
+                 map_name.remove(0);
             }
             if !self.udf_table.contains_key(&map_name) && map_name != "" && !self.envoy_properties_to_access_names.contains_key(&map_name) {
                 panic!("unrecognized UDF");
             }
-            /*
-            // TODO
-            // collect the attribute at the request block
-            if self.envoy_attributes_to_access_name.contains_key(map) {
-                let collect_attr = format!("let {map} = self.filter_state.get({access_name})",
-                                            map = map, access_name = self.envoy_attributes_to_access_name[map]);
-                let insert_attr = format!("if rpc.headers.contains_key(self.whoami)");
-                self.request_blocks.insert(collect_attr);
+            if self.envoy_properties_to_access_names.contains_key(&map_name) {
+                self.collect_envoy_property(&map_name);
             }
-            */
         }
     }
 
