@@ -97,12 +97,19 @@ impl CodeGenSimulator {
     }
 
     fn get_maps(&mut self) {
-        for map in &self.ir.maps {
+        for map in &mut self.ir.maps {
+            let mut map_name = map.clone();
             print!("map is {:?}\n", map);
+            if map_name.chars().next().unwrap() == ".".chars().next().unwrap() {
+                map_name.remove(0);
+            }
             for key in self.udf_table.keys() {
                 print!("key is {:?}\n", key);
             }
-            if !self.udf_table.contains_key(map) && map != "" && !self.envoy_properties_to_access_names.contains_key(map) {
+            for key in self.envoy_properties_to_access_names.keys() {
+                print!("envoy key is {:?}\n", key);
+            }
+            if !self.udf_table.contains_key(&map_name) && map_name != "" && !self.envoy_properties_to_access_names.contains_key(&map_name) {
                 panic!("unrecognized UDF");
             }
             /*
