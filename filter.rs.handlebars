@@ -67,7 +67,7 @@ impl Filter {
     pub fn set_whoami(&mut self) {
         let my_node_wrapped = self
             .filter_state
-            .get("node.metadata.WORKLOAD_NAME");
+            .get("service_name");
         if my_node_wrapped.is_none() {
             print!("WARNING: filter was initialized without envoy properties and thus cannot function");
             return;
@@ -78,10 +78,12 @@ impl Filter {
             .clone()
             .unwrap();
         self.whoami = Some(my_node);
+        print!("set whoami\n")
     }
 
     pub fn add_myself_to_path(&mut self, x: &mut Rpc) -> String {
         if !x.headers.contains_key("path") {
+            if self.whoami.is_none() { print!("WHAT\n\n\n\n"); }
             x.headers.insert(String::from("path"), self.whoami.as_ref().unwrap().clone());
             x.headers.get_mut("path").unwrap().push_str(",");
         }
