@@ -136,8 +136,7 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
                     map_literal.oC_PropertyKeyName_all().into_iter().enumerate()
                 {
                     let expression = map_literal.oC_Expression(j).unwrap();
-                    let mut prop_name: String = prop_key_name.get_text();
-                    prop_hashmap.insert(prop_name, expression.get_text());
+                    prop_hashmap.insert(prop_key_name.get_text(), expression.get_text());
                 }
                 struct_filter
                     .properties

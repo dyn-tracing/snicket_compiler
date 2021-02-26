@@ -97,25 +97,44 @@ impl CodeGenSimulator {
     }
 
     fn collect_envoy_property(&mut self, property: &String) {
-        let block = format!("let prop_str = format!(\"{{whoami}}.{{property}}=={{value}},\",
-                                                      whoami=&self.whoami,
+        let get_prop_block = format!("prop_str = format!(\"{{whoami}}.{{property}}=={{value}},\",
+                                                      whoami=&self.whoami.as_ref().unwrap(),
                                                       property=\"{property}\",
-                                                      value=self.filter_state&[{property}].string_data.as_ref().unwrap().to_string());
+                                                      value=self.filter_state[\"{property}\"].string_data.as_ref().unwrap().to_string());
                                             ", property=property);
-        self.request_blocks.push(block);
+        let insert_hdr_block = format!("
+        if x.headers.contains_key(\"properties\") {{
+            if !x.headers[\"properties\"].contains(&prop_str) {{ // don't add our properties if they have already been added
+                x.headers.get_mut(&\"properties\".to_string()).unwrap().push_str(&prop_str);
+            }}
+        }}
+        else {{
+            x.headers.insert(\"properties\".to_string(), prop_str);
+        }}
+        ");
+        self.request_blocks.push(get_prop_block);
+        self.request_blocks.push(insert_hdr_block);
     }
 
     fn get_maps(&mut self) {
+        print!("maps len is {:?}\n", self.ir.maps.len());
         for map in &mut self.ir.maps.clone() {
+            print!("map : {:?}\n", map);
             let mut map_name = map.clone();
+            let mut has_period = false;
             if map_name.chars().next().unwrap() == ".".chars().next().unwrap() {
                  map_name.remove(0);
+                 has_period = true;
+                 print!("has period is true");
             }
-            if !self.udf_table.contains_key(&map_name) && map_name != "" && !self.envoy_properties_to_access_names.contains_key(&map_name) {
-                panic!("unrecognized UDF");
-            }
-            if self.envoy_properties_to_access_names.contains_key(&map_name) {
-                self.collect_envoy_property(&map_name);
+            if ((has_period && !self.ir.maps.contains(&map_name)) || (!has_period)) { // we might have duplicates bc some have preceding periods
+                if !self.udf_table.contains_key(&map_name) && map_name != "" && !self.envoy_properties_to_access_names.contains_key(&map_name) {
+                    panic!("unrecognized UDF");
+                }
+                if self.envoy_properties_to_access_names.contains_key(&map_name) {
+                    self.collect_envoy_property(&map_name);
+                } 
+                // TODO: deal with UDFs
             }
         }
     }

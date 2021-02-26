@@ -2,7 +2,7 @@
 // IR Structs
 /***********************************/
 use std::collections::HashMap;
-use serde::{Serialize, Serializer};
+use serde::Serialize;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct StructuralFilter {
