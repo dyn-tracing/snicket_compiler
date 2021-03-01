@@ -1,9 +1,10 @@
 /***********************************/
 // IR Structs
 /***********************************/
+use serde::Serialize;
 use std::collections::HashMap;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct StructuralFilter {
     pub vertices: Vec<String>,
     pub edges: Vec<(String, String)>,
@@ -19,7 +20,7 @@ impl Default for StructuralFilter {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct AttributeFilter {
     pub node: String,
     pub property: String,
@@ -43,7 +44,7 @@ impl AttributeFilter {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct IrReturn {
     pub entity: String,
     pub property: String,
@@ -55,6 +56,7 @@ impl IrReturn {
     }
 }
 
+#[derive(Clone, Debug, Serialize)]
 pub struct VisitorResults {
     pub struct_filters: Vec<StructuralFilter>,
     pub prop_filters: Vec<AttributeFilter>,
@@ -63,7 +65,7 @@ pub struct VisitorResults {
     pub maps: Vec<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Aggregate {
     pub udf_id: String,
     pub entity: String,
