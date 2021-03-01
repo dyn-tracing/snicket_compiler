@@ -125,7 +125,7 @@ impl Filter {
         return vec!(x);
     }
 
-    pub fn on_incoming_responses(&mut self, mut x: Rpc) -> Vec<Rpc> {
+    pub fn on_outgoing_responses(&mut self, mut x: Rpc) -> Vec<Rpc> {
         let path = self.add_myself_to_path(&mut x);
 
         // at most, we return two rpcs:  one to continue on and one to storage
@@ -172,7 +172,7 @@ impl Filter {
         return vec!(x);
     }
 
-    pub fn on_outgoing_responses(&mut self, mut x: Rpc) -> Vec<Rpc> {
+    pub fn on_incoming_responses(&mut self, mut x: Rpc) -> Vec<Rpc> {
         return vec!(x);
     }
 
