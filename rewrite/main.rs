@@ -7,15 +7,15 @@ use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::token_factory::CommonTokenFactory;
 use antlr_rust::InputStream;
 use clap::{App, Arg};
+use dyntracing::codegen_simulator;
 use dyntracing::lexer::CypherLexer;
 use dyntracing::parser::CypherParser;
-use dyntracing::codegen_simulator;
 use handlebars::Handlebars;
 
 use std::fs;
 use std::fs::File;
-use std::path::{Path, PathBuf};
 use std::io::prelude::*;
+use std::path::{Path, PathBuf};
 
 /* Generates code using templates formatted by handlebars
  * (see https://docs.rs/handlebars/3.5.2/handlebars/)
@@ -40,7 +40,7 @@ fn write_to_handlebars(
     let mut template_str = String::new();
     match template_file.read_to_string(&mut template_str) {
         Err(msg) => panic!("Failed to read {}: {}", display, msg),
-        Ok(_) => println!("Successfully read {}", display),
+        Ok(_) => log::info!("Successfully read {}", display),
     }
 
     let handlebars = Handlebars::new();
@@ -49,7 +49,7 @@ fn write_to_handlebars(
         .render_template(&template_str, &code_gen)
         .expect("handlebar render failed");
 
-    print!("writing to {:?}\n", output_filename);
+    log::info!("Writing output to: {:?}", output_filename);
     let mut file = File::create(output_filename).expect("file create failed.");
     file.write_all(output.as_bytes()).expect("write failed");
 }
@@ -111,8 +111,10 @@ fn main() {
 
     let mut udfs = Vec::new();
     if let Some(udf_file) = matches.value_of("udf") {
-        udfs.push(std::fs::read_to_string(udf_file)
-            .unwrap_or_else(|_| panic!("failed to read file {}", udf_file)));
+        udfs.push(
+            std::fs::read_to_string(udf_file)
+                .unwrap_or_else(|_| panic!("failed to read file {}", udf_file)),
+        );
     }
 
     let tf = CommonTokenFactory::default();
@@ -130,15 +132,19 @@ fn main() {
             log::error!("Error parsing query: {:?}", e);
         }
         Ok(v) => {
-           let visitor_results = dyntracing::to_ir::visit_result(v);
+            let visitor_results = dyntracing::to_ir::visit_result(v);
             match matches.value_of("compilation_mode").unwrap() {
                 "sim" => {
                     // TODO: support multiple UDF files
-                    let codegen_object = codegen_simulator::CodeGenSimulator::generate_code_blocks(visitor_results, udfs);
-                    write_to_handlebars(&codegen_object,
-                                        bin_dir.join("filter.rs.handlebars"),
-                                        PathBuf::from(matches.value_of("output").unwrap()));
-
+                    let codegen_object = codegen_simulator::CodeGenSimulator::generate_code_blocks(
+                        visitor_results,
+                        udfs,
+                    );
+                    write_to_handlebars(
+                        &codegen_object,
+                        bin_dir.join("filter.rs.handlebars"),
+                        PathBuf::from(matches.value_of("output").unwrap()),
+                    );
                 }
                 "cpp" => {
                     // TODO: not yet implemented
