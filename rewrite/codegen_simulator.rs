@@ -102,8 +102,8 @@ impl CodeGenSimulator {
         let get_prop_block = format!("prop_str = format!(\"{{whoami}}.{{property}}=={{value}},\",
                                                       whoami=&self.whoami.as_ref().unwrap(),
                                                       property=\"{property}\",
-                                                      value=self.filter_state[\"{property}\"].string_data.as_ref().unwrap().to_string());
-                                            ", property=property);
+                                                      value=self.filter_state[\"{envoy_property}\"].string_data.as_ref().unwrap().to_string());
+                                            ", property=property, envoy_property=self.envoy_properties_to_access_names[property]);
         let insert_hdr_block = format!("
         if x.headers.contains_key(\"properties\") {{
             if !x.headers[\"properties\"].contains(&prop_str) {{ // don't add our properties if they have already been added
@@ -119,15 +119,12 @@ impl CodeGenSimulator {
     }
 
     fn get_maps(&mut self) {
-        print!("maps len is {:?}\n", self.ir.maps.len());
         for map in &mut self.ir.maps.clone() {
-            print!("map : {:?}\n", map);
             let mut map_name = map.clone();
             let mut has_period = false;
             if map_name.chars().next().unwrap() == ".".chars().next().unwrap() {
                  map_name.remove(0);
                  has_period = true;
-                 print!("has period is true");
             }
             if (has_period && !self.ir.maps.contains(&map_name)) || !has_period { // we might have duplicates bc some have preceding periods
                 if !self.udf_table.contains_key(&map_name) && map_name != "" && !self.envoy_properties_to_access_names.contains_key(&map_name) {
@@ -185,7 +182,37 @@ impl CodeGenSimulator {
     }
 
     fn make_return_block(&mut self) {
-        // TODO
+        if self.ir.return_expr.is_none() { return; }
+        let entity = self.ir.return_expr.as_ref().unwrap().clone().entity;
+        let mut property = self.ir.return_expr.as_ref().unwrap().clone().property;
+        if property.chars().next().unwrap() == ".".chars().next().unwrap() {
+            property.remove(0);
+        }
+
+        if entity == "trace" {
+            // TODO
+        }
+        else {
+            let num_struct_filters = self.ir.struct_filters.len();
+            if !self.ir.struct_filters[num_struct_filters-1].vertices.contains(&entity) {
+                panic!("Unknown entity in return expression");
+            }
+
+            let ret_block = format!(
+               "let node_ptr = graph_utils::get_node_with_id(&self.target_graph.as_ref().unwrap(), \"{node_id}\".to_string());
+               if node_ptr.is_none() {{
+                   print!(\"WARNING Node {node_id} not found\");
+                   return vec!(x);
+               }}
+               let trace_node_index = NodeIndex::new(m[node_ptr.unwrap().index()]);
+               let mut ret_{prop} = &trace_graph.node_weight(trace_node_index).unwrap().1[ \"{prop}\" ];\n
+               value = ret_{prop}.to_string();\n",
+                   node_id = entity,
+                   prop = property
+                );
+
+            self.response_blocks.push(ret_block);
+        }
     }
 
     fn make_aggr_block(&mut self) {

@@ -67,14 +67,15 @@ impl Filter {
     }
 
     pub fn init_filter(&mut self) {
-        if self.whoami.is_none() { self.set_whoami(); }
+        if self.whoami.is_none() { self.set_whoami(); assert!(self.whoami.is_some()); }
         if self.target_graph.is_none() { self.create_target_graph(); }
+        assert!(self.whoami.is_some());
     }
 
     pub fn set_whoami(&mut self) {
         let my_node_wrapped = self
             .filter_state
-            .get("service_name");
+            .get("node.metadata.WORKLOAD_NAME");
         if my_node_wrapped.is_none() {
             print!("WARNING: filter was initialized without envoy properties and thus cannot function");
             return;
@@ -85,11 +86,11 @@ impl Filter {
             .clone()
             .unwrap();
         self.whoami = Some(my_node);
+        assert!(self.whoami.is_some());
     }
 
     pub fn add_myself_to_path(&mut self, x: &mut Rpc) -> String {
         if !x.headers.contains_key("path") {
-            if self.whoami.is_none() { print!("WHAT\n\n\n\n"); }
             x.headers.insert(String::from("path"), self.whoami.as_ref().unwrap().clone());
             x.headers.get_mut("path").unwrap().push_str(",");
         }
@@ -106,11 +107,15 @@ impl Filter {
 
     pub fn create_trace_graph(&mut self, mut mod_rpc: Rpc) -> Graph<(String, HashMap<String, String>), String> {
         let trace;
+        let mut path = mod_rpc.headers["path"].clone();
+        if path.chars().last().unwrap() == ",".chars().next().unwrap() {
+            path.remove(path.len()-1); // remove trailing comma
+        }
         if mod_rpc.headers.contains_key(&"properties".to_string()) {
-            trace = graph_utils::generate_trace_graph_from_headers(mod_rpc.headers["path"].clone(), mod_rpc.headers.get_mut(&"properties".to_string()).unwrap().to_string());
+            trace = graph_utils::generate_trace_graph_from_headers(path, mod_rpc.headers.get_mut(&"properties".to_string()).unwrap().to_string());
         }
         else {
-            trace = graph_utils::generate_trace_graph_from_headers(mod_rpc.headers["path"].clone(), String::new());
+            trace = graph_utils::generate_trace_graph_from_headers(path, String::new());
         }
         return trace;
     }
@@ -127,7 +132,7 @@ impl Filter {
         let mut original_rpc = x.clone();
         let mut storage_rpc : Option<Rpc> = None;
 
-        let trace_graph = self.create_trace_graph(x.clone());
+        let mut trace_graph = self.create_trace_graph(x.clone());
         let mapping = isomorphic_subgraph_matching(
             self.target_graph.as_ref().unwrap(),
             &trace_graph,
@@ -141,7 +146,7 @@ impl Filter {
         );
         if !mapping.is_none() {
             let m = mapping.unwrap();
-            let mut value = "0"; // dummy value
+            let mut value = "0".to_string(); // dummy value
             // TODO: do return stuff
             {{#each response_blocks}}{{{this}}} {{/each}}
             let mut result_rpc = Rpc::new_rpc(&value);
@@ -150,6 +155,9 @@ impl Filter {
             result_rpc
                 .headers
                 .insert("dest".to_string(), dest);
+            result_rpc
+                .headers
+                .insert("direction".to_string(), "request".to_string());
             result_rpc.headers.insert("src".to_string(), self.whoami.clone().unwrap());
             storage_rpc = Some(result_rpc);
             return vec!(x, storage_rpc.unwrap());
@@ -172,6 +180,7 @@ impl Filter {
     #[no_mangle]
     pub fn execute(&mut self, x: &Rpc) -> Vec<Rpc> {
         self.init_filter();
+        assert!(self.whoami.is_some());
         match x.headers["direction"].as_str() {
             "request" => {
                  match x.headers["location"].as_str() {
