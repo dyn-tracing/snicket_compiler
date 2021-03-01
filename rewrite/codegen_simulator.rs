@@ -39,6 +39,7 @@ pub struct CodeGenSimulator {
     ir: VisitorResults,  // the IR, as defined in to_ir.rs
     request_blocks: Vec<String>,  // code blocks to be used in the handlebars
     response_blocks: Vec<String>,  // code blocks to be used in the handlebars
+    target_blocks: Vec<String>,
     udf_table: IndexMap<String, Udf>, // where we store udf implementations
     envoy_properties_to_access_names: HashMap<String, String>
 }
@@ -49,6 +50,7 @@ impl CodeGenSimulator {
             ir,
             request_blocks: Vec::new(),
             response_blocks: Vec::new(),
+            target_blocks: Vec::new(),
             udf_table: IndexMap::default(),
             envoy_properties_to_access_names: HashMap::new(),
         };
@@ -127,7 +129,7 @@ impl CodeGenSimulator {
                  has_period = true;
                  print!("has period is true");
             }
-            if ((has_period && !self.ir.maps.contains(&map_name)) || (!has_period)) { // we might have duplicates bc some have preceding periods
+            if (has_period && !self.ir.maps.contains(&map_name)) || !has_period { // we might have duplicates bc some have preceding periods
                 if !self.udf_table.contains_key(&map_name) && map_name != "" && !self.envoy_properties_to_access_names.contains_key(&map_name) {
                     panic!("unrecognized UDF");
                 }
@@ -141,8 +143,40 @@ impl CodeGenSimulator {
 
     fn make_struct_filter_blocks(&mut self) {
         for struct_filter in &self.ir.struct_filters {
-            
+            self.target_blocks.push(format!("let vertices = vec!( "));
+            for vertex in &struct_filter.vertices {
+                self.target_blocks.push(format!("\"{vertex}\".to_string(),", vertex=vertex));
+            }
+            self.target_blocks.push(format!(" ); "));
 
+            self.target_blocks.push(format!("let edges = vec!( "));
+            for edge in &struct_filter.edges {
+                self.target_blocks.push(format!(" (\"{edge1}\".to_string(), \"{edge2}\".to_string() ), ", edge1=edge.0, edge2=edge.1));
+
+            }
+            self.target_blocks.push(format!(" ); "));
+
+            let ids_to_prop_block = format!("let mut ids_to_properties: HashMap<String, HashMap<String, String>> = HashMap::new();\n");
+            self.target_blocks.push(ids_to_prop_block);
+
+
+            for vertex in &struct_filter.vertices {
+                let ids_to_properties_hashmap_init = format!("ids_to_properties.insert(\"{node}\".to_string(), HashMap::new());\n", node=vertex);
+                self.target_blocks.push(ids_to_properties_hashmap_init);
+            }
+            for node in struct_filter.properties.keys() {
+                let get_hashmap = format!("let mut {node}_hashmap = ids_to_properties.get_mut(\"{node}\").unwrap();\n", node=node);
+                self.target_blocks.push(get_hashmap);
+                for property_name in struct_filter.properties[node].keys() {
+                    let fill_in_hashmap = format!("{node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
+                                                   node=node,
+                                                   property_name=property_name,
+                                                   property_value=struct_filter.properties[node][property_name]);
+                    self.target_blocks.push(fill_in_hashmap);
+                }
+            }
+            let make_graph = format!("self.target_graph = Some(graph_utils::generate_target_graph(vertices, edges, ids_to_properties));\n");
+            self.target_blocks.push(make_graph);
         }
     }
 
