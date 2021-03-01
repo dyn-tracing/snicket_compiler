@@ -127,32 +127,29 @@ fn main() {
     let mut parser = CypherParser::new(token_source);
     let result = parser.oC_Cypher();
 
-    match result {
-        Err(e) => {
-            log::error!("Error parsing query: {:?}", e);
+    if let Err(e) = result {
+        log::error!("Error parsing query: {:?}", e);
+        return;
+    }
+    let visitor_results = dyntracing::to_ir::visit_result(result.unwrap());
+    match matches.value_of("compilation_mode").unwrap() {
+        "sim" => {
+            // TODO: support multiple UDF files
+            let codegen_object = codegen_simulator::CodeGenSimulator::generate_code_blocks(
+                visitor_results,
+                udfs,
+            );
+            write_to_handlebars(
+                &codegen_object,
+                bin_dir.join("filter.rs.handlebars"),
+                PathBuf::from(matches.value_of("output").unwrap()),
+            );
         }
-        Ok(v) => {
-            let visitor_results = dyntracing::to_ir::visit_result(v);
-            match matches.value_of("compilation_mode").unwrap() {
-                "sim" => {
-                    // TODO: support multiple UDF files
-                    let codegen_object = codegen_simulator::CodeGenSimulator::generate_code_blocks(
-                        visitor_results,
-                        udfs,
-                    );
-                    write_to_handlebars(
-                        &codegen_object,
-                        bin_dir.join("filter.rs.handlebars"),
-                        PathBuf::from(matches.value_of("output").unwrap()),
-                    );
-                }
-                "cpp" => {
-                    // TODO: not yet implemented
-                }
-                _ => {
-                    panic!("That is not a valid compilation mode.  Valid modes are:  sim, cpp");
-                }
-            }
+        "cpp" => {
+            // TODO: not yet implemented
+        }
+        _ => {
+            panic!("That is not a valid compilation mode.  Valid modes are:  sim, cpp");
         }
     }
 }
