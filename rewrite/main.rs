@@ -135,10 +135,8 @@ fn main() {
     match matches.value_of("compilation_mode").unwrap() {
         "sim" => {
             // TODO: support multiple UDF files
-            let codegen_object = codegen_simulator::CodeGenSimulator::generate_code_blocks(
-                visitor_results,
-                udfs,
-            );
+            let codegen_object =
+                codegen_simulator::CodeGenSimulator::generate_code_blocks(visitor_results, udfs);
             write_to_handlebars(
                 &codegen_object,
                 bin_dir.join("filter.rs.handlebars"),
