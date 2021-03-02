@@ -35,11 +35,11 @@ struct Udf {
 /********************************/
 #[derive(Serialize)]
 pub struct CodeGenSimulator {
-    ir: VisitorResults,           // the IR, as defined in to_ir.rs
-    request_blocks: Vec<String>,  // code blocks to be used in the handlebars in incoming requests
+    ir: VisitorResults,               // the IR, as defined in to_ir.rs
+    request_blocks: Vec<String>, // code blocks to be used in the handlebars in incoming requests
     response_blocks: Vec<String>, // code blocks to be used in the handlebars in outgoing responses, after matching
     target_blocks: Vec<String>,   // code blocks to create target graph
-    udf_blocks: Vec<String>,      // code blocks to be used in the handlebars on outgoing responses, to compute UDF before matching
+    udf_blocks: Vec<String>, // code blocks to be used in the handlebars on outgoing responses, to compute UDF before matching
     udf_table: IndexMap<String, Udf>, // where we store udf implementations
     envoy_properties_to_access_names: HashMap<String, String>,
 }
@@ -202,14 +202,16 @@ impl CodeGenSimulator {
 
     fn make_struct_filter_blocks(&mut self) {
         for struct_filter in &self.ir.struct_filters {
-            self.target_blocks.push(" let vertices = vec!( ".to_string());
+            self.target_blocks
+                .push(" let vertices = vec!( ".to_string());
             for vertex in &struct_filter.vertices {
                 self.target_blocks
                     .push(format!("\"{vertex}\".to_string(),", vertex = vertex));
             }
             self.target_blocks.push(" );\n".to_string());
 
-            self.target_blocks.push("        let edges = vec!( ".to_string());
+            self.target_blocks
+                .push("        let edges = vec!( ".to_string());
             for edge in &struct_filter.edges {
                 self.target_blocks.push(format!(
                     " (\"{edge1}\".to_string(), \"{edge2}\".to_string() ), ",
