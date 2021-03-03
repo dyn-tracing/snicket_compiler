@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use petgraph::algo::isomorphic_subgraph_matching;
 use petgraph::graph::NodeIndex;
 use petgraph::Graph;
+use petgraph::Outgoing;
 use graph_utils::graph_utils;
 
 pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
@@ -19,7 +20,6 @@ pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
 pub struct State {
     pub type_of_state: Option<String>,
     pub string_data: Option<String>,
-    {{#each udf_table}}pub udf_{{this.id}}: Option<{{this.struct_name}}>,{{/each}}
 }
 
 impl State {
@@ -27,7 +27,6 @@ impl State {
         State {
             type_of_state: None,
             string_data: None,
-            {{#each udfs_table}}udf_{{this.id}}:  None, {{/each}}
         }
     }
 
@@ -35,7 +34,6 @@ impl State {
         State {
             type_of_state: Some(String::from("String")),
             string_data: Some(str_data),
-            {{#each udf_table}}udf_{{this.id}}:  None, {{/each}}
         }
     }
 }
@@ -92,11 +90,10 @@ impl Filter {
     pub fn add_myself_to_path(&mut self, x: &mut Rpc) -> String {
         if !x.headers.contains_key("path") {
             x.headers.insert(String::from("path"), self.whoami.as_ref().unwrap().clone());
-            x.headers.get_mut("path").unwrap().push_str(",");
         }
         else {
-            x.headers.get_mut("path").unwrap().push_str(&self.whoami.as_ref().unwrap());
             x.headers.get_mut("path").unwrap().push_str(",");
+            x.headers.get_mut("path").unwrap().push_str(&self.whoami.as_ref().unwrap());
         }
         return x.headers["path"].clone();
     }
@@ -108,11 +105,10 @@ impl Filter {
     pub fn create_trace_graph(&mut self, mut mod_rpc: Rpc) -> Graph<(String, HashMap<String, String>), String> {
         let trace;
         let mut path = mod_rpc.headers["path"].clone();
-        if path.chars().last().unwrap() == ",".chars().next().unwrap() {
-            path.remove(path.len()-1); // remove trailing comma
-        }
         if mod_rpc.headers.contains_key(&"properties".to_string()) {
-            trace = graph_utils::generate_trace_graph_from_headers(path, mod_rpc.headers.get_mut(&"properties".to_string()).unwrap().to_string());
+            trace = graph_utils::generate_trace_graph_from_headers(
+                        path, 
+                        mod_rpc.headers.get_mut(&"properties".to_string()).unwrap().to_string());
         }
         else {
             trace = graph_utils::generate_trace_graph_from_headers(path, String::new());
@@ -131,6 +127,9 @@ impl Filter {
         // at most, we return two rpcs:  one to continue on and one to storage
         let mut original_rpc = x.clone();
         let mut storage_rpc : Option<Rpc> = None;
+
+        // calculate UDFs and store result
+        {{#each udf_blocks}}{{{this}}} {{/each}}
 
         let mut trace_graph = self.create_trace_graph(x.clone());
         let mapping = isomorphic_subgraph_matching(
