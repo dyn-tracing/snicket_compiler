@@ -103,7 +103,7 @@ impl CodeGenSimulator {
     }
 
     fn collect_envoy_property(&mut self, property: String) {
-        let get_prop_block = format!("prop_str = format!(\"{{whoami}}.{{property}}=={{value}},\",
+        let get_prop_block = format!("prop_str = format!(\"{{whoami}}.{{property}}=={{value}}\",
                                                       whoami=&self.whoami.as_ref().unwrap(),
                                                       property=\"{property}\",
                                                       value=self.filter_state[\"{envoy_property}\"].string_data.as_ref().unwrap().to_string());
@@ -111,6 +111,7 @@ impl CodeGenSimulator {
         let insert_hdr_block = "
         if x.headers.contains_key(\"properties\") {
             if !x.headers[\"properties\"].contains(&prop_str) { // don't add our properties if they have already been added
+                x.headers.get_mut(&\"properties\".to_string()).unwrap().push_str(\",\");
                 x.headers.get_mut(&\"properties\".to_string()).unwrap().push_str(&prop_str);
             }
         }
@@ -152,12 +153,13 @@ impl CodeGenSimulator {
         );
         self.udf_blocks.push(get_udf_vals);
 
-        let save_udf_vals = format!("let {udf_id}_str = format!(\"{{whoami}}.{{udf_id}}=={{value}},\",
+        let save_udf_vals = format!("let {udf_id}_str = format!(\"{{whoami}}.{{udf_id}}=={{value}}\",
                                                       whoami=&self.whoami.as_ref().unwrap(),
                                                       udf_id=\"{udf_id}\",
                                                       value=my_{udf_id}_value);
         if x.headers.contains_key(\"properties\") {{
             if !x.headers[\"properties\"].contains(&{udf_id}_str) {{ // don't add a udf property twice
+                x.headers.get_mut(&\"properties\".to_string()).unwrap().push_str(\",\");
                 x.headers.get_mut(&\"properties\".to_string()).unwrap().push_str(&{udf_id}_str);
             }}
         }}
