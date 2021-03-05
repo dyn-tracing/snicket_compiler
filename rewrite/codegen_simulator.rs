@@ -42,6 +42,7 @@ pub struct CodeGenSimulator {
     udf_blocks: Vec<String>, // code blocks to be used in the handlebars on outgoing responses, to compute UDF before matching
     udf_table: IndexMap<String, Udf>, // where we store udf implementations
     envoy_properties_to_access_names: HashMap<String, String>,
+    collected_properties: Vec<String>, // all the properties we collect
 }
 
 impl CodeGenSimulator {
@@ -54,6 +55,7 @@ impl CodeGenSimulator {
             udf_blocks: Vec::new(),
             udf_table: IndexMap::default(),
             envoy_properties_to_access_names: HashMap::new(),
+            collected_properties: Vec::new(),
         };
         for udf in udfs {
             to_return.parse_udf(udf);
@@ -108,17 +110,17 @@ impl CodeGenSimulator {
                                                       property=\"{property}\",
                                                       value=self.filter_state[\"{envoy_property}\"].string_data.as_ref().unwrap().to_string());
                                             ", property=property, envoy_property=self.envoy_properties_to_access_names[&property]);
-        let insert_hdr_block = "
-        if x.headers.contains_key(\"properties\") {
-            if !x.headers[\"properties\"].contains(&prop_str) { // don't add our properties if they have already been added
-                x.headers.get_mut(&\"properties\".to_string()).unwrap().push_str(\",\");
-                x.headers.get_mut(&\"properties\".to_string()).unwrap().push_str(&prop_str);
-            }
-        }
-        else {
-            x.headers.insert(\"properties\".to_string(), prop_str);
-        }
-        ".to_string();
+        let insert_hdr_block = format!("
+        if x.headers.contains_key(\"properties_{property}\") {{
+            if !x.headers[\"properties_{property}\"].contains(&prop_str) {{ // don't add our properties if they have already been added
+                x.headers.get_mut(&\"properties_{property}\".to_string()).unwrap().push_str(\",\");
+                x.headers.get_mut(&\"properties_{property}\".to_string()).unwrap().push_str(&prop_str);
+            }}
+        }}
+        else {{
+            x.headers.insert(\"properties_{property}\".to_string(), prop_str);
+        }}
+        ", property=property);
         self.request_blocks.push(get_prop_block);
         self.request_blocks.push(insert_hdr_block);
     }
@@ -157,14 +159,14 @@ impl CodeGenSimulator {
                                                       whoami=&self.whoami.as_ref().unwrap(),
                                                       udf_id=\"{udf_id}\",
                                                       value=my_{udf_id}_value);
-        if x.headers.contains_key(\"properties\") {{
-            if !x.headers[\"properties\"].contains(&{udf_id}_str) {{ // don't add a udf property twice
-                x.headers.get_mut(&\"properties\".to_string()).unwrap().push_str(\",\");
-                x.headers.get_mut(&\"properties\".to_string()).unwrap().push_str(&{udf_id}_str);
+        if x.headers.contains_key(\"properties_{udf_id}\") {{
+            if !x.headers[\"properties_{udf_id}\"].contains(&{udf_id}_str) {{ // don't add a udf property twice
+                x.headers.get_mut(&\"properties_{udf_id}\".to_string()).unwrap().push_str(\",\");
+                x.headers.get_mut(&\"properties_{udf_id}\".to_string()).unwrap().push_str(&{udf_id}_str);
             }}
         }}
         else {{
-            x.headers.insert(\"properties\".to_string(), {udf_id}_str);
+            x.headers.insert(\"properties_{udf_id}\".to_string(), {udf_id}_str);
         }}
                                      
         ", udf_id=udf_id);
@@ -190,6 +192,7 @@ impl CodeGenSimulator {
                 {
                     panic!("unrecognized UDF");
                 }
+                self.collected_properties.push(map_name.clone());
                 if self
                     .envoy_properties_to_access_names
                     .contains_key(&map_name)

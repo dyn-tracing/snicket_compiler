@@ -43,7 +43,8 @@ pub struct Filter {
     pub whoami: Option<String>,
     pub target_graph: Option<Graph<(String, HashMap<String, String>), String>>,
     pub filter_state: HashMap<String, State>,
-    internal_rpc_headers: HashMap<u64, Vec<HashMap<String, String>>>, // mapping from trace ID to headers
+    pub envoy_shared_data: HashMap<String, String>,
+    pub collected_properties: Vec<String>, //properties to collect
 }
 
 impl Filter {
@@ -53,7 +54,8 @@ impl Filter {
             whoami: None,
             target_graph: None,
             filter_state: HashMap::new(),
-            internal_rpc_headers: HashMap::<u64, Vec<HashMap<String, String>>>::new(),
+            envoy_shared_data: HashMap::<String, String>::new(),
+            collected_properties: vec!( {{#each collected_properties}}"{{{this}}}".to_string(), {{/each}} ),
          }))
     }
 
@@ -63,12 +65,18 @@ impl Filter {
         for key in string_data.keys() {
             hash.insert(key.clone(), State::new_with_str(string_data[key].clone()));
         }
-        Box::into_raw(Box::new(Filter { whoami: None, target_graph: None, filter_state: hash, internal_rpc_headers: HashMap::new() }))
-    }
+        Box::into_raw(Box::new(Filter {
+                                   whoami: None,
+                                   target_graph: None,
+                                   filter_state: hash,
+                                   envoy_shared_data: HashMap::new(),
+                                   collected_properties: vec!({{#each collected_properties}}"{{{this}}}".to_string(), {{/each}} ),
+                               }))
+     }
 
     pub fn init_filter(&mut self) {
         if self.whoami.is_none() { self.set_whoami(); assert!(self.whoami.is_some()); }
-        if self.target_graph.is_none() { self.create_target_graph(); }
+        if self.target_graph.is_none() { self.create_target_graph(); } 
         assert!(self.whoami.is_some());
     }
 
@@ -89,56 +97,72 @@ impl Filter {
         assert!(self.whoami.is_some());
     }
 
-    pub fn merge_headers(&mut self, headers: Vec<HashMap<String, String>>, new_rpc_headers: HashMap<String, String>) -> HashMap<String, String> {
-        if headers.len() == 0 {
-            return new_rpc_headers;
-        }
-        let mut to_return = HashMap::new();
-        for key in new_rpc_headers.keys() {
-            // for all routing-related keys, don't change them
-            if key == "location" || key == "direction" || key == "src" || key == "dest" {
-                to_return.insert(key.to_string(), new_rpc_headers[key].clone());
+    pub fn store_headers(&mut self, x: Rpc) {
+        // store path as well as properties
+        let prop_str = format!("{uid}_properties_path", uid=x.uid);
+        if x.headers.contains_key("path") {
+            if self.envoy_shared_data.contains_key(&prop_str) {
+                self.envoy_shared_data.get_mut(&prop_str).unwrap().push_str(",");
+                self.envoy_shared_data.get_mut(&prop_str).unwrap().push_str(&x.headers["properties_path"]);
+            }
+            else {
+                self.envoy_shared_data.insert(prop_str, x.headers["properties_path"].clone());
             }
         }
-        for header in headers {
-            for key in header.keys() {
-                // for properties, we get rid of duplicates
-                if key != "location"
-                          && key != "direction" 
-                          && key != "src" 
-                          && key != "dest" 
-                          { // we don't want to edit these
-                    if !to_return.contains_key(key) { to_return.insert(key.to_string(), header[key].clone()); }
-                    else {
-                        let cur_props : Vec<&str> = to_return[key].split(",").collect();
-                        let new_props : Vec<&str> = header[key].split(",").collect();
-                        let mut to_add = Vec::new();
-                        for new_prop in new_props {
-                            if !cur_props.contains(&new_prop) {
-                                to_add.push(new_prop);
-                            }
-                        }
-                        for new_prop in to_add { 
-                            to_return.get_mut(key).unwrap().push_str(",");
-                            to_return.get_mut(key).unwrap().push_str(new_prop);
-                            print!("merging {0} with {1}\n", new_prop, to_return[key]);
-                        }
-                    }  
+        for key in &self.collected_properties {
+            let prop_str = format!("{uid}_properties_{key}", uid=x.uid, key=key);
+            let prop_key = format!("properties_{key}", key=key);
+            if x.headers.contains_key(&prop_key) {
+                if self.envoy_shared_data.contains_key(&prop_str) { // concatenate with comma if not duplicate
+                    // make lists of properties
+                    let properties_unified = self.envoy_shared_data[&prop_str].clone();
+                    let mut properties : Vec<String> = properties_unified.split(",").map(|s| s.to_string()).collect();
+                    let cur_properties_unified = x.headers[&prop_key].clone();
+                    let mut cur_properties : Vec<String> = cur_properties_unified.split(",").map(|s| s.to_string()).collect();
+
+                    // merge lists and remove duplicates
+                    properties.append(&mut cur_properties);
+                    properties.sort_unstable(); // must sort for dedup to work
+                    properties.dedup();
+
+                    // store result
+                    let property_string_to_store = properties.join(",");
+                    self.envoy_shared_data.insert(prop_str.clone(), property_string_to_store);
+                } else {
+                    self.envoy_shared_data.insert(prop_str.clone(), x.headers[&prop_key].clone());
                 }
             }
         }
-        return to_return;
     }
 
-    pub fn add_myself_to_path(&mut self, x: &mut Rpc) -> String {
-        if !x.headers.contains_key("path") {
-            x.headers.insert(String::from("path"), self.whoami.as_ref().unwrap().clone());
+    pub fn merge_headers(&mut self, uid: u64, mut new_rpc_headers: HashMap<String, String>) -> HashMap<String, String> {
+        let prop_str = format!("{uid}_properties_path", uid=uid);
+        if self.envoy_shared_data.contains_key(&prop_str) {
+            new_rpc_headers.insert("path".to_string(), self.envoy_shared_data[&prop_str].clone());
+        }
+        for key in &self.collected_properties {
+            let prop_str = format!("{uid}_properties_{key}", uid=uid, key=key);
+            let prop_key = format!("properties_{key}", key=key);
+            if self.envoy_shared_data.contains_key(&prop_str) {
+                new_rpc_headers.insert(prop_key, self.envoy_shared_data[&prop_str].clone());
+            } else {
+                if new_rpc_headers["direction"] != "request" { 
+                    println!("WARNING: could not find value for {0}", prop_str); 
+                }
+            }
+        }
+        return new_rpc_headers;
+    }
+
+    pub fn add_myself_to_path(&mut self, x: &mut Rpc) {
+        if !x.headers.contains_key("properties_path") {
+            x.headers.insert(String::from("properties_path"), self.whoami.as_ref().unwrap().clone());
         }
         else {
-            x.headers.get_mut("path").unwrap().push_str(";");
-            x.headers.get_mut("path").unwrap().push_str(&self.whoami.as_ref().unwrap());
+            x.headers.get_mut("properties_path").unwrap().push_str(";");
+            x.headers.get_mut("properties_path").unwrap().push_str(&self.whoami.as_ref().unwrap());
         }
-        return x.headers["path"].clone();
+        assert!(x.headers.contains_key("properties_path"));
     }
 
     pub fn create_target_graph(&mut self) {
@@ -147,37 +171,30 @@ impl Filter {
 
     pub fn create_trace_graph(&mut self, mut mod_rpc: Rpc) -> Graph<(String, HashMap<String, String>), String> {
         let trace;
-        let mut path = mod_rpc.headers["path"].clone();
-        if mod_rpc.headers.contains_key(&"properties".to_string()) {
-            trace = graph_utils::generate_trace_graph_from_headers(
-                        path, 
-                        mod_rpc.headers.get_mut(&"properties".to_string()).unwrap().to_string());
+        let mut path = mod_rpc.headers["properties_path"].clone();
+        let mut properties = String::new();
+        for header in mod_rpc.headers.keys() {
+            if header.contains("properties") { properties.push_str(mod_rpc.headers[header].as_str()); }
         }
-        else {
-            trace = graph_utils::generate_trace_graph_from_headers(path, String::new());
-        }
+        trace = graph_utils::generate_trace_graph_from_headers(path, properties);
         return trace;
     }
 
     pub fn on_incoming_requests(&mut self, mut x: Rpc) -> Vec<Rpc> {
-        let path = self.add_myself_to_path(&mut x);
-        if self.internal_rpc_headers.contains_key(&x.uid) {
-            self.internal_rpc_headers.get_mut(&x.uid).unwrap().push(x.headers.clone());
-        } else {
-            self.internal_rpc_headers.insert(x.uid, vec!(x.headers.clone()));
-        }
-        self.internal_rpc_headers.insert(x.uid, vec!(x.headers.clone()));
+        self.store_headers(x.clone());
         return vec!(x);
     }
 
     pub fn on_outgoing_responses(&mut self, mut x: Rpc) -> Vec<Rpc> {
-        if self.internal_rpc_headers.contains_key(&x.uid) {
-            assert!(x.headers.contains_key("dest"));
-            x.headers = self.merge_headers(self.internal_rpc_headers[&x.uid].clone(), x.headers);
-        } else {
-            println!("WARNING: Could not find saved headers for rpc {0}", x.uid);
-            return vec!(x);
+        x.headers = self.merge_headers(x.uid, x.headers);
+
+        // normally, starting a path is the incoming response's job
+        // however, if we are a leaf node, there was no incoming response,
+        // just an incoming request.  So we start the path
+        if !x.headers.contains_key("properties_path") {
+            self.add_myself_to_path(&mut x);
         }
+        assert!(x.headers.contains_key("properties_path"));
 
         // at most, we return two rpcs:  one to continue on and one to storage
         let mut original_rpc = x.clone();
@@ -221,24 +238,15 @@ impl Filter {
     }
 
     pub fn on_outgoing_requests(&mut self, mut x: Rpc) -> Vec<Rpc>{
-        if self.internal_rpc_headers.contains_key(&x.uid) {
-            assert!(x.headers.contains_key("dest"));
-            x.headers = self.merge_headers(self.internal_rpc_headers[&x.uid].clone(), x.headers);
-        } else {
-            println!("WARNING: Could not find saved headers for rpc {0}", x.uid);
-            return vec!(x);
-        }
+        x.headers = self.merge_headers(x.uid, x.headers);
         let prop_str;
         {{#each request_blocks}}{{{this}}} {{/each}}
         return vec!(x);
     }
 
     pub fn on_incoming_responses(&mut self, mut x: Rpc) -> Vec<Rpc> {
-        if self.internal_rpc_headers.contains_key(&x.uid) {
-            self.internal_rpc_headers.get_mut(&x.uid).unwrap().push(x.headers.clone());
-        } else {
-            self.internal_rpc_headers.insert(x.uid, vec!(x.headers.clone()));
-        }
+        self.add_myself_to_path(&mut x);
+        self.store_headers(x.clone());
         return vec!(x);
     }
 
