@@ -100,13 +100,19 @@ impl Filter {
     pub fn store_headers(&mut self, x: Rpc) {
         // store path as well as properties
         let prop_str = format!("{uid}_properties_path", uid=x.uid);
-        if x.headers.contains_key("path") {
+        if x.headers.contains_key("properties_path") {
             if self.envoy_shared_data.contains_key(&prop_str) {
                 self.envoy_shared_data.get_mut(&prop_str).unwrap().push_str(",");
                 self.envoy_shared_data.get_mut(&prop_str).unwrap().push_str(&x.headers["properties_path"]);
+                self.envoy_shared_data.get_mut(&prop_str).unwrap().push_str(";");
+                self.envoy_shared_data.get_mut(&prop_str).unwrap().push_str(self.whoami.as_ref().unwrap());
             }
             else {
-                self.envoy_shared_data.insert(prop_str, x.headers["properties_path"].clone());
+                // add yourself
+                let mut cur_path = x.headers["properties_path"].clone();
+                cur_path.push_str(";");
+                cur_path.push_str(self.whoami.as_ref().unwrap());
+                self.envoy_shared_data.insert(prop_str, cur_path);
             }
         }
         for key in &self.collected_properties {
@@ -114,7 +120,6 @@ impl Filter {
             let prop_key = format!("properties_{key}", key=key);
             if x.headers.contains_key(&prop_key) {
                 if self.envoy_shared_data.contains_key(&prop_str) { // concatenate with comma if not duplicate
-                    print!("I am concatenating on!!! and my plugin is {0}\n\n\n", self.whoami.as_ref().unwrap().clone());
                     // make lists of properties
                     let properties_unified = self.envoy_shared_data[&prop_str].clone();
                     let mut properties : Vec<String> = properties_unified.split(",").map(|s| s.to_string()).collect();
@@ -129,9 +134,7 @@ impl Filter {
                     // store result
                     let property_string_to_store = properties.join(",");
                     self.envoy_shared_data.insert(prop_str.clone(), property_string_to_store.clone());
-                    print!("I am {0} and my new envoy shared data is {1}\n\n\n", self.whoami.as_ref().unwrap().clone(), property_string_to_store);
                 } else {
-                    println!("I am {0} and I had nothing stored before, so I make my own entry containing {1}", self.whoami.as_ref().unwrap().clone(), x.headers[&prop_key].clone());
                     self.envoy_shared_data.insert(prop_str.clone(), x.headers[&prop_key].clone());
                 }
             }
@@ -143,13 +146,7 @@ impl Filter {
         if new_rpc_headers["direction"] == "response" {
             let prop_str = format!("{uid}_properties_path", uid=uid);
             if self.envoy_shared_data.contains_key(&prop_str) {
-                let all_paths = self.envoy_shared_data[&prop_str].clone();
-                let mut all_paths_vec : Vec<String> = all_paths.split(",").map(|s| s.to_string()).collect();
-                for path in &mut all_paths_vec {
-                    path.push_str(";");
-                    path.push_str(self.whoami.as_ref().unwrap().as_str());
-                }
-                new_rpc_headers.insert("properties_path".to_string(), all_paths_vec.join(","));
+                new_rpc_headers.insert("properties_path".to_string(), self.envoy_shared_data[&prop_str].clone());
             }
             else { new_rpc_headers.insert("properties_path".to_string(), self.whoami.as_ref().unwrap().clone()); }
         }
