@@ -175,7 +175,9 @@ impl Filter {
         let mut path = mod_rpc.headers["properties_path"].clone();
         let mut properties = String::new();
         for header in mod_rpc.headers.keys() {
-            if header.contains("properties") { properties.push_str(mod_rpc.headers[header].as_str()); }
+            if header.contains("properties") && header != "properties_path" {
+                properties.push_str(mod_rpc.headers[header].as_str());
+            }
         }
         trace = graph_utils::generate_trace_graph_from_headers(path, properties);
         return trace;
@@ -208,9 +210,9 @@ impl Filter {
                 for property in y.1.keys() {
                     if x.1.contains_key(property) && &(x.1[property]) != &(y.1[property]) { return false; }
                 }
-            return true;
+                return true;
             },
-            |x, y| x == y,
+            |x, y| return true,
         );
         if !mapping.is_none() {
             let m = mapping.unwrap();
