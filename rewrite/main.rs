@@ -57,7 +57,6 @@ fn main() {
     builder.filter_level(log::LevelFilter::Trace);
     builder.init();
 
-
     let bin_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let def_filter_dir = bin_dir.join("cpp_filter/filter.cc");
     let compile_vals = ["sim", "cpp"];
