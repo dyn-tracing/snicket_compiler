@@ -219,22 +219,26 @@ impl CodeGenSimulator {
                 let edge_1 = &edge.1;
                 quote!((#edge_0.to_string(), #edge_1.to_string()))
             });
+
             self.target_blocks
                 .push(quote!(let edges = vec![#(#edges),*]).to_string());
 
             self.target_blocks.push(quote!(let mut ids_to_properties: HashMap<String, HashMap<String, String>> = HashMap::new();).to_string());
 
             let vertices = &struct_filter.vertices;
+
             let ids_to_properties_hashmap_init = quote!(
                 #(ids_to_properties.insert(stringify!(#vertices).to_string(), HashMap::new()));*
             )
             .to_string();
+
             self.target_blocks.push(ids_to_properties_hashmap_init);
 
             for node in struct_filter.properties.keys() {
                 let node_hashmap_ident = format_ident!("{}_hashmap", node);
                 let get_hashmap = quote!(let mut #node_hashmap_ident = ids_to_properties.get_mut(stringify!(#node)).unwrap();).to_string();
                 self.target_blocks.push(get_hashmap);
+
                 for property_name in struct_filter.properties[node].keys() {
                     let property_value = &struct_filter.properties[node][property_name];
                     let fill_in_hashmap = quote!(#node_hashmap_ident.insert(stringify!(#property_name).to_string(), stringify!(#property_value).to_string());).to_string();
@@ -271,22 +275,23 @@ impl CodeGenSimulator {
                 panic!("Unknown entity in return expression");
             }
 
-            let ret_block = format!(
-               "let node_ptr = graph_utils::get_node_with_id(&self.target_graph.as_ref().unwrap(), \"{node_id}\".to_string());
-               if node_ptr.is_none() {{
-                   print!(\"WARNING Node {node_id} not found\");
+            let node_id = entity;
+            let prop = property;
+            let ret_prop_ident = format_ident!("ret_{}", prop);
+
+            let ret_block = quote!(
+               let node_ptr = graph_utils::get_node_with_id(&self.target_graph.as_ref().unwrap(), stringify!(#node_id).to_string());
+               if node_ptr.is_none() {
+                   print!("WARNING Node {node_id} not found");
                    return vec!(x);
-               }}
+               }
                let trace_node_index = NodeIndex::new(m[node_ptr.unwrap().index()]);
-               if !&trace_graph.node_weight(trace_node_index).unwrap().1.contains_key(\"{prop}\") {{
+               if !&trace_graph.node_weight(trace_node_index).unwrap().1.contains_key(stringify!(#prop)) {
                    // we have not yet collected the return property
                    return vec!(x);
-               }}
-               let mut ret_{prop} = &trace_graph.node_weight(trace_node_index).unwrap().1[ \"{prop}\" ];\n
-               value = ret_{prop}.to_string();\n",
-                   node_id = entity,
-                   prop = property
-                );
+               }
+               let mut #ret_prop_ident = &trace_graph.node_weight(trace_node_index).unwrap().1[ stringify!(#prop) ];
+               value = #ret_prop_ident.to_string();).to_string();
 
             self.response_blocks.push(ret_block);
         }
