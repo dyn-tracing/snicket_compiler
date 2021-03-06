@@ -1,8 +1,3 @@
-extern crate clap;
-extern crate dyntracing;
-extern crate handlebars;
-extern crate input_stream;
-extern crate serde;
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::token_factory::CommonTokenFactory;
 use antlr_rust::InputStream;
@@ -61,6 +56,7 @@ fn main() {
     // Set default log level to info
     builder.filter_level(log::LevelFilter::Trace);
     builder.init();
+
 
     let bin_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let def_filter_dir = bin_dir.join("cpp_filter/filter.cc");
