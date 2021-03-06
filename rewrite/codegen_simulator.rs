@@ -1,5 +1,6 @@
 use crate::ir::VisitorResults;
 use indexmap::map::IndexMap;
+use quote::{format_ident, quote};
 use regex::Regex;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -209,50 +210,38 @@ impl CodeGenSimulator {
 
     fn make_struct_filter_blocks(&mut self) {
         for struct_filter in &self.ir.struct_filters {
+            let vertices = &struct_filter.vertices;
             self.target_blocks
-                .push(" let vertices = vec!( ".to_string());
-            for vertex in &struct_filter.vertices {
-                self.target_blocks
-                    .push(format!("\"{vertex}\".to_string(),", vertex = vertex));
-            }
-            self.target_blocks.push(" );\n".to_string());
+                .push(quote!(let vertices = vec![#(#vertices.to_string()),*]).to_string());
 
+            let edges = struct_filter.edges.iter().map(|edge| {
+                let edge_0 = &edge.0;
+                let edge_1 = &edge.1;
+                quote!((#edge_0.to_string(), #edge_1.to_string()))
+            });
             self.target_blocks
-                .push("        let edges = vec!( ".to_string());
-            for edge in &struct_filter.edges {
-                self.target_blocks.push(format!(
-                    " (\"{edge1}\".to_string(), \"{edge2}\".to_string() ), ",
-                    edge1 = edge.0,
-                    edge2 = edge.1
-                ));
-            }
-            self.target_blocks.push(" );\n".to_string());
+                .push(quote!(let edges = vec![#(#edges),*]).to_string());
 
-            let ids_to_prop_block = "        let mut ids_to_properties: HashMap<String, HashMap<String, String>> = HashMap::new();\n".to_string();
-            self.target_blocks.push(ids_to_prop_block);
+            self.target_blocks.push(quote!(let mut ids_to_properties: HashMap<String, HashMap<String, String>> = HashMap::new();).to_string());
 
-            for vertex in &struct_filter.vertices {
-                let ids_to_properties_hashmap_init = format!(
-                    "        ids_to_properties.insert(\"{node}\".to_string(), HashMap::new());\n",
-                    node = vertex
-                );
-                self.target_blocks.push(ids_to_properties_hashmap_init);
-            }
+            let vertices = &struct_filter.vertices;
+            let ids_to_properties_hashmap_init = quote!(
+                #(ids_to_properties.insert(stringify!(#vertices).to_string(), HashMap::new()));*
+            )
+            .to_string();
+            self.target_blocks.push(ids_to_properties_hashmap_init);
+
             for node in struct_filter.properties.keys() {
-                let get_hashmap = format!(
-                    "        let mut {node}_hashmap = ids_to_properties.get_mut(\"{node}\").unwrap();\n",
-                    node = node
-                );
+                let node_hashmap_ident = format_ident!("{}_hashmap", node);
+                let get_hashmap = quote!(let mut #node_hashmap_ident = ids_to_properties.get_mut(stringify!(#node)).unwrap();).to_string();
                 self.target_blocks.push(get_hashmap);
                 for property_name in struct_filter.properties[node].keys() {
-                    let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
-                                                   node=node,
-                                                   property_name=property_name,
-                                                   property_value=struct_filter.properties[node][property_name]);
+                    let property_value = &struct_filter.properties[node][property_name];
+                    let fill_in_hashmap = quote!(#node_hashmap_ident.insert(stringify!(#property_name).to_string(), stringify!(#property_value).to_string());).to_string();
                     self.target_blocks.push(fill_in_hashmap);
                 }
             }
-            let make_graph = "        self.target_graph = Some(graph_utils::generate_target_graph(vertices, edges, ids_to_properties));\n".to_string();
+            let make_graph = quote!(self.target_graph = Some(graph_utils::generate_target_graph(vertices, edges, ids_to_properties));).to_string();
             self.target_blocks.push(make_graph);
         }
     }

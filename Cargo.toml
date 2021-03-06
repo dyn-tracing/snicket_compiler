@@ -17,6 +17,8 @@ strum_macros = "0.19"
 indexmap = { version = "1.6.1", features = ["serde-1"] }
 antlr-rust = "=0.2"
 input-stream = "0.3.0"
+quote = "1.0.9"
+syn = "1.0.61"
 
 [dev-dependencies]
 test-case = "1.1.0"
