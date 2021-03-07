@@ -1,8 +1,3 @@
-extern crate clap;
-extern crate dyntracing;
-extern crate handlebars;
-extern crate input_stream;
-extern crate serde;
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::token_factory::CommonTokenFactory;
 use antlr_rust::InputStream;
