@@ -152,20 +152,21 @@ impl CodeGenSimulator {
         );
         self.udf_blocks.push(get_udf_vals);
 
-        let save_udf_vals = format!("let {udf_id}_str = format!(\"{{whoami}}.{{udf_id}}=={{value}},\",
+        let udf_id_str_ident = format_ident!("{}_str", udf_id);
+        let my_udf_id_value_ident = format_ident!("my_{}_value", udf_id);
+        let save_udf_vals = quote!(let #udf_id_str_ident = format!("{{whoami}}.{{udf_id}}=={{value}},",
                                                       whoami=&self.whoami.as_ref().unwrap(),
-                                                      udf_id=\"{udf_id}\",
-                                                      value=my_{udf_id}_value);
-        if x.headers.contains_key(\"properties\") {{
-            if !x.headers[\"properties\"].contains(&{udf_id}_str) {{ // don't add a udf property twice
-                x.headers.get_mut(&\"properties\".to_string()).unwrap().push_str(&{udf_id}_str);
-            }}
-        }}
-        else {{
-            x.headers.insert(\"properties\".to_string(), {udf_id}_str);
-        }}
-                                     
-        ", udf_id=udf_id);
+                                                      udf_id=stringify!(udf_id),
+                                                      value=#my_udf_id_value_ident);
+        if x.headers.contains_key("properties") {
+            if !x.headers["properties"].contains(&(#udf_id_str_ident)) { // don't add a udf property twice
+                x.headers.get_mut("properties".to_string()).unwrap().push_str(&#udf_id_str_ident);
+            }
+        }
+        else {
+            x.headers.insert("properties".to_string(), #udf_id_str_ident);
+        }
+        ).to_string();
 
         self.udf_blocks.push(save_udf_vals);
     }
