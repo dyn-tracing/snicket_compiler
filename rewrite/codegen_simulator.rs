@@ -123,33 +123,33 @@ impl CodeGenSimulator {
     }
 
     fn collect_udf_property(&mut self, udf_id: String) {
-        let get_udf_vals = format!("let my_{id}_value;
-    if x.headers.contains_key(\"path\") {{
+        let leaf_func = &self.udf_table[&udf_id].leaf_func;
+        let mid_func = &self.udf_table[&udf_id].mid_func;
+        let my_id_value_ident = format_ident!("my_{}_value", udf_id);
+
+        let get_udf_vals = quote!(let my_{id}_value;
+        if x.headers.contains_key("path") {
             // TODO:  only create trace graph once and then add to it
             let graph = self.create_trace_graph(x.clone());
             let child_iterator = graph.neighbors_directed(
                 graph_utils::get_node_with_id(&graph, self.whoami.as_ref().unwrap().clone()).unwrap(),
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
-            for child in child_iterator {{
-                child_values.push(graph.node_weight(child).unwrap().1[\"{id}\"].clone());
-            }}
-            if child_values.len() == 0 {{
-                my_{id}_value = {leaf_func}(graph);
-            }} else {{
-                my_{id}_value = {mid_func}(graph, child_values);
-            }}
-         }}
-         else {{
-             print!(\"WARNING: no path header\");
+            for child in child_iterator {
+                child_values.push(graph.node_weight(child).unwrap().1[stringify!(#udf_id)].clone());
+            }
+            if child_values.len() == 0 {
+               #my_id_value_ident = #leaf_func(graph);
+            } else {
+               #my_id_value_ident = #mid_func(graph, child_values);
+            }
+         }
+         else {
+             print!("WARNING: no path header");
              return vec!(x);
-         }}
+         }
+        ).to_string();
 
-        ",
-        id=udf_id,
-        leaf_func=self.udf_table[&udf_id].leaf_func,
-        mid_func=self.udf_table[&udf_id].mid_func
-        );
         self.udf_blocks.push(get_udf_vals);
 
         let udf_id_str_ident = format_ident!("{}_str", udf_id);
