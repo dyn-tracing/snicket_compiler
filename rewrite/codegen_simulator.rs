@@ -126,11 +126,20 @@ impl CodeGenSimulator {
     }
 
     fn collect_udf_property(&mut self, udf_id: String) {
+<<<<<<< HEAD
         let my_udf_id_value = format_ident!("my_{}_value", udf_id);
         let leaf_func = &self.udf_table[&udf_id].leaf_func;
         let mid_func = &self.udf_table[&udf_id].mid_func;
         let get_udf_vals = quote!(
           let #my_udf_id_value = if x.headers.contains_key("path") {
+=======
+        let leaf_func = &self.udf_table[&udf_id].leaf_func;
+        let mid_func = &self.udf_table[&udf_id].mid_func;
+        let my_id_value_ident = format_ident!("my_{}_value", udf_id);
+
+        let get_udf_vals = quote!(let my_{id}_value;
+        if x.headers.contains_key("path") {
+>>>>>>> db6c4fe (More conversions)
             // TODO:  only create trace graph once and then add to it
             let graph = self.create_trace_graph(x.clone());
             let child_iterator = graph.neighbors_directed(
@@ -141,11 +150,20 @@ impl CodeGenSimulator {
                 child_values.push(graph.node_weight(child).unwrap().1[stringify!(#udf_id)].clone());
             }
             if child_values.len() == 0 {
+<<<<<<< HEAD
                 #leaf_func(graph)
             } else {
                 #mid_func(graph, child_values)
             }
          } else {
+=======
+               #my_id_value_ident = #leaf_func(graph);
+            } else {
+               #my_id_value_ident = #mid_func(graph, child_values);
+            }
+         }
+         else {
+>>>>>>> db6c4fe (More conversions)
              print!("WARNING: no path header");
              return vec!(x);
          }
