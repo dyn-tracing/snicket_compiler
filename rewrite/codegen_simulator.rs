@@ -126,50 +126,52 @@ impl CodeGenSimulator {
     }
 
     fn collect_udf_property(&mut self, udf_id: String) {
-        let get_udf_vals = format!("let my_{id}_value;
-    if x.headers.contains_key(\"path\") {{
+        let my_udf_id_value = format_ident!("my_{}_value", udf_id);
+        let leaf_func = &self.udf_table[&udf_id].leaf_func;
+        let mid_func = &self.udf_table[&udf_id].mid_func;
+        let get_udf_vals = quote!(
+          let #my_udf_id_value = if x.headers.contains_key("path") {
             // TODO:  only create trace graph once and then add to it
             let graph = self.create_trace_graph(x.clone());
             let child_iterator = graph.neighbors_directed(
                 graph_utils::get_node_with_id(&graph, self.whoami.as_ref().unwrap().clone()).unwrap(),
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
-            for child in child_iterator {{
-                child_values.push(graph.node_weight(child).unwrap().1[\"{id}\"].clone());
-            }}
-            if child_values.len() == 0 {{
-                my_{id}_value = {leaf_func}(graph);
-            }} else {{
-                my_{id}_value = {mid_func}(graph, child_values);
-            }}
-         }}
-         else {{
-             print!(\"WARNING: no path header\");
+            for child in child_iterator {
+                child_values.push(graph.node_weight(child).unwrap().1[stringify!(#udf_id)].clone());
+            }
+            if child_values.len() == 0 {
+                #leaf_func(graph)
+            } else {
+                #mid_func(graph, child_values)
+            }
+         } else {
+             print!("WARNING: no path header");
              return vec!(x);
-         }}
+         }
+        ).to_string();
 
-        ",
-        id=udf_id,
-        leaf_func=self.udf_table[&udf_id].leaf_func,
-        mid_func=self.udf_table[&udf_id].mid_func
-        );
         self.udf_blocks.push(get_udf_vals);
 
-        let save_udf_vals = format!("let {udf_id}_str = format!(\"{{whoami}}.{{udf_id}}=={{value}}\",
-                                                      whoami=&self.whoami.as_ref().unwrap(),
-                                                      udf_id=\"{udf_id}\",
-                                                      value=my_{udf_id}_value);
-        if x.headers.contains_key(\"properties_{udf_id}\") {{
-            if !x.headers[\"properties_{udf_id}\"].contains(&{udf_id}_str) {{ // don't add a udf property twice
-                x.headers.get_mut(&\"properties_{udf_id}\".to_string()).unwrap().push_str(\",\");
-                x.headers.get_mut(&\"properties_{udf_id}\".to_string()).unwrap().push_str(&{udf_id}_str);
-            }}
-        }}
-        else {{
-            x.headers.insert(\"properties_{udf_id}\".to_string(), {udf_id}_str);
-        }}
-                                     
-        ", udf_id=udf_id);
+        let udf_id_str = format_ident!("{}_str", udf_id);
+        let my_udf_id_value = format_ident!("my_{}_value", udf_id);
+        let save_udf_vals = quote!(
+          let #udf_id_str = format!("{{whoami}}.{{udf_id}}=={{value}},",
+                              whoami=&self.whoami.as_ref().unwrap(),
+                              udf_id=stringify!(udf_id),
+                              value=#my_udf_id_value);
+          let proprties_udf_id = stringify!(properties_#udf_id);
+          if x.headers.contains_key() {
+              if !x.headers[properties_udf_id].contains(&(#udf_id_str)) { // don't add a udf property twice
+                  x.headers.get_mut(&properties_udf_id.to_string()).unwrap().push_str(&#udf_id_str);
+                  x.headers.get_mut(&properties_udf_id.to_string()).unwrap().push_str(&#udf_id_str);
+              }
+          }
+          else {
+              x.headers.insert(propreties_udf_id.to_string(), #udf_id_str);
+          }
+        )
+        .to_string();
 
         self.udf_blocks.push(save_udf_vals);
     }
