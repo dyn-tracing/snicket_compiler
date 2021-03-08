@@ -38,7 +38,6 @@ cc_test(
         "filter_test.cc",
     ],
     deps = [
-        "@com_google_protobuf//:protobuf_lite",
         "@gtest",
         "@gtest//:gtest_main",
     ],
@@ -99,5 +98,15 @@ cc_binary(
     ],
     deps = [
         "@boost//:graph",
+    ],
+)
+
+
+test_suite(
+    name = "util_tests",
+    tests = [
+        "str_utils_test",
+        "graph_utils_test",
+        "filter_test",
     ],
 )

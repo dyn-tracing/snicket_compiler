@@ -15,6 +15,14 @@ http_archive(
   ]
 )
 
+load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+git_repository(
+    name = "gtest",
+    remote = "https://github.com/google/googletest",
+    branch = "v1.10.x",
+)
+
+
 # TODO: consider fixing this so that we don't need install and activate above.
 # http_archive(
 #   name = 'emscripten_clang',
