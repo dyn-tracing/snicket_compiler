@@ -103,21 +103,24 @@ impl CodeGenSimulator {
     }
 
     fn collect_envoy_property(&mut self, property: String) {
-        let get_prop_block = format!("prop_str = format!(\"{{whoami}}.{{property}}=={{value}},\",
-                                                      whoami=&self.whoami.as_ref().unwrap(),
-                                                      property=\"{property}\",
-                                                      value=self.filter_state[\"{envoy_property}\"].string_data.as_ref().unwrap().to_string());
-                                            ", property=property, envoy_property=self.envoy_properties_to_access_names[&property]);
-        let insert_hdr_block = "
-        if x.headers.contains_key(\"properties\") {
-            if !x.headers[\"properties\"].contains(&prop_str) { // don't add our properties if they have already been added
-                x.headers.get_mut(&\"properties\".to_string()).unwrap().push_str(&prop_str);
+        let envoy_property = self.envoy_properties_to_access_names[&property];
+        let get_prop_block = quote!(prop_str = format!("{whoami}.{property}=={value},",
+                  whoami=&self.whoami.as_ref().unwrap(),
+                  property=stringify!(#property),
+                  value=self.filter_state[quote!(envoy_property)].string_data.as_ref().unwrap().to_string());
+        ).to_string();
+        let insert_hdr_block = quote!(if x.headers.contains_key("properties") {
+            if !x.headers["properties"].contains(&prop_str) {
+                // don't add our properties if they have already been added
+                x.headers
+                    .get_mut(&"properties".to_string())
+                    .unwrap()
+                    .push_str(&prop_str);
             }
-        }
-        else {
-            x.headers.insert(\"properties\".to_string(), prop_str);
-        }
-        ".to_string();
+        } else {
+            x.headers.insert("properties".to_string(), prop_str);
+        })
+        .to_string();
         self.request_blocks.push(get_prop_block);
         self.request_blocks.push(insert_hdr_block);
     }
