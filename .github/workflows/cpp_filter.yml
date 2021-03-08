@@ -1,0 +1,23 @@
+name: C++ Filter Utils
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Bazel Test
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup Bazel
+        uses: abhinavsingh/setup-bazel@v3
+      - uses: Bazel Unit Tests
+        run: |
+          cd cpp_filter
+          bazel test util_tests
