@@ -6,3 +6,4 @@ src/proto/treenode.rs
 bin/
 example_queries/*.cc
 example_queries/*.rs
+/.idea/

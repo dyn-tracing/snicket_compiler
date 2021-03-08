@@ -3,6 +3,7 @@ use indexmap::map::IndexMap;
 use regex::Regex;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::mem;
 use std::str::FromStr;
 use strum_macros::EnumString;
 
@@ -80,28 +81,26 @@ impl CodeGenSimulator {
         let re = Regex::new(
             r".*udf_type:\s+(?P<udf_type>\w+)\n.*leaf_func:\s+(?P<leaf_func>\w+)\n.*mid_func:\s+(?P<mid_func>\w+)\n.*id:\s+(?P<id>\w+)",
         ).unwrap();
-        let rust_caps = re.captures(&udf_clone);
 
-        match rust_caps {
-            Some(caps) => {
-                let udf_type = UdfType::from_str(caps.name("udf_type").unwrap().as_str()).unwrap();
-                let leaf_func = String::from(caps.name("leaf_func").unwrap().as_str());
-                let mid_func = String::from(caps.name("mid_func").unwrap().as_str());
-                let id = String::from(caps.name("id").unwrap().as_str());
+        let rust_caps = re
+            .captures(&udf_clone)
+            .expect("Rust UDF did not have proper header");
 
-                self.udf_table.insert(
-                    id.clone(),
-                    Udf {
-                        udf_type,
-                        leaf_func,
-                        mid_func,
-                        func_impl: udf,
-                        id,
-                    },
-                );
-            }
-            None => panic!("Rust UDF did not have proper header"),
-        }
+        let udf_type = UdfType::from_str(rust_caps.name("udf_type").unwrap().as_str()).unwrap();
+        let leaf_func = String::from(rust_caps.name("leaf_func").unwrap().as_str());
+        let mid_func = String::from(rust_caps.name("mid_func").unwrap().as_str());
+        let id = String::from(rust_caps.name("id").unwrap().as_str());
+
+        self.udf_table.insert(
+            id.clone(),
+            Udf {
+                udf_type,
+                leaf_func,
+                mid_func,
+                func_impl: udf,
+                id,
+            },
+        );
     }
 
     fn collect_envoy_property(&mut self, property: String) {
@@ -175,10 +174,12 @@ impl CodeGenSimulator {
     }
 
     fn get_maps(&mut self) {
-        for map in &mut self.ir.maps.clone() {
+        let mut maps = Vec::new();
+        mem::swap(&mut maps, &mut self.ir.maps);
+        for map in &maps {
             let mut map_name = map.clone();
             let mut has_period = false;
-            if map_name.chars().next().unwrap() == ".".chars().next().unwrap() {
+            if map_name.starts_with('.') {
                 map_name.remove(0);
                 has_period = true;
             }
@@ -203,6 +204,7 @@ impl CodeGenSimulator {
                 }
             }
         }
+        mem::swap(&mut maps, &mut self.ir.maps);
     }
 
     fn make_struct_filter_blocks(&mut self) {

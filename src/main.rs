@@ -1,8 +1,3 @@
-extern crate clap;
-extern crate dyntracing;
-extern crate handlebars;
-extern crate serde;
-
 use clap::{App, Arg};
 use dyntracing::{code_gen, lexer, parser, tree_fold::TreeFold};
 use handlebars::Handlebars;
