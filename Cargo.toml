@@ -26,8 +26,8 @@ diffy = "*"
 
 [lib]
 name = "dyntracing"
-path = "src/lib.rs"
+path = "rewrite/lib.rs"
 
 [[bin]]
 name = "dtc"
-path = "src/main.rs"
+path = "rewrite/main.rs"
