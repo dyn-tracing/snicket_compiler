@@ -13,7 +13,7 @@ use test_case::test_case; // Parametrized tests
 #[test_case("response_size_avg.cql", vec!["avg.cc"]; "inconclusive - response_size_avg")]
 #[test_case("return.cql", vec![]; "inconclusive - return_query")]
 #[test_case("return_height.cql", vec![]; "inconclusive - return_height")]
-fn check_compilation(
+fn check_compilation_cc(
     query_name: &str,
     udf_names: Vec<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -61,17 +61,8 @@ fn check_compilation(
     }
 }
 
-#[test_case("breadth_histogram.cql", vec!["histogram.rs"];
-                                        "inconclusive - breadth_histogram")]
-#[test_case("breadth.cql", vec![]; "inconclusive - breadth")]
-#[test_case("height_histogram.cql" , vec!["histogram.rs"];
-                                         "inconclusive - height_histogram" )]
-#[test_case("count.cql", vec!["count.rs"]; "inconclusive - count")]
-#[test_case("response_code_count.cql", vec!["count.rs"]; "inconclusive - response_code_count")]
-#[test_case("response_size_avg.cql", vec!["avg.rs"];
-                                         "inconclusive - response_size_avg")]
-#[test_case("return.cql", vec![]; "inconclusive - return_query")]
-#[test_case("return_height.cql", vec![]; "inconclusive - return_height")]
+#[test_case("get_service_name.cql", vec![]; "get_service_name")]
+#[test_case("height.cql", vec!["height.rs"]; "height")]
 fn check_compilation_rust(
     query_name: &str,
     udf_names: Vec<&str>,
