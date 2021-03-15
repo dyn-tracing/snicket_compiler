@@ -5,14 +5,12 @@ use std::path::Path; // Directory management
 use std::process::Command; // Run programs
 use test_case::test_case; // Parametrized tests
 
-#[test_case("breadth_histogram.cql", vec!["histogram.cc"]; "inconclusive - breadth_histogram")]
-#[test_case("breadth.cql", vec![]; "inconclusive - breadth")]
-#[test_case("height_histogram.cql", vec!["histogram.cc"]; "inconclusive - height_histogram")]
-#[test_case("count.cql", vec!["count.cc"]; "inconclusive - count")]
-#[test_case("response_code_count.cql", vec!["count.cc"]; "inconclusive - response_code_count")]
-#[test_case("response_size_avg.cql", vec!["avg.cc"]; "inconclusive - response_size_avg")]
-#[test_case("return.cql", vec![]; "inconclusive - return_query")]
-#[test_case("return_height.cql", vec![]; "inconclusive - return_height")]
+#[test_case("get_service_name.cql", vec![]; "inconclusive - get_service_name")]
+#[test_case("height.cql", vec!["height.rs"]; "inconclusive - height")]
+#[test_case("histogram.cql", vec!["histogram.rs"]; "inconclusive - histogram")]
+#[test_case("request_size.cql", vec![]; "inconclusive - request_size")]
+#[test_case("request_size_avg.cql", vec![]; "inconclusive - request_size_avg")]
+#[test_case("latency.cql", vec!["latency.rs"]; "inconclusive - latency")]
 fn check_compilation_cc(
     query_name: &str,
     udf_names: Vec<&str>,
@@ -63,6 +61,10 @@ fn check_compilation_cc(
 
 #[test_case("get_service_name.cql", vec![]; "get_service_name")]
 #[test_case("height.cql", vec!["height.rs"]; "height")]
+#[test_case("histogram.cql", vec!["histogram.rs"]; "inconclusive - histogram")]
+#[test_case("request_size.cql", vec![]; "inconclusive - request_size")]
+#[test_case("request_size_avg.cql", vec![]; "inconclusive - request_size_avg")]
+#[test_case("latency.cql", vec!["latency.rs"]; "inconclusive - latency")]
 fn check_compilation_rust(
     query_name: &str,
     udf_names: Vec<&str>,
