@@ -1,5 +1,6 @@
 use crate::ir::VisitorResults;
 use indexmap::map::IndexMap;
+use quote::{format_ident, quote};
 use regex::Regex;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -104,71 +105,81 @@ impl CodeGenSimulator {
     }
 
     fn collect_envoy_property(&mut self, property: String) {
-        let get_prop_block = format!("prop_str = format!(\"{{whoami}}.{{property}}=={{value}}\",
-                                                      whoami=&self.whoami.as_ref().unwrap(),
-                                                      property=\"{property}\",
-                                                      value=self.filter_state[\"{envoy_property}\"].string_data.as_ref().unwrap().to_string());
-                                            ", property=property, envoy_property=self.envoy_properties_to_access_names[&property]);
-        let insert_hdr_block = format!("
-        if x.headers.contains_key(\"properties_{property}\") {{
-            if !x.headers[\"properties_{property}\"].contains(&prop_str) {{ // don't add our properties if they have already been added
-                x.headers.get_mut(&\"properties_{property}\".to_string()).unwrap().push_str(\",\");
-                x.headers.get_mut(&\"properties_{property}\".to_string()).unwrap().push_str(&prop_str);
-            }}
-        }}
-        else {{
-            x.headers.insert(\"properties_{property}\".to_string(), prop_str);
-        }}
-        ", property=property);
+        let envoy_property = &self.envoy_properties_to_access_names[&property];
+        let get_prop_block = quote!(
+          prop_str = format!("{whoami}.{property}=={value}",
+                              whoami=&self.whoami.as_ref().unwrap(),
+                              property=stringify!(#property),
+                              value=self.filter_state[stringify!(#envoy_property)].string_data.as_ref().unwrap().to_string());
+        ).to_string();
+
+        let insert_hdr_block = quote!(
+          let properties_key = stringify!(properties_#property).to_string();
+          if x.headers.contains_key(stringify!(properties_#property)) {
+              if !x.headers[&properties_key].contains(&prop_str) { // don't add our properties if they have already been added
+                  x.headers.get_mut(&properties_key).unwrap().push_str(",");
+                  x.headers.get_mut(&properties_key).unwrap().push_str(&prop_str);
+              }
+          }
+          else {
+              x.headers.insert(properties_key, prop_str);
+          }
+        )
+        .to_string();
         self.request_blocks.push(get_prop_block);
         self.request_blocks.push(insert_hdr_block);
     }
 
     fn collect_udf_property(&mut self, udf_id: String) {
-        let get_udf_vals = format!("let my_{id}_value;
-    if x.headers.contains_key(\"path\") {{
+        let my_udf_id_value = format_ident!("my_{}_value", udf_id);
+        let leaf_func = &self.udf_table[&udf_id].leaf_func;
+        let mid_func = &self.udf_table[&udf_id].mid_func;
+
+        let get_udf_vals = quote!(
+          let #my_udf_id_value = if x.headers.contains_key("path") {
             // TODO:  only create trace graph once and then add to it
             let graph = self.create_trace_graph(x.clone());
             let child_iterator = graph.neighbors_directed(
                 graph_utils::get_node_with_id(&graph, self.whoami.as_ref().unwrap().clone()).unwrap(),
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
-            for child in child_iterator {{
-                child_values.push(graph.node_weight(child).unwrap().1[\"{id}\"].clone());
-            }}
-            if child_values.len() == 0 {{
-                my_{id}_value = {leaf_func}(graph);
-            }} else {{
-                my_{id}_value = {mid_func}(graph, child_values);
-            }}
-         }}
-         else {{
-             print!(\"WARNING: no path header\");
-             return vec!(x);
-         }}
 
-        ",
-        id=udf_id,
-        leaf_func=self.udf_table[&udf_id].leaf_func,
-        mid_func=self.udf_table[&udf_id].mid_func
-        );
+            for child in child_iterator {
+                child_values.push(graph.node_weight(child).unwrap().1[stringify!(#udf_id)].clone());
+            }
+
+            if child_values.is_empty() {
+                #leaf_func(graph)
+            } else {
+                #mid_func(graph, child_values)
+            }
+         } else {
+             print!("WARNING: no path header");
+             return vec!(x);
+         }
+        ).to_string();
+
         self.udf_blocks.push(get_udf_vals);
 
-        let save_udf_vals = format!("let {udf_id}_str = format!(\"{{whoami}}.{{udf_id}}=={{value}}\",
-                                                      whoami=&self.whoami.as_ref().unwrap(),
-                                                      udf_id=\"{udf_id}\",
-                                                      value=my_{udf_id}_value);
-        if x.headers.contains_key(\"properties_{udf_id}\") {{
-            if !x.headers[\"properties_{udf_id}\"].contains(&{udf_id}_str) {{ // don't add a udf property twice
-                x.headers.get_mut(&\"properties_{udf_id}\".to_string()).unwrap().push_str(\",\");
-                x.headers.get_mut(&\"properties_{udf_id}\".to_string()).unwrap().push_str(&{udf_id}_str);
-            }}
-        }}
-        else {{
-            x.headers.insert(\"properties_{udf_id}\".to_string(), {udf_id}_str);
-        }}
-                                     
-        ", udf_id=udf_id);
+        let udf_id_str = format_ident!("{}_str", udf_id);
+        let my_udf_id_value = format_ident!("my_{}_value", udf_id);
+        let save_udf_vals = quote!(
+          let #udf_id_str = format!("{{whoami}}.{{udf_id}}=={{value}},",
+                              whoami=&self.whoami.as_ref().unwrap(),
+                              udf_id=stringify!(udf_id),
+                              value=#my_udf_id_value);
+          let proprties_udf_id = stringify!(properties_#udf_id);
+          if x.headers.contains_key() {
+              if !x.headers[properties_udf_id].contains(&(#udf_id_str)) { // don't add a udf property twice
+                  x.headers.get_mut(&properties_udf_id.to_string()).unwrap().push_str(&#udf_id_str);
+                  x.headers.get_mut(&properties_udf_id.to_string()).unwrap().push_str(&#udf_id_str);
+              }
+          }
+          else {
+              x.headers.insert(propreties_udf_id.to_string(), #udf_id_str);
+          }
+        )
+        .to_string();
 
         self.udf_blocks.push(save_udf_vals);
     }
@@ -209,50 +220,42 @@ impl CodeGenSimulator {
 
     fn make_struct_filter_blocks(&mut self) {
         for struct_filter in &self.ir.struct_filters {
+            let vertices = &struct_filter.vertices;
             self.target_blocks
-                .push(" let vertices = vec!( ".to_string());
-            for vertex in &struct_filter.vertices {
-                self.target_blocks
-                    .push(format!("\"{vertex}\".to_string(),", vertex = vertex));
-            }
-            self.target_blocks.push(" );\n".to_string());
+                .push(quote!(let vertices = vec![#(#vertices.to_string()),*]).to_string());
+
+            let edges = struct_filter.edges.iter().map(|edge| {
+                let edge_0 = &edge.0;
+                let edge_1 = &edge.1;
+                quote!((#edge_0.to_string(), #edge_1.to_string()))
+            });
 
             self.target_blocks
-                .push("        let edges = vec!( ".to_string());
-            for edge in &struct_filter.edges {
-                self.target_blocks.push(format!(
-                    " (\"{edge1}\".to_string(), \"{edge2}\".to_string() ), ",
-                    edge1 = edge.0,
-                    edge2 = edge.1
-                ));
-            }
-            self.target_blocks.push(" );\n".to_string());
+                .push(quote!(let edges = vec![#(#edges),*]).to_string());
 
-            let ids_to_prop_block = "        let mut ids_to_properties: HashMap<String, HashMap<String, String>> = HashMap::new();\n".to_string();
-            self.target_blocks.push(ids_to_prop_block);
+            self.target_blocks.push(quote!(let mut ids_to_properties: HashMap<String, HashMap<String, String>> = HashMap::new();).to_string());
 
-            for vertex in &struct_filter.vertices {
-                let ids_to_properties_hashmap_init = format!(
-                    "        ids_to_properties.insert(\"{node}\".to_string(), HashMap::new());\n",
-                    node = vertex
-                );
-                self.target_blocks.push(ids_to_properties_hashmap_init);
-            }
+            let vertices = &struct_filter.vertices;
+
+            let ids_to_properties_hashmap_init = quote!(
+                #(ids_to_properties.insert(stringify!(#vertices).to_string(), HashMap::new()));*
+            )
+            .to_string();
+
+            self.target_blocks.push(ids_to_properties_hashmap_init);
+
             for node in struct_filter.properties.keys() {
-                let get_hashmap = format!(
-                    "        let mut {node}_hashmap = ids_to_properties.get_mut(\"{node}\").unwrap();\n",
-                    node = node
-                );
+                let node_hashmap_ident = format_ident!("{}_hashmap", node);
+                let get_hashmap = quote!(let mut #node_hashmap_ident = ids_to_properties.get_mut(stringify!(#node)).unwrap();).to_string();
                 self.target_blocks.push(get_hashmap);
+
                 for property_name in struct_filter.properties[node].keys() {
-                    let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
-                                                   node=node,
-                                                   property_name=property_name,
-                                                   property_value=struct_filter.properties[node][property_name]);
+                    let property_value = &struct_filter.properties[node][property_name];
+                    let fill_in_hashmap = quote!(#node_hashmap_ident.insert(stringify!(#property_name).to_string(), stringify!(#property_value).to_string());).to_string();
                     self.target_blocks.push(fill_in_hashmap);
                 }
             }
-            let make_graph = "        self.target_graph = Some(graph_utils::generate_target_graph(vertices, edges, ids_to_properties));\n".to_string();
+            let make_graph = quote!(self.target_graph = Some(graph_utils::generate_target_graph(vertices, edges, ids_to_properties));).to_string();
             self.target_blocks.push(make_graph);
         }
     }
@@ -282,22 +285,23 @@ impl CodeGenSimulator {
                 panic!("Unknown entity in return expression");
             }
 
-            let ret_block = format!(
-               "let node_ptr = graph_utils::get_node_with_id(&self.target_graph.as_ref().unwrap(), \"{node_id}\".to_string());
-               if node_ptr.is_none() {{
-                   print!(\"WARNING Node {node_id} not found\");
+            let node_id = entity;
+            let prop = property;
+            let ret_prop_ident = format_ident!("ret_{}", prop);
+
+            let ret_block = quote!(
+               let node_ptr = graph_utils::get_node_with_id(&self.target_graph.as_ref().unwrap(), stringify!(#node_id).to_string());
+               if node_ptr.is_none() {
+                   print!("WARNING Node {node_id} not found");
                    return vec!(x);
-               }}
+               }
                let trace_node_index = NodeIndex::new(m[node_ptr.unwrap().index()]);
-               if !&trace_graph.node_weight(trace_node_index).unwrap().1.contains_key(\"{prop}\") {{
+               if !&trace_graph.node_weight(trace_node_index).unwrap().1.contains_key(stringify!(#prop)) {
                    // we have not yet collected the return property
                    return vec!(x);
-               }}
-               let mut ret_{prop} = &trace_graph.node_weight(trace_node_index).unwrap().1[ \"{prop}\" ];\n
-               value = ret_{prop}.to_string();\n",
-                   node_id = entity,
-                   prop = property
-                );
+               }
+               let mut #ret_prop_ident = &trace_graph.node_weight(trace_node_index).unwrap().1[ stringify!(#prop) ];
+               value = #ret_prop_ident.to_string();).to_string();
 
             self.response_blocks.push(ret_block);
         }
