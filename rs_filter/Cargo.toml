@@ -1,0 +1,15 @@
+
+[package]
+name = "rs_filter"
+version = "0.1.0"
+authors = ["Anirudh Sivaraman <sk.anirudh@gmail.com>", "Jessica Berg <jb7399@nyu.edu>", "Fabian Ruffy <fruffy@nyu.edu>"]
+edition = "2018"
+
+[lib]
+name = "rust_filter"
+path = "filter.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+proxy-wasm = "0.1.*"
+log = "*"
