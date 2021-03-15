@@ -13,8 +13,8 @@ use antlr_rust::tree::Tree;
 use antlr_rust::tree::Visitable;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::process;
 use std::rc::Rc;
+use std::{mem, process};
 
 /***********************************/
 // FilterVisitor:  visits tree and fills out structural and property filters
@@ -86,26 +86,30 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
     fn visit_oC_ComparisonExpression(&mut self, ctx: &OC_ComparisonExpressionContext<'i>) {
         // get the left node
         ctx.oC_AddOrSubtractExpression().unwrap().accept(self);
-        let node = self.return_items[0].entity.clone();
-        let property = self.return_items[0].property.clone();
-        self.return_items.clear();
+        let mut lhs_return_items = Vec::new();
+        mem::swap(&mut lhs_return_items, &mut self.return_items);
+
+        let (node, property) = {
+            let item = lhs_return_items.into_iter().next().unwrap();
+            (item.entity, item.property)
+        };
 
         // process the right node
-        let value;
-        if let Some(right_clause) = ctx.oC_PartialComparisonExpression(0) {
+        let value = if let Some(right_clause) = ctx.oC_PartialComparisonExpression(0) {
             right_clause.accept(self);
-            value = self.return_items[0].entity.clone();
+            self.return_items[0].entity.clone()
         } else {
             log::error!("Expected a right-hand side expression.");
             process::exit(1);
-        }
+        };
+
         self.return_items.clear();
-        let attr_filter = AttributeFilter {
+
+        self.prop_filters.push(AttributeFilter {
             node,
             property,
             value,
-        };
-        self.prop_filters.push(attr_filter);
+        });
     }
 
     fn visit_oC_PatternElement(&mut self, ctx: &OC_PatternElementContext<'i>) {

@@ -267,7 +267,8 @@ impl CodeGenSimulator {
         }
         let entity = self.ir.return_expr.as_ref().unwrap().clone().entity;
         let mut property = self.ir.return_expr.as_ref().unwrap().clone().property;
-        if property.chars().next().unwrap() == ".".chars().next().unwrap() {
+
+        if property.starts_with('.') {
             property.remove(0);
         }
 
