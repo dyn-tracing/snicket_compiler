@@ -27,27 +27,23 @@ fn write_to_handlebars(
     output_filename: PathBuf,
 ) {
     let display = template_path.display();
-    let mut template_file = match File::open(&template_path) {
+
+    let template_str = match fs::read_to_string(&template_path) {
         Err(msg) => panic!("Failed to open {}: {}", display, msg),
         Ok(file) => file,
     };
 
-    let mut template_str = String::new();
-    match template_file.read_to_string(&mut template_str) {
-        Err(msg) => panic!("Failed to read {}: {}", display, msg),
-        Ok(_) => log::info!("Successfully read {}", display),
-    }
-
     let handlebars = Handlebars::new();
 
     let output = handlebars
-        .render_template(&template_str, &code_gen)
+        .render_template(template_str.as_str(), &code_gen)
         .expect("handlebar render failed");
 
     log::info!("Writing output to: {:?}", output_filename);
     let mut file = File::create(output_filename).expect("file create failed.");
     file.write_all(output.as_bytes()).expect("write failed");
 }
+
 fn main() {
     // Set up logging
     let mut builder = env_logger::Builder::from_default_env();

@@ -290,7 +290,7 @@ oC_NotExpression
 NOT : ( 'N' | 'n' ) ( 'O' | 'o' ) ( 'T' | 't' )  ;
 
 oC_ComparisonExpression
-                    :  oC_AddOrSubtractExpression ( SP? oC_PartialComparisonExpression )* ;
+                    :  oC_AddOrSubtractExpression ( SP? oC_PartialComparisonExpression )? ;
 
 oC_AddOrSubtractExpression
                        :  oC_MultiplyDivideModuloExpression ( ( SP? '+' SP? oC_MultiplyDivideModuloExpression ) | ( SP? '-' SP? oC_MultiplyDivideModuloExpression ) )* ;

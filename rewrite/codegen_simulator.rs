@@ -257,9 +257,7 @@ impl CodeGenSimulator {
         }
     }
 
-    fn make_attr_filter_blocks(&mut self) {
-        // TODO
-    }
+    fn make_attr_filter_blocks(&mut self) {}
 
     fn make_return_block(&mut self) {
         if self.ir.return_expr.is_none() {
