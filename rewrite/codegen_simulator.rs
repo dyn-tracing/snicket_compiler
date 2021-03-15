@@ -105,65 +105,55 @@ impl CodeGenSimulator {
     }
 
     fn collect_envoy_property(&mut self, property: String) {
-        let get_prop_block = format!("prop_str = format!(\"{{whoami}}.{{property}}=={{value}}\",
-                                                      whoami=&self.whoami.as_ref().unwrap(),
-                                                      property=\"{property}\",
-                                                      value=self.filter_state[\"{envoy_property}\"].string_data.as_ref().unwrap().to_string());
-                                            ", property=property, envoy_property=self.envoy_properties_to_access_names[&property]);
-        let insert_hdr_block = format!("
-        if x.headers.contains_key(\"properties_{property}\") {{
-            if !x.headers[\"properties_{property}\"].contains(&prop_str) {{ // don't add our properties if they have already been added
-                x.headers.get_mut(&\"properties_{property}\".to_string()).unwrap().push_str(\",\");
-                x.headers.get_mut(&\"properties_{property}\".to_string()).unwrap().push_str(&prop_str);
-            }}
-        }}
-        else {{
-            x.headers.insert(\"properties_{property}\".to_string(), prop_str);
-        }}
-        ", property=property);
+        let envoy_property = &self.envoy_properties_to_access_names[&property];
+        let get_prop_block = quote!(
+          prop_str = format!("{whoami}.{property}=={value}",
+                              whoami=&self.whoami.as_ref().unwrap(),
+                              property=stringify!(#property),
+                              value=self.filter_state[stringify!(#envoy_property)].string_data.as_ref().unwrap().to_string());
+        ).to_string();
+
+        let insert_hdr_block = quote!(
+          let properties_key = stringify!(properties_#property).to_string();
+          if x.headers.contains_key(stringify!(properties_#property)) {
+              if !x.headers[&properties_key].contains(&prop_str) { // don't add our properties if they have already been added
+                  x.headers.get_mut(&properties_key).unwrap().push_str(",");
+                  x.headers.get_mut(&properties_key).unwrap().push_str(&prop_str);
+              }
+          }
+          else {
+              x.headers.insert(properties_key, prop_str);
+          }
+        )
+        .to_string();
         self.request_blocks.push(get_prop_block);
         self.request_blocks.push(insert_hdr_block);
     }
 
     fn collect_udf_property(&mut self, udf_id: String) {
-<<<<<<< HEAD
         let my_udf_id_value = format_ident!("my_{}_value", udf_id);
         let leaf_func = &self.udf_table[&udf_id].leaf_func;
         let mid_func = &self.udf_table[&udf_id].mid_func;
+
         let get_udf_vals = quote!(
           let #my_udf_id_value = if x.headers.contains_key("path") {
-=======
-        let leaf_func = &self.udf_table[&udf_id].leaf_func;
-        let mid_func = &self.udf_table[&udf_id].mid_func;
-        let my_id_value_ident = format_ident!("my_{}_value", udf_id);
-
-        let get_udf_vals = quote!(let my_{id}_value;
-        if x.headers.contains_key("path") {
->>>>>>> db6c4fe (More conversions)
             // TODO:  only create trace graph once and then add to it
             let graph = self.create_trace_graph(x.clone());
             let child_iterator = graph.neighbors_directed(
                 graph_utils::get_node_with_id(&graph, self.whoami.as_ref().unwrap().clone()).unwrap(),
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
+
             for child in child_iterator {
                 child_values.push(graph.node_weight(child).unwrap().1[stringify!(#udf_id)].clone());
             }
-            if child_values.len() == 0 {
-<<<<<<< HEAD
+
+            if child_values.is_empty() {
                 #leaf_func(graph)
             } else {
                 #mid_func(graph, child_values)
             }
          } else {
-=======
-               #my_id_value_ident = #leaf_func(graph);
-            } else {
-               #my_id_value_ident = #mid_func(graph, child_values);
-            }
-         }
-         else {
->>>>>>> db6c4fe (More conversions)
              print!("WARNING: no path header");
              return vec!(x);
          }
