@@ -2,7 +2,6 @@ use crate::ir::VisitorResults;
 use indexmap::map::IndexMap;
 use regex::Regex;
 use serde::Serialize;
-use std::collections::HashMap;
 use std::mem;
 use std::str::FromStr;
 use strum_macros::EnumString;
@@ -42,7 +41,7 @@ pub struct CodeGenSimulator {
     target_blocks: Vec<String>,   // code blocks to create target graph
     udf_blocks: Vec<String>, // code blocks to be used in the handlebars on outgoing responses, to compute UDF before matching
     udf_table: IndexMap<String, Udf>, // where we store udf implementations
-    envoy_properties_to_access_names: HashMap<String, String>,
+    envoy_properties_to_access_names: IndexMap<String, String>,
     collected_properties: Vec<String>, // all the properties we collect
 }
 
@@ -55,7 +54,7 @@ impl CodeGenSimulator {
             target_blocks: Vec::new(),
             udf_blocks: Vec::new(),
             udf_table: IndexMap::default(),
-            envoy_properties_to_access_names: HashMap::new(),
+            envoy_properties_to_access_names: IndexMap::new(),
             collected_properties: Vec::new(),
         };
         for udf in udfs {
@@ -167,7 +166,7 @@ impl CodeGenSimulator {
         else {{
             x.headers.insert(\"properties_{udf_id}\".to_string(), {udf_id}_str);
         }}
-                                     
+
         ", udf_id=udf_id);
 
         self.udf_blocks.push(save_udf_vals);
