@@ -36,10 +36,10 @@ struct Udf {
 #[derive(Serialize)]
 pub struct CodeGenSimulator {
     ir: VisitorResults,               // the IR, as defined in to_ir.rs
-    request_blocks: Vec<String>, // code blocks to be used in the handlebars in incoming requests
-    response_blocks: Vec<String>, // code blocks to be used in the handlebars in outgoing responses, after matching
+    request_blocks: Vec<String>, // code blocks used in incoming requests
+    response_blocks: Vec<String>, // code blocks in outgoing responses, after matching
     target_blocks: Vec<String>,   // code blocks to create target graph
-    udf_blocks: Vec<String>, // code blocks to be used in the handlebars on outgoing responses, to compute UDF before matching
+    udf_blocks: Vec<String>, // code blocks to be used in outgoing responses, to compute UDF before matching
     udf_table: IndexMap<String, Udf>, // where we store udf implementations
     envoy_properties_to_access_names: IndexMap<String, String>,
     collected_properties: Vec<String>, // all the properties we collect
@@ -125,15 +125,15 @@ impl CodeGenSimulator {
 
     fn collect_udf_property(&mut self, udf_id: String) {
         let get_udf_vals = format!("let my_{id}_value;
-    if x.headers.contains_key(\"path\") {{
+    if x.headers.contains_key(\"properties_path\") {{
             // TODO:  only create trace graph once and then add to it
             let graph = self.create_trace_graph(x.clone());
             let child_iterator = graph.neighbors_directed(
-                graph_utils::get_node_with_id(&graph, self.whoami.as_ref().unwrap().clone()).unwrap(),
+                utils::get_node_with_id(&graph, self.whoami.as_ref().unwrap().clone()).unwrap(),
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
             for child in child_iterator {{
-                child_values.push(graph.node_weight(child).unwrap().1[\"{id}\"].clone());
+                child_values.push(graph.node_weight(child).unwrap().1[\"properties_{id}\"].clone());
             }}
             if child_values.len() == 0 {{
                 my_{id}_value = {leaf_func}(graph);
@@ -155,7 +155,7 @@ impl CodeGenSimulator {
 
         let save_udf_vals = format!("let {udf_id}_str = format!(\"{{whoami}}.{{udf_id}}=={{value}}\",
                                                       whoami=&self.whoami.as_ref().unwrap(),
-                                                      udf_id=\"{udf_id}\",
+                                                      udf_id=\"properties_{udf_id}\",
                                                       value=my_{udf_id}_value);
         if x.headers.contains_key(\"properties_{udf_id}\") {{
             if !x.headers[\"properties_{udf_id}\"].contains(&{udf_id}_str) {{ // don't add a udf property twice
@@ -251,7 +251,7 @@ impl CodeGenSimulator {
                     self.target_blocks.push(fill_in_hashmap);
                 }
             }
-            let make_graph = "        self.target_graph = Some(graph_utils::generate_target_graph(vertices, edges, ids_to_properties));\n".to_string();
+            let make_graph = "        self.target_graph = Some(utils::generate_target_graph(vertices, edges, ids_to_properties));\n".to_string();
             self.target_blocks.push(make_graph);
         }
     }
@@ -282,17 +282,23 @@ impl CodeGenSimulator {
             }
 
             let ret_block = format!(
-               "let node_ptr = graph_utils::get_node_with_id(&self.target_graph.as_ref().unwrap(), \"{node_id}\".to_string());
+               "let node_ptr = utils::get_node_with_id(&self.target_graph.as_ref().unwrap(), \"{node_id}\".to_string());
                if node_ptr.is_none() {{
                    print!(\"WARNING Node {node_id} not found\");
                    return vec!(x);
                }}
-               let trace_node_index = NodeIndex::new(m[node_ptr.unwrap().index()]);
-               if !&trace_graph.node_weight(trace_node_index).unwrap().1.contains_key(\"{prop}\") {{
-                   // we have not yet collected the return property
+               let mut trace_node_index = None;
+               for map in m {{
+                   if self.target_graph.as_ref().unwrap().node_weight(map.0).unwrap().0 == \"{node_id}\" {{
+                       trace_node_index = Some(map.1);
+                       break;
+                   }}
+               }}
+               if trace_node_index == None || !&trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key(\"{prop}\") {{
+                   // we have not yet collected the return property or have a mapping error
                    return vec!(x);
                }}
-               let mut ret_{prop} = &trace_graph.node_weight(trace_node_index).unwrap().1[ \"{prop}\" ];\n
+               let mut ret_{prop} = &trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
                value = ret_{prop}.to_string();\n",
                    node_id = entity,
                    prop = property
