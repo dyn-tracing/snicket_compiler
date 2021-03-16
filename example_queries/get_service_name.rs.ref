@@ -169,10 +169,10 @@ impl Filter {
     pub fn create_target_graph(&mut self) {
          let vertices = vec!(  "a".to_string(), "b".to_string(), "c".to_string(),  );
          let edges = vec!(   ("a".to_string(), "b".to_string() ),   ("b".to_string(), "c".to_string() ),   );
-         let mut ids_to_properties: HashMap<String, HashMap<String, String>> = HashMap::new();
-         ids_to_properties.insert("a".to_string(), HashMap::new());
-         ids_to_properties.insert("b".to_string(), HashMap::new());
-         ids_to_properties.insert("c".to_string(), HashMap::new());
+         let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
+         ids_to_properties.insert("a".to_string(), IndexMap::new());
+         ids_to_properties.insert("b".to_string(), IndexMap::new());
+         ids_to_properties.insert("c".to_string(), IndexMap::new());
          let mut b_hashmap = ids_to_properties.get_mut("b").unwrap();
          b_hashmap.insert("service_name".to_string(), "reviews-v1".to_string());
          self.target_graph = Some(graph_utils::generate_target_graph(vertices, edges, ids_to_properties));

@@ -2,20 +2,20 @@
 // IR Structs
 /***********************************/
 use serde::Serialize;
-use std::collections::HashMap;
+use indexmap::map::IndexMap;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct StructuralFilter {
     pub vertices: Vec<String>,
     pub edges: Vec<(String, String)>,
-    pub properties: HashMap<String, HashMap<String, String>>, // attribute, value
+    pub properties: IndexMap<String, IndexMap<String, String>>, // attribute, value
 }
 impl Default for StructuralFilter {
     fn default() -> Self {
         StructuralFilter {
             vertices: Vec::new(),
             edges: Vec::new(),
-            properties: HashMap::new(),
+            properties: IndexMap::new(),
         }
     }
 }
