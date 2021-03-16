@@ -1,8 +1,8 @@
 /***********************************/
 // IR Structs
 /***********************************/
-use serde::Serialize;
 use indexmap::map::IndexMap;
+use serde::Serialize;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct StructuralFilter {
