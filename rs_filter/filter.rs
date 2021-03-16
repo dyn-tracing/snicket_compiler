@@ -1,80 +1,203 @@
-// Copyright 2020 Google LLC
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-use log::debug;
+use log::trace;
 use proxy_wasm::traits::*;
 use proxy_wasm::types::*;
+use std::convert::TryFrom;
+use std::fmt;
+use std::time::Duration;
 
 #[no_mangle]
 pub fn _start() {
-    proxy_wasm::set_http_context(|_, _| -> Box<dyn HttpContext> { Box::new(HttpAuth) });
+    proxy_wasm::set_log_level(LogLevel::Trace);
+    proxy_wasm::set_root_context(|_| -> Box<dyn RootContext> { Box::new(HttpHeadersRoot) });
 }
 
-struct HttpAuth;
-
-impl HttpAuth {
-    fn fail(&mut self) {
-        debug!("auth: allowed");
-        self.send_http_response(403, vec![], Some(b"not authorized"));
+#[repr(i64)]
+#[derive(Debug, PartialEq)]
+enum TrafficDirection {
+    Unspecified = 0,
+    Inbound = 1,
+    Outbound = 2,
+}
+impl From<i64> for TrafficDirection {
+    fn from(orig: i64) -> Self {
+        match orig {
+            0x1 => return TrafficDirection::Inbound,
+            0x2 => return TrafficDirection::Outbound,
+            _ => return TrafficDirection::Unspecified,
+        };
     }
 }
 
-// Implement http functions related to this request.
-// This is the core of the filter code.
-impl HttpContext for HttpAuth {
-    // This callback will be invoked when request headers arrive
-    fn on_http_request_headers(&mut self, _: usize) -> Action {
-        // get all the request headers
-        let headers = self.get_http_request_headers();
-        // transform them from Vec<(String,String)> to Vec<(&str,&str)>; as dispatch_http_call needs
-        // Vec<(&str,&str)>.
-        let _ref_headers: Vec<(&str, &str)> = headers
-            .iter()
-            .map(|(ref k, ref v)| (k.as_str(), v.as_str()))
-            .collect();
+impl fmt::Display for TrafficDirection {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            TrafficDirection::Unspecified => write!(f, "unspecified"),
+            TrafficDirection::Inbound => write!(f, "inbound"),
+            TrafficDirection::Outbound => write!(f, "outbound"),
+        }
+    }
+}
 
+struct HttpHeadersRoot;
+
+impl Context for HttpHeadersRoot {}
+
+impl RootContext for HttpHeadersRoot {
+    fn get_type(&self) -> Option<ContextType> {
+        Some(ContextType::HttpContext)
+    }
+
+    fn create_http_context(&self, context_id: u32) -> Option<Box<dyn HttpContext>> {
+        let workload_name: String;
+        if let Some(workload) = self.get_property(vec!["node", "metadata", "WORKLOAD_NAME"]) {
+            match String::from_utf8(workload) {
+                Ok(cast_string) => workload_name = cast_string,
+                Err(_e) => workload_name = String::new(),
+            }
+        } else {
+            workload_name = String::new();
+        }
+        Some(Box::new(HttpHeaders {
+            context_id,
+            workload_name,
+        }))
+    }
+}
+
+struct HttpHeaders {
+    context_id: u32,
+    workload_name: String,
+}
+
+impl Context for HttpHeaders {}
+
+impl HttpContext for HttpHeaders {
+    fn on_http_request_headers(&mut self, num_headers: usize) -> Action {
+        let direction = self.get_traffic_direction();
+        log::warn!(
+            "{}: Request Header Direction {}",
+            self.workload_name,
+            direction
+        );
+        for (name, value) in &self.get_http_request_headers() {
+            log::warn!("#{} -> {}: {}", self.context_id, name, value);
+        }
+
+        if direction == TrafficDirection::Inbound {
+            self.on_http_request_headers_inbound(num_headers);
+        } else if direction == TrafficDirection::Outbound {
+            self.on_http_request_headers_outbound(num_headers);
+        } else {
+            log::error!("Unknown request direction!");
+        }
+
+        let key = "This";
+        let value = "works";
+
+        let call_result = self.dispatch_http_call(
+            "storage-upstream",
+            vec![
+                (":method", "GET"),
+                (":path", "/store"),
+                (":authority", "storage-upstream"),
+                ("key", key),
+                ("value", value),
+            ],
+            None,
+            vec![],
+            Duration::from_secs(5),
+        );
+        if let Err(e) = call_result {
+            log::error!("Failed to make a call to storage {:?}", e);
+        }
         Action::Continue
     }
 
-    fn on_http_response_headers(&mut self, _: usize) -> Action {
-        // Add a header on the response.
-        self.set_http_response_header("Hello", Some("world"));
+    fn on_http_response_headers(&mut self, num_headers: usize) -> Action {
+        let direction = self.get_traffic_direction();
+        log::warn!(
+            "{}: Response Header Direction {}",
+            self.workload_name,
+            direction
+        );
+        if direction == TrafficDirection::Inbound {
+            self.on_http_response_headers_inbound(num_headers);
+        } else if direction == TrafficDirection::Outbound {
+            self.on_http_response_headers_outbound(num_headers);
+        } else {
+            log::error!("Unknown request direction!");
+        }
         Action::Continue
     }
+
+    fn on_log(&mut self) {
+        trace!("#{} completed.", self.context_id);
+    }
 }
+impl HttpHeaders {
+    // Retrieves the traffic direction from the configuration context.
+    fn get_traffic_direction(&self) -> TrafficDirection {
+        if let Some(direction_bytes) = self.get_property(vec!["listener_direction"]) {
+            let cast_bytes = <[u8; 8]>::try_from(direction_bytes);
+            match cast_bytes {
+                Ok(byte_array) => return i64::from_ne_bytes(byte_array).into(),
+                Err(_e) => return 0i64.into(),
+            }
+        }
+        return 0i64.into();
+    }
 
-impl Context for HttpAuth {
-    fn on_http_call_response(&mut self, _: u32, header_size: usize, _: usize, _: usize) {
-        // We have a response to the http call!
-
-        // if we have no headers, it means the http call failed. Fail the incoming request as well.
-        if header_size == 0 {
-            self.fail();
+    fn on_http_request_headers_inbound(&mut self, _num_headers: usize) {
+        let trace_id: String;
+        if let Some(trace_id_) = self.get_http_request_header("x-request-id") {
+            trace_id = trace_id_;
+            log::warn!("Using trace id {}!", trace_id);
+        } else {
+            log::error!("Request inbound: x-request-id not found in header!",);
+            return;
+        }
+    }
+    fn on_http_request_headers_outbound(&mut self, _num_headers: usize) {
+        let trace_id: String;
+        if let Some(trace_id_) = self.get_http_request_header("x-request-id") {
+            trace_id = trace_id_;
+            log::warn!("Using trace id {}!", trace_id);
+        } else {
+            log::error!("Request outbound: x-request-id not found in header!",);
+            return;
+        }
+    }
+    fn on_http_response_headers_inbound(&mut self, _num_headers: usize) {
+        let trace_id: String;
+        if let Some(trace_id_) = self.get_http_response_header("x-request-id") {
+            trace_id = trace_id_;
+            log::warn!("Using trace id {}!", trace_id);
+        } else {
+            log::error!("Response inbound: x-request-id not found in header!",);
             return;
         }
 
-        // Check if the auth server returned "200", if so call `resume_http_request` so request is
-        // sent upstream.
-        // Otherwise, fail the incoming request.
-        match self.get_http_request_header(":status") {
-            Some(ref status) if status == "200" => {
-                self.resume_http_request();
-            }
-            _ => {
-                debug!("auth: not authorized");
-                self.fail();
-            }
+        // Add a header on the response.
+        self.set_http_response_header("Hello", Some("world"));
+    }
+
+    fn on_http_response_headers_outbound(&mut self, _num_headers: usize) {
+        let trace_id: String;
+        if let Some(trace_id_) = self.get_http_response_header("x-request-id") {
+            trace_id = trace_id_;
+            log::warn!("Using trace id {}!", trace_id);
+        } else {
+            log::error!("Response outbound: x-request-id not found in header!",);
+            return;
+        }
+
+        // This is where we merge the path and send it out
+        if let Some(_x_wasm) = self.get_http_response_header("x-wasm") {
+            let trace_key = trace_id + "path";
+            let _data = self.get_shared_data(&trace_key);
+        } else {
+            log::error!("Response outbound: x-wasm not found!",);
+            return;
         }
     }
 }
