@@ -11,8 +11,8 @@ use antlr_rust::tree::ParseTreeVisitor;
 use antlr_rust::tree::TerminalNode;
 use antlr_rust::tree::Tree;
 use antlr_rust::tree::Visitable;
-use std::collections::HashMap;
-use std::collections::HashSet;
+use indexmap::map::IndexMap;
+use indexmap::set::IndexSet;
 use std::process;
 use std::rc::Rc;
 
@@ -131,7 +131,7 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
             }
             if let Some(prop) = node_pattern.oC_Properties() {
                 let map_literal = prop.oC_MapLiteral().unwrap();
-                let mut prop_hashmap = HashMap::new();
+                let mut prop_hashmap = IndexMap::new();
                 for (j, prop_key_name) in
                     map_literal.oC_PropertyKeyName_all().into_iter().enumerate()
                 {
@@ -269,8 +269,8 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
 /// # Arguments
 /// * `visitor` - A visitor that already has its filters, returns, and aggregations filled in
 pub fn get_map_functions(mut results: VisitorResults) -> VisitorResults {
-    let mut unknown_properties: HashSet<String> = HashSet::new();
-    let mut known_properties: HashSet<String> = HashSet::new();
+    let mut unknown_properties: IndexSet<String> = IndexSet::new();
+    let mut known_properties: IndexSet<String> = IndexSet::new();
     known_properties.insert(".id".to_string()); // TODO:  are there any other built in properties besides id?
     for struct_filter in &results.struct_filters {
         for property_map in struct_filter.properties.values() {

@@ -228,12 +228,12 @@ impl CodeGenSimulator {
             }
             self.target_blocks.push(" );\n".to_string());
 
-            let ids_to_prop_block = "        let mut ids_to_properties: HashMap<String, HashMap<String, String>> = HashMap::new();\n".to_string();
+            let ids_to_prop_block = "        let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();\n".to_string();
             self.target_blocks.push(ids_to_prop_block);
 
             for vertex in &struct_filter.vertices {
                 let ids_to_properties_hashmap_init = format!(
-                    "        ids_to_properties.insert(\"{node}\".to_string(), HashMap::new());\n",
+                    "        ids_to_properties.insert(\"{node}\".to_string(), IndexMap::new());\n",
                     node = vertex
                 );
                 self.target_blocks.push(ids_to_properties_hashmap_init);
