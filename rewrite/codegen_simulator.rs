@@ -36,9 +36,9 @@ struct Udf {
 #[derive(Serialize)]
 pub struct CodeGenSimulator {
     ir: VisitorResults,               // the IR, as defined in to_ir.rs
-    request_blocks: Vec<String>, // code blocks used in incoming requests
-    response_blocks: Vec<String>, // code blocks in outgoing responses, after matching
-    target_blocks: Vec<String>,   // code blocks to create target graph
+    request_blocks: Vec<String>,      // code blocks used in incoming requests
+    response_blocks: Vec<String>,     // code blocks in outgoing responses, after matching
+    target_blocks: Vec<String>,       // code blocks to create target graph
     udf_blocks: Vec<String>, // code blocks to be used in outgoing responses, to compute UDF before matching
     udf_table: IndexMap<String, Udf>, // where we store udf implementations
     envoy_properties_to_access_names: IndexMap<String, String>,
@@ -124,7 +124,8 @@ impl CodeGenSimulator {
     }
 
     fn collect_udf_property(&mut self, udf_id: String) {
-        let get_udf_vals = format!("let my_{id}_value;
+        let get_udf_vals = format!(
+            "let my_{id}_value;
     if x.headers.contains_key(\"properties_path\") {{
             // TODO:  only create trace graph once and then add to it
             let graph = self.create_trace_graph(x.clone());
@@ -133,7 +134,7 @@ impl CodeGenSimulator {
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
             for child in child_iterator {{
-                child_values.push(graph.node_weight(child).unwrap().1[\"properties_{id}\"].clone());
+                child_values.push(graph.node_weight(child).unwrap().1[\"{id}\"].clone());
             }}
             if child_values.len() == 0 {{
                 my_{id}_value = {leaf_func}(graph);
@@ -147,9 +148,9 @@ impl CodeGenSimulator {
          }}
 
         ",
-        id=udf_id,
-        leaf_func=self.udf_table[&udf_id].leaf_func,
-        mid_func=self.udf_table[&udf_id].mid_func
+            id = udf_id,
+            leaf_func = self.udf_table[&udf_id].leaf_func,
+            mid_func = self.udf_table[&udf_id].mid_func
         );
         self.udf_blocks.push(get_udf_vals);
 

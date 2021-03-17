@@ -177,8 +177,8 @@ impl Filter {
         let mut path = mod_rpc.headers["properties_path"].clone();
         let mut properties = Vec::new();
         for header in mod_rpc.headers.keys() {
-            if header.contains("properties") && header != "properties_path" {
-                properties.push(mod_rpc.headers[header].clone());
+            if header.contains("properties_") && header != "properties_path" {
+                properties.push(mod_rpc.headers[header].clone().replace("properties_", ""));
             }
         }
         let prop_to_trace = properties.join(",");
@@ -216,11 +216,9 @@ impl Filter {
             // TODO: do return stuff
             {{#each response_blocks}}{{{this}}} {{/each}}
             let mut result_rpc = Rpc::new_with_src(&value, self.whoami.as_ref().unwrap());
-            let mut dest = self.whoami.clone().unwrap().split("_").next().unwrap().to_string(); // do not take the _plugin affix
-            dest.push_str("_storage");
             result_rpc
                 .headers
-                .insert("dest".to_string(), dest);
+                .insert("dest".to_string(), "storage".to_string());
             result_rpc
                 .headers
                 .insert("direction".to_string(), "request".to_string());
