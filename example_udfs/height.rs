@@ -11,8 +11,11 @@ fn leaf_height(_graph: Graph<(String, HashMap<String, String>), String>) -> u32 
 fn mid_height(_graph: Graph<(String, HashMap<String, String>), String>, children_responses: Vec<String>) -> u32 {
     let mut max = 0;
     for response in children_responses {
-        let response_as_u32 = response.parse::<u32>().unwrap();
-            if response_as_u32 > max { max = response_as_u32; }
+        let response_as_u32 = response.parse::<u32>();
+            match response_as_u32 {
+                Ok(num) => { if num > max { max = num; } }
+                Err(e) => { print!("error: {0}\n", e); }
+            }
     }
     return max + 1;
 }

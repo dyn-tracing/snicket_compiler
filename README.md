@@ -19,5 +19,8 @@ After the compiler has been built, you can compile queries with the
 `target/debug/dtc -q [QUERY] -u [USER_DEFINED_FUNCTION]` command. For example,
 `target/debug/dtc -q example_queries/count.cql -u example_udfs/count.cc` compiles a counting query with the user defined function "count". The result will be stored in `cpp_filter/filter.cc`.
 
+# Examples
+target/debug/dtc -q example_queries/height.cql -u example_udfs/height.rs -o rust_filter/filter.rs -c sim -r productpage-v1
 
+target/debug/dtc -q example_queries/get_service_name.cql -o rust_filter/filter.rs -c sim -r productpage-v1
 

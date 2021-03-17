@@ -1,21 +1,23 @@
 use rpc_lib::rpc::Rpc;
 use std::collections::HashMap;
-use petgraph::algo::isomorphic_subgraph_matching;
 use petgraph::graph::NodeIndex;
 use petgraph::Graph;
 use petgraph::Outgoing;
-use graph_utils::graph_utils;
+use graph_utils::utils;
+use graph_utils::iso::find_mapping_shamir_centralized;
 
 pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
-
 
 // user defined functions:
 
 
 
 // This represents a piece of state of the filter
-// it either contains a user defined function, or some sort of
-// other persistent state
+// it contains information that we get from calling getValue in the real filters
+// TODO:  since we no longer use these to define UDFs, we have no need for it
+// to be anything other than a string.  We should simplify it to simply have
+// an Option<String> for every possible envoy value
+
 #[derive(Clone, Debug)]
 pub struct State {
     pub type_of_state: Option<String>,
@@ -175,25 +177,26 @@ impl Filter {
          ids_to_properties.insert("c".to_string(), IndexMap::new());
          let mut b_hashmap = ids_to_properties.get_mut("b").unwrap();
          b_hashmap.insert("service_name".to_string(), "reviews-v1".to_string());
-         self.target_graph = Some(graph_utils::generate_target_graph(vertices, edges, ids_to_properties));
+         self.target_graph = Some(utils::generate_target_graph(vertices, edges, ids_to_properties));
  
     }
 
     pub fn create_trace_graph(&mut self, mut mod_rpc: Rpc) -> Graph<(String, HashMap<String, String>), String> {
         let trace;
         let mut path = mod_rpc.headers["properties_path"].clone();
-        let mut properties = String::new();
+        let mut properties = Vec::new();
         for header in mod_rpc.headers.keys() {
-            if header.contains("properties") && header != "properties_path" {
-                properties.push_str(mod_rpc.headers[header].as_str());
+            if header.contains("properties_") && header != "properties_path" {
+                properties.push(mod_rpc.headers[header].clone().replace("properties_", ""));
             }
         }
-        trace = graph_utils::generate_trace_graph_from_headers(path, properties);
+        let prop_to_trace = properties.join(",");
+        trace = utils::generate_trace_graph_from_headers(path, prop_to_trace);
         return trace;
     }
 
     pub fn on_incoming_requests(&mut self, mut x: Rpc) -> Vec<Rpc> {
-        let prop_str;
+        let mut prop_str;
         prop_str = format!("{whoami}.{property}=={value}",
                                                       whoami=&self.whoami.as_ref().unwrap(),
                                                       property="service_name",
@@ -240,41 +243,38 @@ impl Filter {
         
 
         let mut trace_graph = self.create_trace_graph(x.clone());
-        let mapping = isomorphic_subgraph_matching(
-            self.target_graph.as_ref().unwrap(),
+        let mapping = find_mapping_shamir_centralized(
             &trace_graph,
-            |x, y| {
-                for property in y.1.keys() {
-                    if x.1.contains_key(property) && &(x.1[property]) != &(y.1[property]) { return false; }
-                }
-                return true;
-            },
-            |x, y| return true,
+            self.target_graph.as_ref().unwrap(),
         );
         if !mapping.is_none() {
             let m = mapping.unwrap();
             let mut value = "0".to_string(); // dummy value
             // TODO: do return stuff
-            let node_ptr = graph_utils::get_node_with_id(&self.target_graph.as_ref().unwrap(), "a".to_string());
+            let node_ptr = utils::get_node_with_id(&self.target_graph.as_ref().unwrap(), "a".to_string());
                if node_ptr.is_none() {
                    print!("WARNING Node a not found");
                    return vec!(x);
                }
-               let trace_node_index = NodeIndex::new(m[node_ptr.unwrap().index()]);
-               if !&trace_graph.node_weight(trace_node_index).unwrap().1.contains_key("service_name") {
-                   // we have not yet collected the return property
+               let mut trace_node_index = None;
+               for map in m {
+                   if self.target_graph.as_ref().unwrap().node_weight(map.0).unwrap().0 == "a" {
+                       trace_node_index = Some(map.1);
+                       break;
+                   }
+               }
+               if trace_node_index == None || !&trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("service_name") {
+                   // we have not yet collected the return property or have a mapping error
                    return vec!(x);
                }
-               let mut ret_service_name = &trace_graph.node_weight(trace_node_index).unwrap().1[ "service_name" ];
+               let mut ret_service_name = &trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "service_name" ];
 
                value = ret_service_name.to_string();
  
             let mut result_rpc = Rpc::new_with_src(&value, self.whoami.as_ref().unwrap());
-            let mut dest = self.whoami.clone().unwrap().split("_").next().unwrap().to_string(); // do not take the _plugin affix
-            dest.push_str("_storage");
             result_rpc
                 .headers
-                .insert("dest".to_string(), dest);
+                .insert("dest".to_string(), "storage".to_string());
             result_rpc
                 .headers
                 .insert("direction".to_string(), "request".to_string());
