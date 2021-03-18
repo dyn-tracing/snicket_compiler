@@ -38,6 +38,15 @@ impl fmt::Display for TrafficDirection {
     }
 }
 
+#[repr(u8)]
+#[derive(Debug, PartialEq)]
+#[allow(dead_code)]
+enum HttpType {
+    Unspecified = 0,
+    Request = 1,
+    Response = 2,
+}
+
 struct HttpHeadersRoot;
 
 impl Context for HttpHeadersRoot {}
@@ -79,10 +88,7 @@ impl HttpContext for HttpHeaders {
             self.workload_name,
             direction
         );
-        for (name, value) in &self.get_http_request_headers() {
-            log::warn!("#{} -> {}: {}", self.context_id, name, value);
-        }
-
+        self.print_headers(HttpType::Request);
         if direction == TrafficDirection::Inbound {
             self.on_http_request_headers_inbound(num_headers);
         } else if direction == TrafficDirection::Outbound {
@@ -120,6 +126,8 @@ impl HttpContext for HttpHeaders {
             self.workload_name,
             direction
         );
+        self.print_headers(HttpType::Response);
+
         if direction == TrafficDirection::Inbound {
             self.on_http_response_headers_inbound(num_headers);
         } else if direction == TrafficDirection::Outbound {
@@ -147,21 +155,47 @@ impl HttpHeaders {
         return 0i64.into();
     }
 
+    fn print_headers(&self, direction: HttpType) {
+        if direction == HttpType::Request {
+            for (name, value) in &self.get_http_request_headers() {
+                log::warn!("#{} -> {}: {}", self.context_id, name, value);
+            }
+        } else if direction == HttpType::Response {
+            for (name, value) in &self.get_http_response_headers() {
+                log::warn!("#{} -> {}: {}", self.context_id, name, value);
+            }
+        } else {
+            log::error!("Unsupported http type {:?}", direction);
+        }
+    }
+
     fn on_http_request_headers_inbound(&mut self, _num_headers: usize) {
         let trace_id: String;
         if let Some(trace_id_) = self.get_http_request_header("x-request-id") {
             trace_id = trace_id_;
-            log::warn!("Using trace id {}!", trace_id);
+            log::warn!("Request inbound: Using trace id {}!", trace_id);
         } else {
             log::error!("Request inbound: x-request-id not found in header!",);
             return;
+        }
+        // attaching some data
+        let trace_key = trace_id + "path";
+        let trace_value = Some(self.workload_name.as_bytes());
+        let store_result = self.set_shared_data(&trace_key, trace_value, None);
+        if let Err(ref e) = store_result {
+            log::error!(
+                "Failed to store key {:?} and value {:?}: {:?}",
+                trace_key,
+                store_result,
+                e
+            );
         }
     }
     fn on_http_request_headers_outbound(&mut self, _num_headers: usize) {
         let trace_id: String;
         if let Some(trace_id_) = self.get_http_request_header("x-request-id") {
             trace_id = trace_id_;
-            log::warn!("Using trace id {}!", trace_id);
+            log::warn!("Request outbound:Using trace id {}!", trace_id);
         } else {
             log::error!("Request outbound: x-request-id not found in header!",);
             return;
@@ -171,21 +205,31 @@ impl HttpHeaders {
         let trace_id: String;
         if let Some(trace_id_) = self.get_http_response_header("x-request-id") {
             trace_id = trace_id_;
-            log::warn!("Using trace id {}!", trace_id);
+            log::warn!("Response inbound: Using trace id {}!", trace_id);
         } else {
             log::error!("Response inbound: x-request-id not found in header!",);
             return;
         }
-
-        // Add a header on the response.
-        self.set_http_response_header("Hello", Some("world"));
+        // Try to access some result we have stored before and attach it
+        let trace_key = trace_id + "path";
+        if let (Some(data), _) = self.get_shared_data(&trace_key) {
+            let msg = format!("Unable to convert {:?} into a string ", data);
+            // Add a header on the response.
+            // FIXME: There must be  a nicer way to resolve this
+            match String::from_utf8(data) {
+                Ok(cast_string) => self.set_http_response_header("Hello", Some(&cast_string)),
+                Err(_e) => log::error!("{}", msg),
+            }
+        } else {
+            log::warn!("Trace key {:?} not found in shared data.", trace_key);
+        }
     }
 
     fn on_http_response_headers_outbound(&mut self, _num_headers: usize) {
         let trace_id: String;
         if let Some(trace_id_) = self.get_http_response_header("x-request-id") {
             trace_id = trace_id_;
-            log::warn!("Using trace id {}!", trace_id);
+            log::warn!("Response outbound: Using trace id {}!", trace_id);
         } else {
             log::error!("Response outbound: x-request-id not found in header!",);
             return;

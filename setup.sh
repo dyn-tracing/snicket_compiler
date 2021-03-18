@@ -15,4 +15,5 @@ sudo apt update && sudo apt install bazel
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 set PATH $HOME/.cargo/bin $PATH
 rustup toolchain install nightly
-
+# install the wasm back end
+rustup target add wasm32-unknown-unknown --toolchain nightly
