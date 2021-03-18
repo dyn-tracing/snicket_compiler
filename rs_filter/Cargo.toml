@@ -1,0 +1,18 @@
+
+[package]
+name = "rs_filter"
+version = "0.1.0"
+authors = ["Anirudh Sivaraman <sk.anirudh@gmail.com>", "Jessica Berg <jb7399@nyu.edu>", "Fabian Ruffy <fruffy@nyu.edu>"]
+edition = "2018"
+
+[lib]
+name = "filter"
+path = "filter.rs"
+crate-type = ["cdylib"]
+
+[profile.release]
+lto = true
+
+[dependencies]
+proxy-wasm = { version = "0.1.*", features = ["wee_alloc"] }
+log = "*"
