@@ -8,6 +8,11 @@ use graph_utils::iso::find_mapping_shamir_centralized;
 
 pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
 
+pub struct FerriedData {
+    set_s: IndexMap<(NodeIndex, NodeIndex), IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>>,
+    trace_graph: Graph
+}
+
 // user defined functions:
 {{#each udf_table}}{{{this.func_impl}}}{{/each}}
 

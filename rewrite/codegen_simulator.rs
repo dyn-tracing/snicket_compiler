@@ -267,8 +267,7 @@ impl CodeGenSimulator {
             root_id = self.ir.root_id
         );
         self.udf_blocks.push(if_root_block);
-        let init_trace_prop_str =
-            "        let mut trace_prop_str : String;\n".to_string();
+        let init_trace_prop_str = "        let mut trace_prop_str : String;\n".to_string();
         self.udf_blocks.push(init_trace_prop_str);
 
         for attr_filter in &self.ir.attr_filters {
