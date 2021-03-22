@@ -14,7 +14,7 @@ crate-type = ["dylib"]
 path = "filter.rs"
 
 [dependencies]
-petgraph = { path = "../petgraph" }
+petgraph = { path = "../petgraph" , features = ["serde-1"] }
 rpc_lib = { path = "../rpc_lib" }
 graph_utils = { path = "../graph_utils" }
 indexmap = { version = "1.6.1", features = ["serde-1"] }

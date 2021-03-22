@@ -5,8 +5,27 @@ use petgraph::Graph;
 use petgraph::Outgoing;
 use graph_utils::utils;
 use graph_utils::iso::find_mapping_shamir_centralized;
+use serde::Serialize;
 
 pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
+
+#[derive(Debug, Serialize)]
+pub struct FerriedData {
+    set_s: IndexMap<(NodeIndex, NodeIndex), IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>>,
+    trace_graph: Graph<(String, IndexMap<String, String>), String>,
+    unassigned_properties: Vec<(String, String, String)>, // entity property value
+}
+
+impl FerriedData {
+    fn default() -> FerriedData {
+        FerriedData {
+            set_s: IndexMap::new(),
+            trace_graph: Graph::new(),
+            unassigned_properties: Vec::new(),
+            
+        }
+    }
+}
 
 // user defined functions:
 {{#each udf_table}}{{{this.func_impl}}}{{/each}}
@@ -19,33 +38,11 @@ pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
 // an Option<String> for every possible envoy value
 
 #[derive(Clone, Debug)]
-pub struct State {
-    pub type_of_state: Option<String>,
-    pub string_data: Option<String>,
-}
-
-impl State {
-    pub fn new() -> State {
-        State {
-            type_of_state: None,
-            string_data: None,
-        }
-    }
-
-    pub fn new_with_str(str_data: String) -> State {
-        State {
-            type_of_state: Some(String::from("String")),
-            string_data: Some(str_data),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
 pub struct Filter {
     pub whoami: Option<String>,
     pub target_graph: Option<Graph<(String, IndexMap<String, String>), String>>,
-    pub filter_state: IndexMap<String, State>,
-    pub envoy_shared_data: IndexMap<String, String>,
+    pub filter_state: IndexMap<String, String>,
+    pub envoy_shared_data: IndexMap<String, String>, // trace ID to stored ferried data as string 
     pub collected_properties: Vec<String>, //properties to collect
 }
 
@@ -63,14 +60,10 @@ impl Filter {
 
     #[no_mangle]
     pub fn new_with_envoy_properties(string_data: IndexMap<String, String>) -> *mut Filter {
-        let mut hash = IndexMap::new();
-        for key in string_data.keys() {
-            hash.insert(key.clone(), State::new_with_str(string_data[key].clone()));
-        }
         Box::into_raw(Box::new(Filter {
                                    whoami: None,
                                    target_graph: None,
-                                   filter_state: hash,
+                                   filter_state: string_data,
                                    envoy_shared_data: IndexMap::new(),
                                    collected_properties: vec!({{#each collected_properties}}"{{{this}}}".to_string(), {{/each}} ),
                                }))
@@ -83,64 +76,68 @@ impl Filter {
     }
 
     pub fn set_whoami(&mut self) {
-        let my_node_wrapped = self
-            .filter_state
-            .get("node.metadata.WORKLOAD_NAME");
-        if my_node_wrapped.is_none() {
+        if !self.filter_state.contains_key("node.metadata.WORKLOAD_NAME") {
             print!("WARNING: filter was initialized without envoy properties and thus cannot function");
             return;
         }
-        let my_node = my_node_wrapped
-            .unwrap()
-            .string_data
-            .clone()
-            .unwrap();
+        let my_node = self
+            .filter_state["node.metadata.WORKLOAD_NAME"].clone();
         self.whoami = Some(my_node);
         assert!(self.whoami.is_some());
     }
 
     pub fn store_headers(&mut self, x: Rpc) {
-        // store path as well as properties
-        let prop_str = format!("{uid}_properties_path", uid=x.uid);
-        if x.headers.contains_key("properties_path") {
-            if self.envoy_shared_data.contains_key(&prop_str) {
-                self.envoy_shared_data.get_mut(&prop_str).unwrap().push_str(",");
-                self.envoy_shared_data.get_mut(&prop_str).unwrap().push_str(&x.headers["properties_path"]);
-                self.envoy_shared_data.get_mut(&prop_str).unwrap().push_str(";");
-                self.envoy_shared_data.get_mut(&prop_str).unwrap().push_str(self.whoami.as_ref().unwrap());
-            }
-            else {
-                // add yourself
-                let mut cur_path = x.headers["properties_path"].clone();
-                cur_path.push_str(";");
-                cur_path.push_str(self.whoami.as_ref().unwrap());
-                self.envoy_shared_data.insert(prop_str, cur_path);
-            }
+        // If you don't have data, nothing to store
+        if !x.headers.contains_key("ferried_data") { 
+            print!("WARNING: no ferried data\n");
         }
-        for key in &self.collected_properties {
-            let prop_str = format!("{uid}_properties_{key}", uid=x.uid, key=key);
-            let prop_key = format!("properties_{key}", key=key);
-            if x.headers.contains_key(&prop_key) {
-                if self.envoy_shared_data.contains_key(&prop_str) { // concatenate with comma if not duplicate
-                    // make lists of properties
-                    let properties_unified = self.envoy_shared_data[&prop_str].clone();
-                    let mut properties : Vec<String> = properties_unified.split(",").map(|s| s.to_string()).collect();
-                    let cur_properties_unified = x.headers[&prop_key].clone();
-                    let mut cur_properties : Vec<String> = cur_properties_unified.split(",").map(|s| s.to_string()).collect();
-
-                    // merge lists and remove duplicates
-                    properties.append(&mut cur_properties);
-                    properties.sort_unstable(); // must sort for dedup to work
-                    properties.dedup();
-
-                    // store result
-                    let property_string_to_store = properties.join(",");
-                    self.envoy_shared_data.insert(prop_str.clone(), property_string_to_store.clone());
-                } else {
-                    self.envoy_shared_data.insert(prop_str.clone(), x.headers[&prop_key].clone());
-                }
-            }
+        // If there is no data stored, you needn't merge - just throw it in
+        if !self.envoy_shared_data.contains_key(x.uid) {
+            self.envoy_shared_data.insert(x.uid, x.headers["ferried_data"]);
         }
+
+        // Else, we merge in 3 parts, for each of the struct values
+        let data: FerriedData = serde_json::from_str(x.headers["ferried_data"]);
+        let stored_data: FerriedData = serde_json::from_str(self.envoy_shared_data[x.uid]);
+
+        // 1. TODO: merge set_s
+
+        // 2. Merge the graphs by becoming another child of root
+
+        let mut root_stored = utils::find_root(&stored_data.trace_graph);
+        let mut root_new = utils::find_root(&data.trace_graph);
+
+        // add nodes
+        for node in data.trace_graph.node_indices() {
+            stored_data.trace_graph.add_node(data.trace_graph.node_weight(node).unwrap());
+        }
+
+        // add edges
+        for edge in data.trace_graph.edge_indices() {
+            let edge0_weight = data.trace_graph.node_weight(edge.0).unwrap();
+            let edge1_weight = data.trace_graph.node_weight(edge.1).unwrap();
+            let edge0_in_stored_graph = get_node_with_id(stored_data.trace_graph, edge0_weight);
+            let edge1_in_stored_graph = get_node_with_id(stored_data.trace_graph, edge1_weight);
+            stored_data.trace_graph.add_edge(edge0_in_stored_graph, edge1_in_stored_graph, String::new());
+        }
+
+        // add link between roots
+        let root_new_weight = data.trace_graph.node_weight(root_new).unwrap();
+        let root_new_in_stored = get_node_with_id(stored_data.trace_graph, root_new_weight);
+        stored_data.trace_graph.add_edge(
+            root_stored,
+            root_new_in_stored,
+            String::new(),
+        );
+
+        // 3. merge unassigned properties
+        //    these are properties we have collected but are not yet in the graph
+        stored_data.unassigned_properties.append(data.unassigned_properties);
+        stored_data.unassigned_properties.sort_unstable();
+        stored_data.unassigned_properties.dedup();
+
+        self.envoy_shared_data.insert(x.uid, serde_json::to_str(stored_data));
+
     }
 
     pub fn merge_headers(&mut self, uid: u64, mut new_rpc_headers: IndexMap<String, String>) -> IndexMap<String, String> {

@@ -106,7 +106,7 @@ impl CodeGenSimulator {
         let get_prop_block = format!("prop_str = format!(\"{{whoami}}.{{property}}=={{value}}\",
                                                       whoami=&self.whoami.as_ref().unwrap(),
                                                       property=\"{property}\",
-                                                      value=self.filter_state[\"{envoy_property}\"].string_data.as_ref().unwrap().to_string());
+                                                      value=self.filter_state[\"{envoy_property}\"]);
                                             ", property=property, envoy_property=self.envoy_properties_to_access_names[&property]);
         let insert_hdr_block = format!("
         if x.headers.contains_key(\"properties_{property}\") {{
