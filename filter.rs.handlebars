@@ -201,6 +201,8 @@ impl Filter {
         // at most, we return two rpcs:  one to continue on and one to storage
         let mut original_rpc = x.clone();
         let mut storage_rpc : Option<Rpc> = None;
+        let mut have_trace_level_attributes = true;
+        let mut am_root = false;
 
         // calculate UDFs and store result
         {{#each udf_blocks}}{{{this}}} {{/each}}
@@ -210,9 +212,9 @@ impl Filter {
             &trace_graph,
             self.target_graph.as_ref().unwrap(),
         );
-        if !mapping.is_none() {
+        if !mapping.is_none() && have_trace_level_attributes {
             let m = mapping.unwrap();
-            let mut value = "0".to_string(); // dummy value
+            let mut value : String;
             // TODO: do return stuff
             {{#each response_blocks}}{{{this}}} {{/each}}
             let mut result_rpc = Rpc::new_with_src(&value, self.whoami.as_ref().unwrap());

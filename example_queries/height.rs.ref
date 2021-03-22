@@ -245,6 +245,8 @@ impl Filter {
         // at most, we return two rpcs:  one to continue on and one to storage
         let mut original_rpc = x.clone();
         let mut storage_rpc : Option<Rpc> = None;
+        let mut have_trace_level_attributes = true;
+        let mut am_root = false;
 
         // calculate UDFs and store result
         let my_height_value;
@@ -283,36 +285,39 @@ impl Filter {
             x.headers.insert("properties_height".to_string(), height_str);
         }
 
-         
+         if self.whoami.as_ref().unwrap() == "productpage-v1" {
+         let mut trace_prop_str : String;
+        am_root = true;
+        } 
 
         let mut trace_graph = self.create_trace_graph(x.clone());
         let mapping = find_mapping_shamir_centralized(
             &trace_graph,
             self.target_graph.as_ref().unwrap(),
         );
-        if !mapping.is_none() {
+        if !mapping.is_none() && have_trace_level_attributes {
             let m = mapping.unwrap();
-            let mut value = "0".to_string(); // dummy value
+            let mut value : String;
             // TODO: do return stuff
             let node_ptr = utils::get_node_with_id(&self.target_graph.as_ref().unwrap(), "a".to_string());
-               if node_ptr.is_none() {
-                   print!("WARNING Node a not found");
-                   return vec!(x);
-               }
-               let mut trace_node_index = None;
-               for map in m {
-                   if self.target_graph.as_ref().unwrap().node_weight(map.0).unwrap().0 == "a" {
-                       trace_node_index = Some(map.1);
-                       break;
-                   }
-               }
-               if trace_node_index == None || !&trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("height") {
-                   // we have not yet collected the return property or have a mapping error
-                   return vec!(x);
-               }
-               let mut ret_height = &trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "height" ];
+        if node_ptr.is_none() {
+           print!("WARNING Node a not found");
+                return vec!(x);
+        }
+        let mut trace_node_index = None;
+        for map in m {
+            if self.target_graph.as_ref().unwrap().node_weight(map.0).unwrap().0 == "a" {
+                trace_node_index = Some(map.1);
+                break;
+            }
+        }
+        if trace_node_index == None || !&trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("height") {
+            // we have not yet collected the return property or have a mapping error
+            return vec!(x);
+        }
+        let mut ret_height = &trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "height" ];
 
-               value = ret_height.to_string();
+        value = ret_height.to_string();
  
             let mut result_rpc = Rpc::new_with_src(&value, self.whoami.as_ref().unwrap());
             result_rpc
