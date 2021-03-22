@@ -1,1 +1,1 @@
-MATCH (a {service_name: "productpage-v1"}) RETURN agg(a.request_size)
+MATCH (a {service_name: "productpage-v1"}) RETURN a.request_size, hist(a.request_size)

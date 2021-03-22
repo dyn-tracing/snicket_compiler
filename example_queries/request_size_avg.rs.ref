@@ -57,7 +57,7 @@ impl Filter {
             target_graph: None,
             filter_state: IndexMap::new(),
             envoy_shared_data: IndexMap::<String, String>::new(),
-            collected_properties: vec!( "service_name".to_string(), "service_name".to_string(),  ),
+            collected_properties: vec!( "service_name".to_string(), "request_size".to_string(),  ),
          }))
     }
 
@@ -72,7 +72,7 @@ impl Filter {
                                    target_graph: None,
                                    filter_state: hash,
                                    envoy_shared_data: IndexMap::new(),
-                                   collected_properties: vec!("service_name".to_string(), "service_name".to_string(),  ),
+                                   collected_properties: vec!("service_name".to_string(), "request_size".to_string(),  ),
                                }))
      }
 
@@ -213,17 +213,17 @@ impl Filter {
         }
          prop_str = format!("{whoami}.{property}=={value}",
                                                       whoami=&self.whoami.as_ref().unwrap(),
-                                                      property="service_name",
-                                                      value=self.filter_state["node.metadata.WORKLOAD_NAME"].string_data.as_ref().unwrap().to_string());
+                                                      property="request_size",
+                                                      value=self.filter_state["request.total_size"].string_data.as_ref().unwrap().to_string());
                                              
-        if x.headers.contains_key("properties_service_name") {
-            if !x.headers["properties_service_name"].contains(&prop_str) { // don't add our properties if they have already been added
-                x.headers.get_mut(&"properties_service_name".to_string()).unwrap().push_str(",");
-                x.headers.get_mut(&"properties_service_name".to_string()).unwrap().push_str(&prop_str);
+        if x.headers.contains_key("properties_request_size") {
+            if !x.headers["properties_request_size"].contains(&prop_str) { // don't add our properties if they have already been added
+                x.headers.get_mut(&"properties_request_size".to_string()).unwrap().push_str(",");
+                x.headers.get_mut(&"properties_request_size".to_string()).unwrap().push_str(&prop_str);
             }
         }
         else {
-            x.headers.insert("properties_service_name".to_string(), prop_str);
+            x.headers.insert("properties_request_size".to_string(), prop_str);
         }
          
         self.store_headers(x.clone());
@@ -243,7 +243,12 @@ impl Filter {
         // calculate UDFs and store result, and check trace level properties
         if self.whoami.as_ref().unwrap() == "productpage-v1" {
          let mut trace_prop_str : String;
-        } 
+ 
+                let mut trace_prop_str = "productpage-v1.request_size==1".to_string();
+                if x.headers.contains_key("properties_request_size") {
+                    if !x.headers["properties_request_size"].contains(&trace_prop_str) { return vec!(x); }
+                }
+                        } 
 
         let mut trace_graph = self.create_trace_graph(x.clone());
         let mapping = find_mapping_shamir_centralized(
@@ -266,13 +271,13 @@ impl Filter {
                 break;
             }
         }
-        if trace_node_index == None || !&trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("service_name") {
+        if trace_node_index == None || !&trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("request_size") {
             // we have not yet collected the return property or have a mapping error
             return vec!(x);
         }
-        let mut ret_service_name = &trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "service_name" ];
+        let mut ret_request_size = &trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "request_size" ];
 
-        value = ret_service_name.to_string();
+        value = ret_request_size.to_string();
  
             let mut result_rpc = Rpc::new_with_src(&value, self.whoami.as_ref().unwrap());
             result_rpc

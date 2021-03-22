@@ -115,6 +115,7 @@ fn main() {
     let tf = CommonTokenFactory::default();
     // Read query from file specified by command line argument.
     let query_file = matches.value_of("query").unwrap();
+    let root_id = matches.value_of("root_node").unwrap();
     let query: String = fs::read_to_string(query_file).unwrap();
     let query_stream = InputStream::new_owned(query.into_boxed_str());
     let lexer = CypherLexer::new_with_token_factory(query_stream, &tf);
@@ -126,7 +127,7 @@ fn main() {
         log::error!("Error parsing query: {:?}", e);
         return;
     }
-    let visitor_results = dyntracing::to_ir::visit_result(result.unwrap());
+    let visitor_results = dyntracing::to_ir::visit_result(result.unwrap(), root_id.to_string());
     match matches.value_of("compilation_mode").unwrap() {
         "sim" => {
             // TODO: support multiple UDF files

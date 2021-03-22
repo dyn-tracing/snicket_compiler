@@ -62,8 +62,9 @@ fn check_compilation_cc(
 #[test_case("get_service_name.cql", vec![]; "get_service_name")]
 #[test_case("height.cql", vec!["height.rs"]; "height")]
 #[test_case("histogram.cql", vec!["histogram.rs"]; "inconclusive - histogram")]
-#[test_case("request_size.cql", vec![]; "inconclusive - request_size")]
-#[test_case("request_size_avg.cql", vec![]; "inconclusive - request_size_avg")]
+#[test_case("request_size.cql", vec![]; "request_size")]
+#[test_case("request_size_avg.cql", vec![]; "request_size_avg")]
+#[test_case("request_size_avg_trace_attr.cql", vec![]; "request_size_avg_trace_attr")]
 #[test_case("latency.cql", vec!["latency.rs"]; "inconclusive - latency")]
 fn check_compilation_rust(
     query_name: &str,
@@ -94,7 +95,7 @@ fn check_compilation_rust(
     out_file.set_extension("rs");
     args.extend(vec!["-o", out_file.to_str().unwrap()]);
     args.extend(vec!["-c", "sim"]);
-    args.extend(vec!["--root-node", "0"]);
+    args.extend(vec!["--root-node", "productpage-v1"]);
     cmd.args(args);
     cmd.assert().success();
 

@@ -258,7 +258,79 @@ impl CodeGenSimulator {
     }
 
     fn make_attr_filter_blocks(&mut self) {
-        // TODO
+        // for everything except trace level attributes, the UDF/envoy property
+        // collection will make the attribute filtering happen at the same time as
+        // the struct filtering.  This is not the case for trace-level attributes
+
+        let if_root_block = format!(
+            "if self.whoami.as_ref().unwrap() == \"{root_id}\" {{\n",
+            root_id = self.ir.root_id
+        );
+        self.udf_blocks.push(if_root_block);
+        let init_trace_prop_str = "        let mut trace_prop_str : String;\n".to_string();
+        self.udf_blocks.push(init_trace_prop_str);
+
+        for attr_filter in &self.ir.attr_filters {
+            if attr_filter.node == "trace" {
+                let mut prop = attr_filter.property.clone();
+                if prop.starts_with('.') {
+                    prop.remove(0);
+                }
+                let trace_filter_block = format!(
+                "
+                let mut trace_prop_str = \"{root_id}.{prop_name}=={value}\".to_string();
+                if x.headers.contains_key(\"properties_{prop_name}\") {{
+                    if !x.headers[\"properties_{prop_name}\"].contains(&trace_prop_str) {{ return vec!(x); }}
+                }}
+                ", root_id=self.ir.root_id, prop_name=prop, value=attr_filter.value);
+                self.udf_blocks.push(trace_filter_block);
+            }
+        }
+
+        let end_root_block = "       }".to_string();
+        self.udf_blocks.push(end_root_block);
+    }
+
+    fn make_storage_rpc_value_from_trace(&mut self, entity: String, property: String) {
+        let ret_block = format!(
+        "let trace_node_index = utils::get_node_with_id(&trace_graph, \"{node_id}\".to_string());
+        if trace_node_index.is_none() {{
+           print!(\"WARNING Node {node_id} not found\");
+                return vec!(x);
+        }}
+        let mut ret_{prop} = &trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
+        value = ret_{prop}.to_string();\n",
+                node_id = entity,
+                prop = property
+        );
+
+        self.response_blocks.push(ret_block);
+    }
+    fn make_storage_rpc_value_from_target(&mut self, entity: String, property: String) {
+        let ret_block = format!(
+        "let node_ptr = utils::get_node_with_id(&self.target_graph.as_ref().unwrap(), \"{node_id}\".to_string());
+        if node_ptr.is_none() {{
+           print!(\"WARNING Node {node_id} not found\");
+                return vec!(x);
+        }}
+        let mut trace_node_index = None;
+        for map in m {{
+            if self.target_graph.as_ref().unwrap().node_weight(map.0).unwrap().0 == \"{node_id}\" {{
+                trace_node_index = Some(map.1);
+                break;
+            }}
+        }}
+        if trace_node_index == None || !&trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key(\"{prop}\") {{
+            // we have not yet collected the return property or have a mapping error
+            return vec!(x);
+        }}
+        let mut ret_{prop} = &trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
+        value = ret_{prop}.to_string();\n",
+                node_id = entity,
+                prop = property
+        );
+
+        self.response_blocks.push(ret_block);
     }
 
     fn make_return_block(&mut self) {
@@ -272,7 +344,7 @@ impl CodeGenSimulator {
         }
 
         if entity == "trace" {
-            // TODO
+            self.make_storage_rpc_value_from_trace(self.ir.root_id.clone(), property);
         } else {
             let num_struct_filters = self.ir.struct_filters.len();
             if !self.ir.struct_filters[num_struct_filters - 1]
@@ -281,36 +353,33 @@ impl CodeGenSimulator {
             {
                 panic!("Unknown entity in return expression");
             }
-
-            let ret_block = format!(
-               "let node_ptr = utils::get_node_with_id(&self.target_graph.as_ref().unwrap(), \"{node_id}\".to_string());
-               if node_ptr.is_none() {{
-                   print!(\"WARNING Node {node_id} not found\");
-                   return vec!(x);
-               }}
-               let mut trace_node_index = None;
-               for map in m {{
-                   if self.target_graph.as_ref().unwrap().node_weight(map.0).unwrap().0 == \"{node_id}\" {{
-                       trace_node_index = Some(map.1);
-                       break;
-                   }}
-               }}
-               if trace_node_index == None || !&trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key(\"{prop}\") {{
-                   // we have not yet collected the return property or have a mapping error
-                   return vec!(x);
-               }}
-               let mut ret_{prop} = &trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
-               value = ret_{prop}.to_string();\n",
-                   node_id = entity,
-                   prop = property
-                );
-
-            self.response_blocks.push(ret_block);
+            self.make_storage_rpc_value_from_target(entity, property);
         }
     }
 
     fn make_aggr_block(&mut self) {
-        // TODO
+        // for the simulator, aggregation is the same as return
+        if self.ir.aggregate.is_none() {
+            return;
+        }
+        let entity = self.ir.aggregate.as_ref().unwrap().clone().entity;
+        let mut property = self.ir.aggregate.as_ref().unwrap().clone().property;
+        if property.chars().next().unwrap() == ".".chars().next().unwrap() {
+            property.remove(0);
+        }
+
+        if entity == "trace" {
+            self.make_storage_rpc_value_from_trace(self.ir.root_id.clone(), property);
+        } else {
+            let num_struct_filters = self.ir.struct_filters.len();
+            if !self.ir.struct_filters[num_struct_filters - 1]
+                .vertices
+                .contains(&entity)
+            {
+                panic!("Unknown entity in return expression");
+            }
+            self.make_storage_rpc_value_from_target(entity, property);
+        }
     }
 }
 
@@ -349,7 +418,7 @@ mod tests {
         let token_source = CommonTokenStream::new(_lexer);
         let mut parser = CypherParser::new(token_source);
         let result = parser.oC_Cypher().expect("parsed unsuccessfully");
-        visit_result(result)
+        visit_result(result, "".to_string())
     }
 
     #[test]
@@ -357,6 +426,28 @@ mod tests {
         let result =
             get_codegen_from_query("MATCH (a) -[]-> (b)-[]->(c) RETURN a.count".to_string());
         assert!(!result.struct_filters.is_empty());
-        let codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());
+        let _codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());
+    }
+
+    #[test]
+    fn get_group_by() {
+        let result = get_codegen_from_query(
+            "MATCH (a {service_name: \"productpage-v1\"}) RETURN a.count, agg".to_string(),
+        );
+        assert!(!result.struct_filters.is_empty());
+        let _codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());
+        assert!(!_codegen.target_blocks.is_empty());
+        assert!(!_codegen.ir.struct_filters.is_empty());
+        assert!(!_codegen.ir.aggregate.is_none());
+    }
+
+    #[test]
+    fn test_where() {
+        let result = get_codegen_from_query(
+            "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) WHERE trace.request_size = 1 RETURN a.request_size, avg(a.request_size)".to_string(),
+        );
+        assert!(!result.struct_filters.is_empty());
+        let _codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());
+        assert!(!_codegen.ir.attr_filters.is_empty());
     }
 }

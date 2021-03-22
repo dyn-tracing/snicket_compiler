@@ -22,7 +22,7 @@ use std::rc::Rc;
 
 pub struct FilterVisitor {
     struct_filters: Vec<StructuralFilter>,
-    prop_filters: Vec<AttributeFilter>,
+    attr_filters: Vec<AttributeFilter>,
     return_items: Vec<IrReturn>,
 }
 
@@ -30,7 +30,7 @@ impl Default for FilterVisitor {
     fn default() -> Self {
         FilterVisitor {
             struct_filters: Vec::new(),
-            prop_filters: Vec::new(),
+            attr_filters: Vec::new(),
             return_items: Vec::new(),
         }
     }
@@ -105,7 +105,7 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
             property,
             value,
         };
-        self.prop_filters.push(attr_filter);
+        self.attr_filters.push(attr_filter);
     }
 
     fn visit_oC_PatternElement(&mut self, ctx: &OC_PatternElementContext<'i>) {
@@ -282,7 +282,7 @@ pub fn get_map_functions(mut results: VisitorResults) -> VisitorResults {
         }
     }
 
-    for attribute_filter in &results.prop_filters {
+    for attribute_filter in &results.attr_filters {
         if !known_properties.contains(&attribute_filter.property) {
             unknown_properties.insert(attribute_filter.property.to_string());
         }
@@ -306,17 +306,18 @@ pub fn get_map_functions(mut results: VisitorResults) -> VisitorResults {
 
 /// This is a function that aggregates all the functionality above;  it makes a visitor,
 /// visits everything in the query via accept, and then finds the map functions.
-pub fn visit_result(result: Rc<OC_CypherContextAll>) -> VisitorResults {
+pub fn visit_result(result: Rc<OC_CypherContextAll>, root_id: String) -> VisitorResults {
     let mut filter_visitor = FilterVisitor::default();
     let mut return_visitor = ReturnVisitor::default();
     let _res = result.accept(&mut filter_visitor);
     let _res = result.accept(&mut return_visitor);
     let results = VisitorResults {
         struct_filters: filter_visitor.struct_filters,
-        prop_filters: filter_visitor.prop_filters,
+        attr_filters: filter_visitor.attr_filters,
         return_expr: return_visitor.return_expr,
         aggregate: return_visitor.aggregate,
         maps: Vec::new(),
+        root_id,
     };
     get_map_functions(results)
 }
@@ -380,10 +381,10 @@ mod tests {
         let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
         assert!(!visitor.struct_filters.is_empty());
-        assert!(!visitor.prop_filters.is_empty());
-        assert!(visitor.prop_filters[0].node == "trace".to_string());
-        assert!(visitor.prop_filters[0].property == ".latency".to_string());
-        assert!(visitor.prop_filters[0].value == "500".to_string());
+        assert!(!visitor.attr_filters.is_empty());
+        assert!(visitor.attr_filters[0].node == "trace".to_string());
+        assert!(visitor.attr_filters[0].property == ".latency".to_string());
+        assert!(visitor.attr_filters[0].value == "500".to_string());
     }
 
     #[test]
@@ -393,14 +394,14 @@ mod tests {
         let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
         assert!(!visitor.struct_filters.is_empty());
-        assert!(visitor.prop_filters.len() == 2);
-        assert!(visitor.prop_filters[0].node == "trace".to_string());
-        assert!(visitor.prop_filters[0].property == ".latency".to_string());
-        assert!(visitor.prop_filters[0].value == "500".to_string());
+        assert!(visitor.attr_filters.len() == 2);
+        assert!(visitor.attr_filters[0].node == "trace".to_string());
+        assert!(visitor.attr_filters[0].property == ".latency".to_string());
+        assert!(visitor.attr_filters[0].value == "500".to_string());
 
-        assert!(visitor.prop_filters[1].node == "trace".to_string());
-        assert!(visitor.prop_filters[1].property == ".client".to_string());
-        assert!(visitor.prop_filters[1].value == "xyz".to_string());
+        assert!(visitor.attr_filters[1].node == "trace".to_string());
+        assert!(visitor.attr_filters[1].property == ".client".to_string());
+        assert!(visitor.attr_filters[1].value == "xyz".to_string());
     }
 
     #[test]
@@ -436,10 +437,11 @@ mod tests {
         let _res = result.accept(&mut return_visitor);
         let mut results = VisitorResults {
             struct_filters: filter_visitor.struct_filters,
-            prop_filters: filter_visitor.prop_filters,
+            attr_filters: filter_visitor.attr_filters,
             return_expr: return_visitor.return_expr,
             aggregate: return_visitor.aggregate,
             maps: Vec::new(),
+            root_id: "".to_string(),
         };
         results = get_map_functions(results);
         assert!(results.maps.len() == 2);
