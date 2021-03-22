@@ -317,7 +317,7 @@ pub fn visit_result(result: Rc<OC_CypherContextAll>, root_id: String) -> Visitor
         return_expr: return_visitor.return_expr,
         aggregate: return_visitor.aggregate,
         maps: Vec::new(),
-        root_id: root_id,
+        root_id,
     };
     get_map_functions(results)
 }

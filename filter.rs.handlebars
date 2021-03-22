@@ -204,7 +204,7 @@ impl Filter {
         let mut have_trace_level_attributes = true;
         let mut am_root = false;
 
-        // calculate UDFs and store result
+        // calculate UDFs and store result, and check trace level properties
         {{#each udf_blocks}}{{{this}}} {{/each}}
 
         let mut trace_graph = self.create_trace_graph(x.clone());

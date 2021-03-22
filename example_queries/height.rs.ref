@@ -248,7 +248,7 @@ impl Filter {
         let mut have_trace_level_attributes = true;
         let mut am_root = false;
 
-        // calculate UDFs and store result
+        // calculate UDFs and store result, and check trace level properties
         let my_height_value;
     if x.headers.contains_key("properties_path") {
             // TODO:  only create trace graph once and then add to it

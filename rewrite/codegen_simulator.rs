@@ -274,7 +274,7 @@ impl CodeGenSimulator {
         for attr_filter in &self.ir.attr_filters {
             if attr_filter.node == "trace" {
                 let mut prop = attr_filter.property.clone();
-                if prop.starts_with(".") {
+                if prop.starts_with('.') {
                     prop.remove(0);
                 }
                 let trace_filter_block = format!(
@@ -288,7 +288,7 @@ impl CodeGenSimulator {
             }
         }
 
-        let end_root_block = format!("       }}");
+        let end_root_block = "       }".to_string();
         self.udf_blocks.push(end_root_block);
     }
 
@@ -338,14 +338,13 @@ impl CodeGenSimulator {
         if self.ir.return_expr.is_none() {
             return;
         }
-        let mut entity = self.ir.return_expr.as_ref().unwrap().clone().entity;
+        let entity = self.ir.return_expr.as_ref().unwrap().clone().entity;
         let mut property = self.ir.return_expr.as_ref().unwrap().clone().property;
         if property.chars().next().unwrap() == ".".chars().next().unwrap() {
             property.remove(0);
         }
 
         if entity == "trace" {
-            entity = self.ir.root_id.clone();
             self.make_storage_rpc_value_from_trace(self.ir.root_id.clone(), property);
         } else {
             let num_struct_filters = self.ir.struct_filters.len();
@@ -370,7 +369,6 @@ impl CodeGenSimulator {
             property.remove(0);
         }
 
-        let node_id: String;
         if entity == "trace" {
             self.make_storage_rpc_value_from_trace(self.ir.root_id.clone(), property);
         } else {
@@ -429,7 +427,7 @@ mod tests {
         let result =
             get_codegen_from_query("MATCH (a) -[]-> (b)-[]->(c) RETURN a.count".to_string());
         assert!(!result.struct_filters.is_empty());
-        let codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());
+        let _codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());
     }
 
     #[test]
@@ -442,5 +440,15 @@ mod tests {
         assert!(!_codegen.target_blocks.is_empty());
         assert!(!_codegen.ir.struct_filters.is_empty());
         assert!(!_codegen.ir.aggregate.is_none());
+    }
+
+    #[test]
+    fn test_where() {
+        let result = get_codegen_from_query(
+            "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) WHERE trace.request_size = 1 RETURN a.request_size, avg(a.request_size)".to_string(),
+        );
+        assert!(!result.struct_filters.is_empty());
+        let _codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());
+        assert!(!_codegen.ir.attr_filters.is_empty());
     }
 }
