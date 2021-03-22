@@ -239,12 +239,10 @@ impl Filter {
         let mut original_rpc = x.clone();
         let mut storage_rpc : Option<Rpc> = None;
         let mut have_trace_level_attributes = true;
-        let mut am_root = false;
 
         // calculate UDFs and store result, and check trace level properties
         if self.whoami.as_ref().unwrap() == "productpage-v1" {
          let mut trace_prop_str : String;
-        am_root = true;
         } 
 
         let mut trace_graph = self.create_trace_graph(x.clone());
@@ -252,7 +250,7 @@ impl Filter {
             &trace_graph,
             self.target_graph.as_ref().unwrap(),
         );
-        if !mapping.is_none() && have_trace_level_attributes {
+        if mapping.is_some() {
             let m = mapping.unwrap();
             let mut value : String;
             // TODO: do return stuff

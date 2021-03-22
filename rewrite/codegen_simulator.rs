@@ -268,7 +268,7 @@ impl CodeGenSimulator {
         );
         self.udf_blocks.push(if_root_block);
         let init_trace_prop_str =
-            "        let mut trace_prop_str : String;\n        am_root = true;\n".to_string();
+            "        let mut trace_prop_str : String;\n".to_string();
         self.udf_blocks.push(init_trace_prop_str);
 
         for attr_filter in &self.ir.attr_filters {
@@ -281,7 +281,7 @@ impl CodeGenSimulator {
                 "
                 let mut trace_prop_str = \"{root_id}.{prop_name}=={value}\".to_string();
                 if x.headers.contains_key(\"properties_{prop_name}\") {{
-                    if !x.headers[\"properties_{prop_name}\"].contains(&trace_prop_str) {{ have_trace_level_attributes = false; }}
+                    if !x.headers[\"properties_{prop_name}\"].contains(&trace_prop_str) {{ return vec!(x); }}
                 }}
                 ", root_id=self.ir.root_id, prop_name=prop, value=attr_filter.value);
                 self.udf_blocks.push(trace_filter_block);
