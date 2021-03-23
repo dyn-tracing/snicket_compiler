@@ -145,6 +145,17 @@ impl Filter {
         stored_data.unassigned_properties.sort_unstable();
         stored_data.unassigned_properties.dedup();
 
+        // 3a.  If we have any unassigned properties that should be assigned, now is the time
+        let mut to_delete = Vec::new();
+        for property in &stored_data.unassigned_properties {
+            let node = utils::get_node_with_id(&stored_data.trace_graph, property.0.clone());
+            if node.is_some() {
+                stored_data.trace_graph.node_weight_mut(node.unwrap()).unwrap().1.insert(property.1.clone(), property.2.clone());
+                to_delete.push(property.clone());
+            }
+        }
+        stored_data.unassigned_properties.retain(|x| !to_delete.contains(&x));
+
         match serde_json::to_string(&stored_data) {
             Ok(stored_data_string) => {
                 self.envoy_shared_data.insert(uid, stored_data_string);
@@ -165,25 +176,28 @@ impl Filter {
             match serde_json::from_str(&self.envoy_shared_data[&uid_str]) {
                 Ok(d) => {
                     // 1. TODO:  if needed, do things to set S
-                    // 2. Add yourself as root
-                    let mut data: FerriedData = d;
-                    let mut previous_roots = Vec::new();
-                    for node in data.trace_graph.node_indices() {
-                        if data.trace_graph.neighbors_directed(node, Incoming).count() == 0 {
-                            previous_roots.push(node);
+                    // 2. If response, add yourself as root
+                    if new_rpc_headers["direction"] == "response" {
+                        let mut data: FerriedData = d;
+                        let mut previous_roots = Vec::new();
+                        for node in data.trace_graph.node_indices() {
+                            if data.trace_graph.neighbors_directed(node, Incoming).count() == 0 {
+                                previous_roots.push(node);
+                            }
                         }
-                    }
-                    let me = data.trace_graph.add_node((self.whoami.as_ref().unwrap().to_string(), my_indexmap));
-
-                    for previous_root in previous_roots {
-                        data.trace_graph.add_edge(me, previous_root, String::new());
-                    }
-                    match serde_json::to_string(&data) {
-                        Ok(stored_data_string) => {
-                            new_rpc_headers.insert("ferried_data".to_string(), stored_data_string);
+                        let me = data.trace_graph.add_node(
+                            (self.whoami.as_ref().unwrap().to_string(), my_indexmap));
+    
+                        for previous_root in previous_roots {
+                            data.trace_graph.add_edge(me, previous_root, String::new());
                         }
-                        Err(e) => {
-                            print!("ERROR:  could not translate stored data to json string: {0}\n", e);
+                        match serde_json::to_string(&data) {
+                            Ok(stored_data_string) => {
+                                new_rpc_headers.insert("ferried_data".to_string(), stored_data_string);
+                            }
+                            Err(e) => {
+                                print!("ERROR:  could not translate stored data to json string: {0}\n", e);
+                            }
                         }
                     }
                 }
@@ -269,7 +283,7 @@ impl Filter {
         {{#each udf_blocks}}{{{this}}} {{/each}}
 
         // 3. perform isomorphism and possibly return if root node
-        if self.whoami.as_ref().unwrap() == "{{root_id}}" {
+        if self.whoami.as_ref().unwrap() == root_id {
             let mapping = find_mapping_shamir_centralized(
                 &ferried_data.trace_graph,
                 self.target_graph.as_ref().unwrap(),
@@ -302,6 +316,17 @@ impl Filter {
                         return vec![original_rpc];
                     }
                 }
+            }
+       }
+       match serde_json::to_string(&ferried_data) {
+            Ok(fd_str) => {
+                original_rpc.headers.insert("ferried_data".to_string(), fd_str);
+                return vec![original_rpc];
+
+            }
+            Err(e) => {
+                print!("could not serialize baggage {0}\n", e);
+                return vec![original_rpc];
             }
        }
        return vec![original_rpc];

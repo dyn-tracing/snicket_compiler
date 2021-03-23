@@ -238,7 +238,8 @@ impl CodeGenSimulator {
         // the struct filtering.  This is not the case for trace-level attributes
 
         let if_root_block = format!(
-            "if self.whoami.as_ref().unwrap() == \"{root_id}\" {{\n",
+            "let root_id = \"{root_id}\";
+            if self.whoami.as_ref().unwrap() == root_id {{\n",
             root_id = self.ir.root_id
         );
         self.udf_blocks.push(if_root_block);
