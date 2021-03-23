@@ -13,7 +13,6 @@ pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FerriedData {
-    set_s: IndexMap<(NodeIndex, NodeIndex), IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>>,
     trace_graph: Graph<(String, IndexMap<String, String>), String>,
     unassigned_properties: Vec<(String, String, String)>, // entity property value
 }
@@ -21,7 +20,6 @@ pub struct FerriedData {
 impl FerriedData {
     fn default() -> FerriedData {
         FerriedData {
-            set_s: IndexMap::new(),
             trace_graph: Graph::new(),
             unassigned_properties: Vec::new(),
             
@@ -100,7 +98,7 @@ impl Filter {
             self.envoy_shared_data.insert(uid.clone(), headers["ferried_data"].clone());
         }
 
-        // Else, we merge in 3 parts, for each of the struct values
+        // Else, we merge in 2 parts, for each of the struct values
         let mut data: FerriedData;
         let mut stored_data: FerriedData;
 
@@ -113,7 +111,6 @@ impl Filter {
             Err(e) => { print!("could not parse envoy shared data: {0}\n", e); return; }
         }
 
-        // 1. TODO: merge set_s
 
         // 2. Merge the graphs by simply adding it - later, when we merge, we will
         //    make a root
@@ -191,6 +188,18 @@ impl Filter {
                         for previous_root in previous_roots {
                             data.trace_graph.add_edge(me, previous_root, String::new());
                         }
+                        // Then, once we've added ourselves as root, add any unassigned properties that belong to us
+                        let mut to_delete = Vec::new();
+                        for property in &data.unassigned_properties {
+                            let node = utils::get_node_with_id(&data.trace_graph, property.0.clone());
+                            if node.is_some() {
+                                data.trace_graph.node_weight_mut(node.unwrap()).unwrap().1.insert(property.1.clone(), property.2.clone());
+                                to_delete.push(property.clone());
+                            }
+                        }
+                        data.unassigned_properties.retain(|x| !to_delete.contains(&x));
+
+                        // Finally, put all the data back in the headers
                         match serde_json::to_string(&data) {
                             Ok(stored_data_string) => {
                                 new_rpc_headers.insert("ferried_data".to_string(), stored_data_string);
@@ -329,8 +338,6 @@ impl Filter {
                 return vec![original_rpc];
             }
        }
-       return vec![original_rpc];
-
     }
 
     pub fn on_outgoing_requests(&mut self, mut x: Rpc) -> Vec<Rpc>{

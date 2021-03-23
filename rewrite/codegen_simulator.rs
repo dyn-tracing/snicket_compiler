@@ -254,10 +254,21 @@ impl CodeGenSimulator {
                 }
                 let trace_filter_block = format!(
                 "
-                if ! ( ferried_data.trace_graph.node_weight(\"{root_id}\").unwrap().1.contains(\"prop_name\") &&
-                    ferried_data.trace_graph.node_weight(\"{root_id}\").unwrap().1[\"{prop_name}\"] == \"{value}\" ){{
+                let root_node = utils::get_node_with_id(&ferried_data.trace_graph, \"{root_id}\".to_string()).unwrap();
+                if ! ( ferried_data.trace_graph.node_weight(root_node).unwrap().1.contains_key(\"{prop_name}\") &&
+                    ferried_data.trace_graph.node_weight(root_node).unwrap().1[\"{prop_name}\"] == \"{value}\" ){{
                     // TODO:  replace ferried_data
-                    return vec![original_rpc];
+                    match serde_json::to_string(&ferried_data) {{
+                        Ok(fd_str) => {{
+                            original_rpc.headers.insert(\"ferried_data\".to_string(), fd_str);
+                            return vec![original_rpc];
+                        }}
+                        Err(e) => {{
+                            print!(\"could not serialize baggage {{0}}\n\", e);
+                            return vec![original_rpc];
+                        }}
+                     }}
+                     return vec![original_rpc];
                 }}
                 ", root_id=self.ir.root_id, prop_name=prop, value=attr_filter.value);
                 self.udf_blocks.push(trace_filter_block);
