@@ -2,14 +2,16 @@ use rpc_lib::rpc::Rpc;
 use indexmap::map::IndexMap;
 use petgraph::graph::NodeIndex;
 use petgraph::Graph;
-use petgraph::Outgoing;
+use petgraph::Incoming;
 use graph_utils::utils;
 use graph_utils::iso::find_mapping_shamir_centralized;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
+extern crate serde_json;
 
 pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
 
-#[derive(Debug, Serialize)]
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct FerriedData {
     set_s: IndexMap<(NodeIndex, NodeIndex), IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>>,
     trace_graph: Graph<(String, IndexMap<String, String>), String>,
@@ -86,81 +88,117 @@ impl Filter {
         assert!(self.whoami.is_some());
     }
 
-    pub fn store_headers(&mut self, x: Rpc) {
+    pub fn store_headers(&mut self, uid_64: u64, headers: IndexMap<String,String>) {
         // If you don't have data, nothing to store
-        if !x.headers.contains_key("ferried_data") { 
+        if headers.contains_key("ferried_data") { 
             print!("WARNING: no ferried data\n");
         }
+        let uid = uid_64.to_string();
         // If there is no data stored, you needn't merge - just throw it in
-        if !self.envoy_shared_data.contains_key(x.uid) {
-            self.envoy_shared_data.insert(x.uid, x.headers["ferried_data"]);
+        if !self.envoy_shared_data.contains_key(&uid) {
+            self.envoy_shared_data.insert(uid.clone(), headers["ferried_data"].clone());
         }
 
         // Else, we merge in 3 parts, for each of the struct values
-        let data: FerriedData = serde_json::from_str(x.headers["ferried_data"]);
-        let stored_data: FerriedData = serde_json::from_str(self.envoy_shared_data[x.uid]);
+        let mut data: FerriedData;
+        let mut stored_data: FerriedData;
+
+        match serde_json::from_str(&headers["ferried_data"]) {
+            Ok(d) => { data = d; }
+            Err(e) => { print!("could not parse envoy shared data: {0}\n", e); return; }
+        }
+        match serde_json::from_str(&self.envoy_shared_data[&uid]) {
+            Ok(d) => { stored_data = d; }
+            Err(e) => { print!("could not parse envoy shared data: {0}\n", e); return; }
+        }
 
         // 1. TODO: merge set_s
 
-        // 2. Merge the graphs by becoming another child of root
+        // 2. Merge the graphs by simply adding it - later, when we merge, we will
+        //    make a root
 
-        let mut root_stored = utils::find_root(&stored_data.trace_graph);
-        let mut root_new = utils::find_root(&data.trace_graph);
-
-        // add nodes
+        // add node
         for node in data.trace_graph.node_indices() {
-            stored_data.trace_graph.add_node(data.trace_graph.node_weight(node).unwrap());
+            stored_data.trace_graph.add_node(data.trace_graph.node_weight(node).unwrap().clone());
         }
-
+        /*
         // add edges
         for edge in data.trace_graph.edge_indices() {
             let edge0_weight = data.trace_graph.node_weight(edge.0).unwrap();
             let edge1_weight = data.trace_graph.node_weight(edge.1).unwrap();
-            let edge0_in_stored_graph = get_node_with_id(stored_data.trace_graph, edge0_weight);
-            let edge1_in_stored_graph = get_node_with_id(stored_data.trace_graph, edge1_weight);
+            let edge0_in_stored_graph = utils::get_node_with_id(&stored_data.trace_graph, edge0_weight);
+            let edge1_in_stored_graph = utils::get_node_with_id(&stored_data.trace_graph, edge1_weight);
             stored_data.trace_graph.add_edge(edge0_in_stored_graph, edge1_in_stored_graph, String::new());
         }
-
-        // add link between roots
-        let root_new_weight = data.trace_graph.node_weight(root_new).unwrap();
-        let root_new_in_stored = get_node_with_id(stored_data.trace_graph, root_new_weight);
-        stored_data.trace_graph.add_edge(
-            root_stored,
-            root_new_in_stored,
-            String::new(),
-        );
+        */
 
         // 3. merge unassigned properties
         //    these are properties we have collected but are not yet in the graph
-        stored_data.unassigned_properties.append(data.unassigned_properties);
+        stored_data.unassigned_properties.append(&mut data.unassigned_properties);
         stored_data.unassigned_properties.sort_unstable();
         stored_data.unassigned_properties.dedup();
 
-        self.envoy_shared_data.insert(x.uid, serde_json::to_str(stored_data));
+        match serde_json::to_string(&stored_data) {
+            Ok(stored_data_string) => {
+                self.envoy_shared_data.insert(uid, stored_data_string);
+            }
+            Err(e) => {
+                print!("ERROR:  could not translate stored data to json string: {0}\n", e);
+            }
+        }
 
     }
 
     pub fn merge_headers(&mut self, uid: u64, mut new_rpc_headers: IndexMap<String, String>) -> IndexMap<String, String> {
-        // if we are a response, we should do path bookkeeping
-        if new_rpc_headers["direction"] == "response" {
-            let prop_str = format!("{uid}_properties_path", uid=uid);
-            if self.envoy_shared_data.contains_key(&prop_str) {
-                new_rpc_headers.insert("properties_path".to_string(), self.envoy_shared_data[&prop_str].clone());
-            }
-            else { new_rpc_headers.insert("properties_path".to_string(), self.whoami.as_ref().unwrap().clone()); }
-        }
+        let uid_str = uid.to_string();
+        let mut my_indexmap = IndexMap::new();
+        my_indexmap.insert("node.metadata.WORKLOAD_NAME".to_string(), self.whoami.as_ref().unwrap().clone());
 
-        // all other properties
-        for key in &self.collected_properties {
-            let prop_str = format!("{uid}_properties_{key}", uid=uid, key=key);
-            let prop_key = format!("properties_{key}", key=key);
-            if self.envoy_shared_data.contains_key(&prop_str) {
-                new_rpc_headers.insert(prop_key, self.envoy_shared_data[&prop_str].clone());
-            } else {
-                if new_rpc_headers["direction"] != "request" { 
-                    println!("WARNING: could not find value for {0}", prop_str); 
+        if self.envoy_shared_data.contains_key(&uid_str) {
+            match serde_json::from_str(&self.envoy_shared_data[&uid_str]) {
+                Ok(d) => {
+                    // 1. TODO:  if needed, do things to set S
+                    // 2. Add yourself as root
+                    let mut data: FerriedData = d;
+                    let mut previous_roots = Vec::new();
+                    for node in data.trace_graph.node_indices() {
+                        if data.trace_graph.neighbors_directed(node, Incoming).count() == 0 {
+                            previous_roots.push(node);
+                        }
+                    }
+                    let me = data.trace_graph.add_node((self.whoami.as_ref().unwrap().to_string(), my_indexmap));
+
+                    for previous_root in previous_roots {
+                        data.trace_graph.add_edge(me, previous_root, String::new());
+                    }
+                    match serde_json::to_string(&data) {
+                        Ok(stored_data_string) => {
+                            new_rpc_headers.insert("ferried_data".to_string(), stored_data_string);
+                        }
+                        Err(e) => {
+                            print!("ERROR:  could not translate stored data to json string: {0}\n", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    print!("ERROR:  could not parse envoy shared data: {0}\n", e);
+                }
+
+            }
+        } else {
+            // just add yourself as root
+            let mut new_ferried_data = FerriedData::default();
+            new_ferried_data.trace_graph.add_node((self.whoami.as_ref().unwrap().to_string(), my_indexmap));
+            new_rpc_headers.insert("ferried_data".to_string(), self.envoy_shared_data[&uid_str].clone());
+            match serde_json::to_string(&new_ferried_data) {
+                Ok(stored_data_string) => {
+                    new_rpc_headers.insert("ferried_data".to_string(), stored_data_string);
+                }
+                Err(e) => {
+                    print!("ERROR:  could not translate stored data to json string: {0}\n", e);
                 }
             }
+
         }
         return new_rpc_headers;
     }
@@ -186,24 +224,34 @@ impl Filter {
     pub fn on_incoming_requests(&mut self, mut x: Rpc) -> Vec<Rpc> {
         let mut prop_str;
         {{#each request_blocks}}{{{this}}} {{/each}}
-        self.store_headers(x.clone());
+        self.store_headers(x.uid, x.headers.clone());
         return vec!(x);
     }
 
     pub fn on_outgoing_responses(&mut self, mut x: Rpc) -> Vec<Rpc> {
         x.headers = self.merge_headers(x.uid, x.headers);
 
-        assert!(x.headers.contains_key("properties_path"));
-
         // at most, we return two rpcs:  one to continue on and one to storage
         let mut original_rpc = x.clone();
         let mut storage_rpc : Option<Rpc> = None;
-        let mut have_trace_level_attributes = true;
 
+        if !original_rpc.headers.contains_key("ferried") {
+            match serde_json::to_string(&FerriedData::default()) {
+                Ok(ferried_data_string) => {
+                    original_rpc.headers.insert("ferried_data".to_string(), ferried_data_string);
+                }
+                Err(e) => {
+                    print!("ERROR:  ferried data could not be turned to a string: {0}\n", e);
+                    return vec![original_rpc];
+                }
+            }
+        }
+        let mut trace_graph = self.create_trace_graph(x.clone());
+
+        /*
         // calculate UDFs and store result, and check trace level properties
         {{#each udf_blocks}}{{{this}}} {{/each}}
 
-        let mut trace_graph = self.create_trace_graph(x.clone());
         let mapping = find_mapping_shamir_centralized(
             &trace_graph,
             self.target_graph.as_ref().unwrap(),
@@ -224,6 +272,7 @@ impl Filter {
             storage_rpc = Some(result_rpc);
             return vec!(x, storage_rpc.unwrap());
        }
+       */
        return vec!(x);
 
     }
@@ -234,7 +283,7 @@ impl Filter {
     }
 
     pub fn on_incoming_responses(&mut self, mut x: Rpc) -> Vec<Rpc> {
-        self.store_headers(x.clone());
+        self.store_headers(x.uid, x.headers.clone());
         return vec!(x);
     }
 
