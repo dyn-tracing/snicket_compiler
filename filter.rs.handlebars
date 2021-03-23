@@ -25,7 +25,34 @@ impl FerriedData {
             
         }
     }
+
+    // take any unassigned properties that apply to nodes in the graph,
+    // and associate them with those nodes
+    fn assign_properties(&mut self) {
+        let mut to_delete = Vec::new();
+        for property in &self.unassigned_properties {
+            let node = utils::get_node_with_id(&self.trace_graph, property.0.clone());
+            if node.is_some() {
+                self.trace_graph.node_weight_mut(node.unwrap()).unwrap().1.insert(property.1.clone(), property.2.clone());
+                to_delete.push(property.clone());
+            }
+        }
+        self.unassigned_properties.retain(|x| !to_delete.contains(&x));
+
+    }
 }
+
+fn put_ferried_data_in_hdrs(fd: &mut FerriedData, hdr: &mut IndexMap<String,String>) {
+    match serde_json::to_string(fd) {
+        Ok(stored_data_string) => {
+            hdr.insert("ferried_data".to_string(), stored_data_string);
+        }
+        Err(e) => {
+            print!("ERROR:  could not translate stored data to json string: {0}\n", e);
+        }
+    }
+}
+
 
 // user defined functions:
 {{#each udf_table}}{{{this.func_impl}}}{{/each}}
@@ -141,17 +168,7 @@ impl Filter {
         stored_data.unassigned_properties.append(&mut data.unassigned_properties);
         stored_data.unassigned_properties.sort_unstable();
         stored_data.unassigned_properties.dedup();
-
-        // 3a.  If we have any unassigned properties that should be assigned, now is the time
-        let mut to_delete = Vec::new();
-        for property in &stored_data.unassigned_properties {
-            let node = utils::get_node_with_id(&stored_data.trace_graph, property.0.clone());
-            if node.is_some() {
-                stored_data.trace_graph.node_weight_mut(node.unwrap()).unwrap().1.insert(property.1.clone(), property.2.clone());
-                to_delete.push(property.clone());
-            }
-        }
-        stored_data.unassigned_properties.retain(|x| !to_delete.contains(&x));
+        stored_data.assign_properties();
 
         match serde_json::to_string(&stored_data) {
             Ok(stored_data_string) => {
@@ -188,26 +205,10 @@ impl Filter {
                         for previous_root in previous_roots {
                             data.trace_graph.add_edge(me, previous_root, String::new());
                         }
-                        // Then, once we've added ourselves as root, add any unassigned properties that belong to us
-                        let mut to_delete = Vec::new();
-                        for property in &data.unassigned_properties {
-                            let node = utils::get_node_with_id(&data.trace_graph, property.0.clone());
-                            if node.is_some() {
-                                data.trace_graph.node_weight_mut(node.unwrap()).unwrap().1.insert(property.1.clone(), property.2.clone());
-                                to_delete.push(property.clone());
-                            }
-                        }
-                        data.unassigned_properties.retain(|x| !to_delete.contains(&x));
+                        data.assign_properties();
 
                         // Finally, put all the data back in the headers
-                        match serde_json::to_string(&data) {
-                            Ok(stored_data_string) => {
-                                new_rpc_headers.insert("ferried_data".to_string(), stored_data_string);
-                            }
-                            Err(e) => {
-                                print!("ERROR:  could not translate stored data to json string: {0}\n", e);
-                            }
-                        }
+                        put_ferried_data_in_hdrs(&mut data, &mut new_rpc_headers);
                     }
                 }
                 Err(e) => {
@@ -218,15 +219,7 @@ impl Filter {
         } else {
             let mut new_ferried_data = FerriedData::default();
             new_ferried_data.trace_graph.add_node((self.whoami.as_ref().unwrap().to_string(), my_indexmap));
-            match serde_json::to_string(&new_ferried_data) {
-                Ok(stored_data_string) => {
-                    new_rpc_headers.insert("ferried_data".to_string(), stored_data_string);
-                }
-                Err(e) => {
-                    print!("ERROR:  could not translate stored data to json string: {0}\n", e);
-                }
-            }
-
+            put_ferried_data_in_hdrs(&mut new_ferried_data, &mut new_rpc_headers);
         }
         return new_rpc_headers;
     }
@@ -255,15 +248,7 @@ impl Filter {
         {{#each request_blocks}}{{{this}}} {{/each}}
 
         // Return ferried data to x, and store headers
-        match serde_json::to_string(&ferried_data) {
-            Ok(stored_data_string) => {
-                x.headers.insert("ferried_data".to_string(), stored_data_string);
-            }
-            Err(e) => {
-                print!("ERROR:  could not translate stored data to json string: {0}\n", e);
-                return vec![x];
-            }
-        }
+        put_ferried_data_in_hdrs(&mut ferried_data, &mut x.headers);
         self.store_headers(x.uid, x.headers.clone());
         return vec![x];
     }
@@ -282,7 +267,7 @@ impl Filter {
         if !original_rpc.headers.contains_key("ferried_data") {
             ferried_data = FerriedData::default();
         } else {
-            match serde_json::from_str(&original_rpc.headers["ferried_data"]) {
+            match serde_json::from_str(&mut original_rpc.headers["ferried_data"]) {
                 Ok(fd) => { ferried_data = fd; }
                 Err(e) => { print!("could not parse ferried data: {0}\n", e); return vec![original_rpc]; }
             }
@@ -314,30 +299,12 @@ impl Filter {
                 storage_rpc.headers.insert("src".to_string(), self.whoami.clone().unwrap());
 
                 // 3b. Put baggage into regular rpc
-                match serde_json::to_string(&ferried_data) {
-                    Ok(fd_str) => {
-                        original_rpc.headers.insert("ferried_data".to_string(), fd_str);
-                        return vec!(original_rpc, storage_rpc);
-
-                    }
-                    Err(e) => {
-                        print!("could not serialize baggage {0}\n", e);
-                        return vec![original_rpc];
-                    }
-                }
+                put_ferried_data_in_hdrs(&mut ferried_data, &mut original_rpc.headers);
+                return vec![original_rpc, storage_rpc];
             }
        }
-       match serde_json::to_string(&ferried_data) {
-            Ok(fd_str) => {
-                original_rpc.headers.insert("ferried_data".to_string(), fd_str);
-                return vec![original_rpc];
-
-            }
-            Err(e) => {
-                print!("could not serialize baggage {0}\n", e);
-                return vec![original_rpc];
-            }
-       }
+       put_ferried_data_in_hdrs(&mut ferried_data, &mut original_rpc.headers);
+       return vec![original_rpc];
     }
 
     pub fn on_outgoing_requests(&mut self, mut x: Rpc) -> Vec<Rpc>{

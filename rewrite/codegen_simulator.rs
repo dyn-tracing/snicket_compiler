@@ -103,10 +103,14 @@ impl CodeGenSimulator {
     }
 
     fn collect_envoy_property(&mut self, property: String) {
-        let get_prop_block = format!("prop_tuple = (self.whoami.as_ref().unwrap().to_string(),
+        let get_prop_block = format!(
+            "prop_tuple = (self.whoami.as_ref().unwrap().to_string(),
                                                    \"{property}\".to_string(), 
                                                    self.filter_state[\"{envoy_property}\"].clone());
-                                            ", property=property, envoy_property=self.envoy_properties_to_access_names[&property]);
+                                            ",
+            property = property,
+            envoy_property = self.envoy_properties_to_access_names[&property]
+        );
         let insert_hdr_block = "ferried_data.unassigned_properties.push(prop_tuple);".to_string();
         self.request_blocks.push(get_prop_block);
         self.request_blocks.push(insert_hdr_block);
