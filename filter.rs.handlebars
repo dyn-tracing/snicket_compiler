@@ -90,8 +90,9 @@ impl Filter {
 
     pub fn store_headers(&mut self, uid_64: u64, headers: IndexMap<String,String>) {
         // If you don't have data, nothing to store
-        if headers.contains_key("ferried_data") { 
+        if !headers.contains_key("ferried_data") { 
             print!("WARNING: no ferried data\n");
+            return;
         }
         let uid = uid_64.to_string();
         // If there is no data stored, you needn't merge - just throw it in
@@ -121,16 +122,22 @@ impl Filter {
         for node in data.trace_graph.node_indices() {
             stored_data.trace_graph.add_node(data.trace_graph.node_weight(node).unwrap().clone());
         }
-        /*
         // add edges
         for edge in data.trace_graph.edge_indices() {
-            let edge0_weight = data.trace_graph.node_weight(edge.0).unwrap();
-            let edge1_weight = data.trace_graph.node_weight(edge.1).unwrap();
-            let edge0_in_stored_graph = utils::get_node_with_id(&stored_data.trace_graph, edge0_weight);
-            let edge1_in_stored_graph = utils::get_node_with_id(&stored_data.trace_graph, edge1_weight);
-            stored_data.trace_graph.add_edge(edge0_in_stored_graph, edge1_in_stored_graph, String::new());
+            match data.trace_graph.edge_endpoints(edge) {
+                Some((edge0, edge1)) => {
+                    let edge0_weight = &data.trace_graph.node_weight(edge0).unwrap().0;
+                    let edge1_weight = &data.trace_graph.node_weight(edge1).unwrap().0;
+                    let edge0_in_stored_graph = utils::get_node_with_id(&stored_data.trace_graph, edge0_weight.to_string()).unwrap();
+                    let edge1_in_stored_graph = utils::get_node_with_id(&stored_data.trace_graph, edge1_weight.to_string()).unwrap();
+                    stored_data.trace_graph.add_edge(edge0_in_stored_graph, edge1_in_stored_graph, String::new());
+                }
+                None => {
+                    print!("Error:  no edge endpoints found \n");
+                    return;
+                }
+            }
         }
-        */
 
         // 3. merge unassigned properties
         //    these are properties we have collected but are not yet in the graph
@@ -186,10 +193,8 @@ impl Filter {
 
             }
         } else {
-            // just add yourself as root
             let mut new_ferried_data = FerriedData::default();
             new_ferried_data.trace_graph.add_node((self.whoami.as_ref().unwrap().to_string(), my_indexmap));
-            new_rpc_headers.insert("ferried_data".to_string(), self.envoy_shared_data[&uid_str].clone());
             match serde_json::to_string(&new_ferried_data) {
                 Ok(stored_data_string) => {
                     new_rpc_headers.insert("ferried_data".to_string(), stored_data_string);
@@ -207,84 +212,110 @@ impl Filter {
         {{#each target_blocks}}{{{this}}} {{/each}}
     }
 
-    pub fn create_trace_graph(&mut self, mut mod_rpc: Rpc) -> Graph<(String, IndexMap<String, String>), String> {
-        let trace;
-        let mut path = mod_rpc.headers["properties_path"].clone();
-        let mut properties = Vec::new();
-        for header in mod_rpc.headers.keys() {
-            if header.contains("properties_") && header != "properties_path" {
-                properties.push(mod_rpc.headers[header].clone().replace("properties_", ""));
+    pub fn on_incoming_requests(&mut self, mut x: Rpc) -> Vec<Rpc> {
+        // Fetch ferried data
+        let mut ferried_data: FerriedData;
+        if !x.headers.contains_key("ferried_data") {
+            ferried_data = FerriedData::default();
+        } else {
+            match serde_json::from_str(&x.headers["ferried_data"]) {
+                Ok(fd) => { ferried_data = fd; }
+                Err(e) => {
+                    print!("ERROR:  could not translate stored data to json string: {0}\n", e);
+                    return vec![x];
+                }
             }
         }
-        let prop_to_trace = properties.join(",");
-        trace = utils::generate_trace_graph_from_headers(path, prop_to_trace);
-        return trace;
-    }
 
-    pub fn on_incoming_requests(&mut self, mut x: Rpc) -> Vec<Rpc> {
-        let mut prop_str;
+        // Insert properties to collect
+        let mut prop_tuple;
         {{#each request_blocks}}{{{this}}} {{/each}}
+
+        // Return ferried data to x, and store headers
+        match serde_json::to_string(&ferried_data) {
+            Ok(stored_data_string) => {
+                x.headers.insert("ferried_data".to_string(), stored_data_string);
+            }
+            Err(e) => {
+                print!("ERROR:  could not translate stored data to json string: {0}\n", e);
+                return vec![x];
+            }
+        }
         self.store_headers(x.uid, x.headers.clone());
-        return vec!(x);
+        return vec![x];
     }
 
     pub fn on_outgoing_responses(&mut self, mut x: Rpc) -> Vec<Rpc> {
+        // 0. Look up stored baggage, and merge it
         x.headers = self.merge_headers(x.uid, x.headers);
 
         // at most, we return two rpcs:  one to continue on and one to storage
         let mut original_rpc = x.clone();
-        let mut storage_rpc : Option<Rpc> = None;
+        let mut storage_rpc : Rpc;
 
-        if !original_rpc.headers.contains_key("ferried") {
-            match serde_json::to_string(&FerriedData::default()) {
-                Ok(ferried_data_string) => {
-                    original_rpc.headers.insert("ferried_data".to_string(), ferried_data_string);
-                }
-                Err(e) => {
-                    print!("ERROR:  ferried data could not be turned to a string: {0}\n", e);
-                    return vec![original_rpc];
-                }
+        // 1. retrieve our ferried data, containing the newly merged
+        //    baggage
+        let mut ferried_data: FerriedData;
+        if !original_rpc.headers.contains_key("ferried_data") {
+            ferried_data = FerriedData::default();
+        } else {
+            match serde_json::from_str(&original_rpc.headers["ferried_data"]) {
+                Ok(fd) => { ferried_data = fd; }
+                Err(e) => { print!("could not parse ferried data: {0}\n", e); return vec![original_rpc]; }
             }
         }
-        let mut trace_graph = self.create_trace_graph(x.clone());
 
-        /*
-        // calculate UDFs and store result, and check trace level properties
+        // 2. calculate UDFs and store result, and check trace level properties
         {{#each udf_blocks}}{{{this}}} {{/each}}
 
-        let mapping = find_mapping_shamir_centralized(
-            &trace_graph,
-            self.target_graph.as_ref().unwrap(),
-        );
-        if mapping.is_some() {
-            let m = mapping.unwrap();
-            let mut value : String;
-            // TODO: do return stuff
-            {{#each response_blocks}}{{{this}}} {{/each}}
-            let mut result_rpc = Rpc::new_with_src(&value, self.whoami.as_ref().unwrap());
-            result_rpc
-                .headers
-                .insert("dest".to_string(), "storage".to_string());
-            result_rpc
-                .headers
-                .insert("direction".to_string(), "request".to_string());
-            result_rpc.headers.insert("src".to_string(), self.whoami.clone().unwrap());
-            storage_rpc = Some(result_rpc);
-            return vec!(x, storage_rpc.unwrap());
+        // 3. perform isomorphism and possibly return if root node
+        if self.whoami.as_ref().unwrap() == "{{root_id}}" {
+            let mapping = find_mapping_shamir_centralized(
+                &ferried_data.trace_graph,
+                self.target_graph.as_ref().unwrap(),
+            );
+            if mapping.is_some() {
+                let m = mapping.unwrap();
+                let mut value : String;
+                {{#each response_blocks}}{{{this}}} {{/each}}
+
+                // Now you have the return value, so
+                // 3a. Make a storage rpc
+                storage_rpc = Rpc::new_with_src(&value, self.whoami.as_ref().unwrap());
+                storage_rpc
+                    .headers
+                    .insert("dest".to_string(), "storage".to_string());
+                storage_rpc
+                    .headers
+                    .insert("direction".to_string(), "request".to_string());
+                storage_rpc.headers.insert("src".to_string(), self.whoami.clone().unwrap());
+
+                // 3b. Put baggage into regular rpc
+                match serde_json::to_string(&ferried_data) {
+                    Ok(fd_str) => {
+                        original_rpc.headers.insert("ferried_data".to_string(), fd_str);
+                        return vec!(original_rpc, storage_rpc);
+
+                    }
+                    Err(e) => {
+                        print!("could not serialize baggage {0}\n", e);
+                        return vec![original_rpc];
+                    }
+                }
+            }
        }
-       */
-       return vec!(x);
+       return vec![original_rpc];
 
     }
 
     pub fn on_outgoing_requests(&mut self, mut x: Rpc) -> Vec<Rpc>{
         x.headers = self.merge_headers(x.uid, x.headers);
-        return vec!(x);
+        return vec![x];
     }
 
     pub fn on_incoming_responses(&mut self, mut x: Rpc) -> Vec<Rpc> {
         self.store_headers(x.uid, x.headers.clone());
-        return vec!(x);
+        return vec![x];
     }
 
 
