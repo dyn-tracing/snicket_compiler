@@ -102,12 +102,6 @@ fn mid_height(_graph: &Graph<(String, IndexMap<String, String>), String>, childr
 
 
 
-// This represents a piece of state of the filter
-// it contains information that we get from calling getValue in the real filters
-// TODO:  since we no longer use these to define UDFs, we have no need for it
-// to be anything other than a string.  We should simplify it to simply have
-// an Option<String> for every possible envoy value
-
 #[derive(Clone, Debug)]
 pub struct Filter {
     pub whoami: Option<String>,
