@@ -103,22 +103,15 @@ impl CodeGenSimulator {
     }
 
     fn collect_envoy_property(&mut self, property: String) {
-        let get_prop_block = format!("prop_str = format!(\"{{whoami}}.{{property}}=={{value}}\",
-                                                      whoami=&self.whoami.as_ref().unwrap(),
-                                                      property=\"{property}\",
-                                                      value=self.filter_state[\"{envoy_property}\"].string_data.as_ref().unwrap().to_string());
-                                            ", property=property, envoy_property=self.envoy_properties_to_access_names[&property]);
-        let insert_hdr_block = format!("
-        if x.headers.contains_key(\"properties_{property}\") {{
-            if !x.headers[\"properties_{property}\"].contains(&prop_str) {{ // don't add our properties if they have already been added
-                x.headers.get_mut(&\"properties_{property}\".to_string()).unwrap().push_str(\",\");
-                x.headers.get_mut(&\"properties_{property}\".to_string()).unwrap().push_str(&prop_str);
-            }}
-        }}
-        else {{
-            x.headers.insert(\"properties_{property}\".to_string(), prop_str);
-        }}
-        ", property=property);
+        let get_prop_block = format!(
+            "prop_tuple = Property::new(self.whoami.as_ref().unwrap().to_string(),
+                                                   \"{property}\".to_string(), 
+                                                   self.filter_state[\"{envoy_property}\"].clone());
+                                            ",
+            property = property,
+            envoy_property = self.envoy_properties_to_access_names[&property]
+        );
+        let insert_hdr_block = "ferried_data.unassigned_properties.push(prop_tuple);".to_string();
         self.request_blocks.push(get_prop_block);
         self.request_blocks.push(insert_hdr_block);
     }
@@ -126,26 +119,18 @@ impl CodeGenSimulator {
     fn collect_udf_property(&mut self, udf_id: String) {
         let get_udf_vals = format!(
             "let my_{id}_value;
-    if x.headers.contains_key(\"properties_path\") {{
-            // TODO:  only create trace graph once and then add to it
-            let graph = self.create_trace_graph(x.clone());
-            let child_iterator = graph.neighbors_directed(
-                utils::get_node_with_id(&graph, self.whoami.as_ref().unwrap().clone()).unwrap(),
+            let child_iterator = ferried_data.trace_graph.neighbors_directed(
+                utils::get_node_with_id(&ferried_data.trace_graph, self.whoami.as_ref().unwrap().clone()).unwrap(),
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
             for child in child_iterator {{
-                child_values.push(graph.node_weight(child).unwrap().1[\"{id}\"].clone());
+                child_values.push(ferried_data.trace_graph.node_weight(child).unwrap().1[\"{id}\"].clone());
             }}
             if child_values.len() == 0 {{
-                my_{id}_value = {leaf_func}(graph);
+                my_{id}_value = {leaf_func}(&ferried_data.trace_graph).to_string();
             }} else {{
-                my_{id}_value = {mid_func}(graph, child_values);
+                my_{id}_value = {mid_func}(&ferried_data.trace_graph, child_values).to_string();
             }}
-         }}
-         else {{
-             print!(\"WARNING: no path header\");
-             return vec!(x);
-         }}
 
         ",
             id = udf_id,
@@ -154,21 +139,15 @@ impl CodeGenSimulator {
         );
         self.udf_blocks.push(get_udf_vals);
 
-        let save_udf_vals = format!("let {udf_id}_str = format!(\"{{whoami}}.{{udf_id}}=={{value}}\",
-                                                      whoami=&self.whoami.as_ref().unwrap(),
-                                                      udf_id=\"properties_{udf_id}\",
-                                                      value=my_{udf_id}_value);
-        if x.headers.contains_key(\"properties_{udf_id}\") {{
-            if !x.headers[\"properties_{udf_id}\"].contains(&{udf_id}_str) {{ // don't add a udf property twice
-                x.headers.get_mut(&\"properties_{udf_id}\".to_string()).unwrap().push_str(\",\");
-                x.headers.get_mut(&\"properties_{udf_id}\".to_string()).unwrap().push_str(&{udf_id}_str);
-            }}
+        let save_udf_vals = format!("
+        let node = utils::get_node_with_id(&ferried_data.trace_graph, self.whoami.as_ref().unwrap().to_string()).unwrap();
+        // if we already have the property, don't add it
+        if !( ferried_data.trace_graph.node_weight(node).unwrap().1.contains_key(\"{id}\") &&
+               ferried_data.trace_graph.node_weight(node).unwrap().1[\"{id}\"] == my_{id}_value ) {{
+           ferried_data.trace_graph.node_weight_mut(node).unwrap().1.insert(
+               \"{id}\".to_string(), my_{id}_value);
         }}
-        else {{
-            x.headers.insert(\"properties_{udf_id}\".to_string(), {udf_id}_str);
-        }}
-
-        ", udf_id=udf_id);
+        ", id=udf_id);
 
         self.udf_blocks.push(save_udf_vals);
     }
@@ -263,7 +242,8 @@ impl CodeGenSimulator {
         // the struct filtering.  This is not the case for trace-level attributes
 
         let if_root_block = format!(
-            "if self.whoami.as_ref().unwrap() == \"{root_id}\" {{\n",
+            "let root_id = \"{root_id}\";
+            if self.whoami.as_ref().unwrap() == root_id {{\n",
             root_id = self.ir.root_id
         );
         self.udf_blocks.push(if_root_block);
@@ -278,9 +258,21 @@ impl CodeGenSimulator {
                 }
                 let trace_filter_block = format!(
                 "
-                let mut trace_prop_str = \"{root_id}.{prop_name}=={value}\".to_string();
-                if x.headers.contains_key(\"properties_{prop_name}\") {{
-                    if !x.headers[\"properties_{prop_name}\"].contains(&trace_prop_str) {{ return vec!(x); }}
+                let root_node = utils::get_node_with_id(&ferried_data.trace_graph, \"{root_id}\".to_string()).unwrap();
+                if ! ( ferried_data.trace_graph.node_weight(root_node).unwrap().1.contains_key(\"{prop_name}\") &&
+                    ferried_data.trace_graph.node_weight(root_node).unwrap().1[\"{prop_name}\"] == \"{value}\" ){{
+                    // TODO:  replace ferried_data
+                    match serde_json::to_string(&ferried_data) {{
+                        Ok(fd_str) => {{
+                            original_rpc.headers.insert(\"ferried_data\".to_string(), fd_str);
+                            return vec![original_rpc];
+                        }}
+                        Err(e) => {{
+                            log::error!(\"could not serialize baggage {{0}}\n\", e);
+                            return vec![original_rpc];
+                        }}
+                     }}
+                     return vec![original_rpc];
                 }}
                 ", root_id=self.ir.root_id, prop_name=prop, value=attr_filter.value);
                 self.udf_blocks.push(trace_filter_block);
@@ -293,12 +285,12 @@ impl CodeGenSimulator {
 
     fn make_storage_rpc_value_from_trace(&mut self, entity: String, property: String) {
         let ret_block = format!(
-        "let trace_node_index = utils::get_node_with_id(&trace_graph, \"{node_id}\".to_string());
+        "let trace_node_index = utils::get_node_with_id(&ferried_data.trace_graph, \"{node_id}\".to_string());
         if trace_node_index.is_none() {{
-           print!(\"WARNING Node {node_id} not found\");
-                return vec!(x);
+           log::warn!(\"Node {node_id} not found\");
+                return vec![original_rpc];
         }}
-        let mut ret_{prop} = &trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
+        let mut ret_{prop} = &ferried_data.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
         value = ret_{prop}.to_string();\n",
                 node_id = entity,
                 prop = property
@@ -310,8 +302,8 @@ impl CodeGenSimulator {
         let ret_block = format!(
         "let node_ptr = utils::get_node_with_id(&self.target_graph.as_ref().unwrap(), \"{node_id}\".to_string());
         if node_ptr.is_none() {{
-           print!(\"WARNING Node {node_id} not found\");
-                return vec!(x);
+           log::warn!(\"Node {node_id} not found\");
+                return vec![original_rpc];
         }}
         let mut trace_node_index = None;
         for map in m {{
@@ -320,11 +312,11 @@ impl CodeGenSimulator {
                 break;
             }}
         }}
-        if trace_node_index == None || !&trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key(\"{prop}\") {{
+        if trace_node_index == None || !&ferried_data.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key(\"{prop}\") {{
             // we have not yet collected the return property or have a mapping error
-            return vec!(x);
+            return vec![original_rpc];
         }}
-        let mut ret_{prop} = &trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
+        let mut ret_{prop} = &ferried_data.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
         value = ret_{prop}.to_string();\n",
                 node_id = entity,
                 prop = property
