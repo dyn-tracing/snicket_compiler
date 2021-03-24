@@ -10,11 +10,34 @@ extern crate serde_json;
 
 pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub struct Property {
+    entity: String,
+    property_name: String,
+    value: String,
+}
 
+impl Property {
+    fn default() -> Property {
+        Property {
+            entity: String::new(),
+            property_name: String::new(),
+            value: String::new()
+        }
+    }
+
+    fn new(entity: String, property_name: String, value: String) -> Property {
+        Property {
+            entity,
+            property_name,
+            value
+        }
+    }
+}
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FerriedData {
     trace_graph: Graph<(String, IndexMap<String, String>), String>,
-    unassigned_properties: Vec<(String, String, String)>, // entity property value
+    unassigned_properties: Vec<Property>, // entity property value
 }
 
 impl FerriedData {
@@ -30,10 +53,10 @@ impl FerriedData {
     // and associate them with those nodes
     fn assign_properties(&mut self) {
         let mut to_delete = Vec::new();
-        for property in &self.unassigned_properties {
-            let node = utils::get_node_with_id(&self.trace_graph, property.0.clone());
+        for property in &mut self.unassigned_properties {
+            let node = utils::get_node_with_id(&self.trace_graph, property.entity.clone());
             if node.is_some() {
-                self.trace_graph.node_weight_mut(node.unwrap()).unwrap().1.insert(property.1.clone(), property.2.clone());
+                self.trace_graph.node_weight_mut(node.unwrap()).unwrap().1.insert(property.property_name.clone(), property.value.clone());
                 to_delete.push(property.clone());
             }
         }
@@ -48,7 +71,7 @@ fn put_ferried_data_in_hdrs(fd: &mut FerriedData, hdr: &mut IndexMap<String,Stri
             hdr.insert("ferried_data".to_string(), stored_data_string);
         }
         Err(e) => {
-            print!("ERROR:  could not translate stored data to json string: {0}\n", e);
+            log::error!("ERROR:  could not translate stored data to json string: {0}\n", e);
         }
     }
 }
@@ -104,7 +127,7 @@ impl Filter {
 
     pub fn set_whoami(&mut self) {
         if !self.filter_state.contains_key("node.metadata.WORKLOAD_NAME") {
-            print!("WARNING: filter was initialized without envoy properties and thus cannot function");
+            log::warn!("filter was initialized without envoy properties and thus cannot function");
             return;
         }
         let my_node = self
@@ -116,7 +139,7 @@ impl Filter {
     pub fn store_headers(&mut self, uid_64: u64, headers: IndexMap<String,String>) {
         // If you don't have data, nothing to store
         if !headers.contains_key("ferried_data") { 
-            print!("WARNING: no ferried data\n");
+            log::warn!("no ferried data\n");
             return;
         }
         let uid = uid_64.to_string();
@@ -131,11 +154,11 @@ impl Filter {
 
         match serde_json::from_str(&headers["ferried_data"]) {
             Ok(d) => { data = d; }
-            Err(e) => { print!("could not parse envoy shared data: {0}\n", e); return; }
+            Err(e) => { log::error!("could not parse envoy shared data: {0}\n", e); return; }
         }
         match serde_json::from_str(&self.envoy_shared_data[&uid]) {
             Ok(d) => { stored_data = d; }
-            Err(e) => { print!("could not parse envoy shared data: {0}\n", e); return; }
+            Err(e) => { log::error!("could not parse envoy shared data: {0}\n", e); return; }
         }
 
 
@@ -157,7 +180,7 @@ impl Filter {
                     stored_data.trace_graph.add_edge(edge0_in_stored_graph, edge1_in_stored_graph, String::new());
                 }
                 None => {
-                    print!("Error:  no edge endpoints found \n");
+                    log::error!("no edge endpoints found \n");
                     return;
                 }
             }
@@ -175,7 +198,7 @@ impl Filter {
                 self.envoy_shared_data.insert(uid, stored_data_string);
             }
             Err(e) => {
-                print!("ERROR:  could not translate stored data to json string: {0}\n", e);
+                log::error!("could not translate stored data to json string: {0}\n", e);
             }
         }
 
@@ -212,7 +235,7 @@ impl Filter {
                     }
                 }
                 Err(e) => {
-                    print!("ERROR:  could not parse envoy shared data: {0}\n", e);
+                    log::error!("could not parse envoy shared data: {0}\n", e);
                 }
 
             }
@@ -246,7 +269,7 @@ impl Filter {
             match serde_json::from_str(&x.headers["ferried_data"]) {
                 Ok(fd) => { ferried_data = fd; }
                 Err(e) => {
-                    print!("ERROR:  could not translate stored data to json string: {0}\n", e);
+                    log::error!("could not translate stored data to json string: {0}\n", e);
                     return vec![x];
                 }
             }
@@ -254,10 +277,10 @@ impl Filter {
 
         // Insert properties to collect
         let mut prop_tuple;
-        prop_tuple = (self.whoami.as_ref().unwrap().to_string(),
+        prop_tuple = Property::new(self.whoami.as_ref().unwrap().to_string(),
                                                    "service_name".to_string(), 
                                                    self.filter_state["node.metadata.WORKLOAD_NAME"].clone());
-                                             ferried_data.unassigned_properties.push(prop_tuple); prop_tuple = (self.whoami.as_ref().unwrap().to_string(),
+                                             ferried_data.unassigned_properties.push(prop_tuple); prop_tuple = Property::new(self.whoami.as_ref().unwrap().to_string(),
                                                    "request_size".to_string(), 
                                                    self.filter_state["request.total_size"].clone());
                                              ferried_data.unassigned_properties.push(prop_tuple); 
@@ -284,7 +307,7 @@ impl Filter {
         } else {
             match serde_json::from_str(&mut original_rpc.headers["ferried_data"]) {
                 Ok(fd) => { ferried_data = fd; }
-                Err(e) => { print!("could not parse ferried data: {0}\n", e); return vec![original_rpc]; }
+                Err(e) => { log::error!("could not parse ferried data: {0}\n", e); return vec![original_rpc]; }
             }
         }
 
@@ -305,7 +328,7 @@ impl Filter {
                 let mut value : String;
                 let node_ptr = utils::get_node_with_id(&self.target_graph.as_ref().unwrap(), "a".to_string());
         if node_ptr.is_none() {
-           print!("WARNING Node a not found");
+           log::warn!("Node a not found");
                 return vec![original_rpc];
         }
         let mut trace_node_index = None;

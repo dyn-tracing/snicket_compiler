@@ -104,7 +104,7 @@ impl CodeGenSimulator {
 
     fn collect_envoy_property(&mut self, property: String) {
         let get_prop_block = format!(
-            "prop_tuple = (self.whoami.as_ref().unwrap().to_string(),
+            "prop_tuple = Property::new(self.whoami.as_ref().unwrap().to_string(),
                                                    \"{property}\".to_string(), 
                                                    self.filter_state[\"{envoy_property}\"].clone());
                                             ",
@@ -268,7 +268,7 @@ impl CodeGenSimulator {
                             return vec![original_rpc];
                         }}
                         Err(e) => {{
-                            print!(\"could not serialize baggage {{0}}\n\", e);
+                            log::error!(\"could not serialize baggage {{0}}\n\", e);
                             return vec![original_rpc];
                         }}
                      }}
@@ -287,7 +287,7 @@ impl CodeGenSimulator {
         let ret_block = format!(
         "let trace_node_index = utils::get_node_with_id(&ferried_data.trace_graph, \"{node_id}\".to_string());
         if trace_node_index.is_none() {{
-           print!(\"WARNING Node {node_id} not found\");
+           log::warn!(\"Node {node_id} not found\");
                 return vec![original_rpc];
         }}
         let mut ret_{prop} = &ferried_data.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
@@ -302,7 +302,7 @@ impl CodeGenSimulator {
         let ret_block = format!(
         "let node_ptr = utils::get_node_with_id(&self.target_graph.as_ref().unwrap(), \"{node_id}\".to_string());
         if node_ptr.is_none() {{
-           print!(\"WARNING Node {node_id} not found\");
+           log::warn!(\"Node {node_id} not found\");
                 return vec![original_rpc];
         }}
         let mut trace_node_index = None;
