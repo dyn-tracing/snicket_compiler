@@ -61,6 +61,47 @@ impl FerriedData {
         self.unassigned_properties
             .retain(|x| !to_delete.contains(&x));
     }
+    pub fn merge(&mut self, other_data: FerriedData) {
+        //  Merge the graphs by simply adding other data's to self's
+
+        // add nodes
+        for node in other_data.trace_graph.node_indices() {
+            self.trace_graph
+                .add_node(other_data.trace_graph.node_weight(node).unwrap().clone());
+        }
+        // add edges
+        for edge in other_data.trace_graph.edge_indices() {
+            match other_data.trace_graph.edge_endpoints(edge) {
+                Some((edge0, edge1)) => {
+                    let edge0_weight = &other_data.trace_graph.node_weight(edge0).unwrap().0;
+                    let edge1_weight = &other_data.trace_graph.node_weight(edge1).unwrap().0;
+                    let edge0_in_stored_graph =
+                        utils::get_node_with_id(&self.trace_graph, edge0_weight.to_string())
+                            .unwrap();
+                    let edge1_in_stored_graph =
+                        utils::get_node_with_id(&self.trace_graph, edge1_weight.to_string())
+                            .unwrap();
+                    self.trace_graph.add_edge(
+                        edge0_in_stored_graph,
+                        edge1_in_stored_graph,
+                        String::new(),
+                    );
+                }
+                None => {
+                    log::error!("no edge endpoints found \n");
+                    return;
+                }
+            }
+        }
+
+        // 2. merge unassigned properties
+        //    these are properties we have collected but are not yet in the graph
+        self.unassigned_properties
+            .append(&mut other_data.unassigned_properties);
+        self.unassigned_properties.sort_unstable();
+        self.unassigned_properties.dedup(); // remove duplicates
+        self.assign_properties();
+    }
 }
 
 pub fn put_ferried_data_in_hdrs(fd: &mut FerriedData, hdr: &mut IndexMap<String, String>) {

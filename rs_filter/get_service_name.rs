@@ -11,49 +11,6 @@ use utils::graph::serde::FerriedData;
 use utils::graph::serde::Property;
 use utils::graph::utils::get_node_with_id;
 
-pub fn merged_ferried_data(data: &mut FerriedData, stored_data: &mut FerriedData) {
-    // 2. Merge the graphs by simply adding it - later, when we merge, we will
-    //    make a root
-
-    // add node
-    for node in data.trace_graph.node_indices() {
-        stored_data
-            .trace_graph
-            .add_node(data.trace_graph.node_weight(node).unwrap().clone());
-    }
-    // add edges
-    for edge in data.trace_graph.edge_indices() {
-        match data.trace_graph.edge_endpoints(edge) {
-            Some((edge0, edge1)) => {
-                let edge0_weight = &data.trace_graph.node_weight(edge0).unwrap().0;
-                let edge1_weight = &data.trace_graph.node_weight(edge1).unwrap().0;
-                let edge0_in_stored_graph =
-                    get_node_with_id(&stored_data.trace_graph, edge0_weight.to_string()).unwrap();
-                let edge1_in_stored_graph =
-                    get_node_with_id(&stored_data.trace_graph, edge1_weight.to_string()).unwrap();
-                stored_data.trace_graph.add_edge(
-                    edge0_in_stored_graph,
-                    edge1_in_stored_graph,
-                    String::new(),
-                );
-            }
-            None => {
-                log::error!("no edge endpoints found \n");
-                return;
-            }
-        }
-    }
-
-    // 3. merge unassigned properties
-    //    these are properties we have collected but are not yet in the graph
-    stored_data
-        .unassigned_properties
-        .append(&mut data.unassigned_properties);
-    stored_data.unassigned_properties.sort_unstable();
-    stored_data.unassigned_properties.dedup();
-    stored_data.assign_properties();
-}
-
 #[no_mangle]
 pub fn _start() {
     proxy_wasm::set_log_level(LogLevel::Trace);
@@ -296,7 +253,9 @@ impl HttpHeaders {
         } else {
             log::warn!("Trace key {:?} not found in shared data.", trace_id);
         }
-        merged_ferried_data(&mut ferried_data, &mut stored_data);
+
+        stored_data.merge(ferried_data);
+
         let stored_data_str: String;
         match serde_json::to_string(&stored_data) {
             Ok(stored_data_str_) => {
@@ -307,7 +266,6 @@ impl HttpHeaders {
                 return;
             }
         }
-        log::warn!("STORED DATA STRING {:?}", stored_data_str);
         let stored_data_bytes = Some(stored_data_str.as_bytes());
         let store_result = self.set_shared_data(&trace_id, stored_data_bytes, None);
         if let Err(ref e) = store_result {
