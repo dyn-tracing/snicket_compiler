@@ -14,10 +14,13 @@ crate-type = ["cdylib"]
 lto = true
 
 [dependencies]
+log = "*"
 proxy-wasm = { version = "0.1.*", features = ["wee_alloc"] }
 indexmap = { version = "1.6.1", features = ["serde-1"] }
-log = "*"
-utils = { path = "../libs/utils" }
+petgraph = {version =  "0.*", features = ["serde-1"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+
+utils = { path = "../libs/utils" }
+
 
