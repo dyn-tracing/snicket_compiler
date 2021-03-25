@@ -105,16 +105,3 @@ impl FerriedData {
     }
 }
 
-pub fn put_ferried_data_in_hdrs(fd: &mut FerriedData, hdr: &mut IndexMap<String, String>) {
-    match serde_json::to_string(fd) {
-        Ok(stored_data_string) => {
-            hdr.insert("ferried_data".to_string(), stored_data_string);
-        }
-        Err(e) => {
-            log::error!(
-                "ERROR:  could not translate stored data to json string: {0}\n",
-                e
-            );
-        }
-    }
-}
