@@ -96,8 +96,9 @@ impl FerriedData {
 
         // 2. merge unassigned properties
         //    these are properties we have collected but are not yet in the graph
-        self.unassigned_properties
-            .append(&mut other_data.unassigned_properties);
+        let mut other_properties = other_data.unassigned_properties.clone();
+        //FIXME this is odd, why is this necessary?
+        self.unassigned_properties.append(&mut other_properties);
         self.unassigned_properties.sort_unstable();
         self.unassigned_properties.dedup(); // remove duplicates
         self.assign_properties();
