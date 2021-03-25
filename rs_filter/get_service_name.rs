@@ -233,10 +233,11 @@ impl HttpHeaders {
         if let Some(ferried_data_str) = self.get_http_request_header("ferried_data") {
             match serde_json::from_str(&ferried_data_str) {
                 Ok(fd) => {
+                    log::warn!("Successfully parsed ferried_data from header.");
                     ferried_data = fd;
                 }
                 Err(e) => {
-                    log::error!("could not translate stored data to json string: {0}\n", e);
+                    log::error!("Could not translate stored data to json string: {0}\n", e);
                 }
             }
         }
@@ -273,7 +274,6 @@ impl HttpHeaders {
         let mut hdrs = IndexMap::<String, String>::new();
         put_ferried_data_in_hdrs(&mut ferried_data, &mut hdrs);
 
-        // Else, we merge in 2 parts, for each of the struct values
         let mut stored_data: FerriedData = FerriedData::default();
 
         // Try to access some result we have stored before and attach it
@@ -287,7 +287,7 @@ impl HttpHeaders {
                         stored_data = d;
                     }
                     Err(e) => {
-                        log::error!("could not parse envoy shared data: {0}\n", e);
+                        log::error!("Could not parse envoy shared data: {0}\n", e);
                         return;
                     }
                 },
@@ -303,10 +303,7 @@ impl HttpHeaders {
                 stored_data_str = stored_data_str_;
             }
             Err(e) => {
-                log::error!(
-                    "ERROR:  could not translate stored data to json string: {0}\n",
-                    e
-                );
+                log::error!("Could not translate stored data to json string: {0}\n", e);
                 return;
             }
         }
