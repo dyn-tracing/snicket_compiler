@@ -45,7 +45,7 @@ impl FerriedData {
         FerriedData {
             trace_graph: Graph::new(),
             unassigned_properties: Vec::new(),
-            
+
         }
     }
 
@@ -86,7 +86,7 @@ pub struct Filter {
     pub whoami: Option<String>,
     pub target_graph: Option<Graph<(String, IndexMap<String, String>), String>>,
     pub filter_state: IndexMap<String, String>,
-    pub envoy_shared_data: IndexMap<String, String>, // trace ID to stored ferried data as string 
+    pub envoy_shared_data: IndexMap<String, String>, // trace ID to stored ferried data as string
     pub collected_properties: Vec<String>, //properties to collect
 }
 
@@ -115,7 +115,7 @@ impl Filter {
 
     pub fn init_filter(&mut self) {
         if self.whoami.is_none() { self.set_whoami(); assert!(self.whoami.is_some()); }
-        if self.target_graph.is_none() { self.create_target_graph(); } 
+        if self.target_graph.is_none() { self.create_target_graph(); }
         assert!(self.whoami.is_some());
     }
 
@@ -132,7 +132,7 @@ impl Filter {
 
     pub fn store_headers(&mut self, uid_64: u64, headers: IndexMap<String,String>) {
         // If you don't have data, nothing to store
-        if !headers.contains_key("ferried_data") { 
+        if !headers.contains_key("ferried_data") {
             log::warn!("no ferried data\n");
             return;
         }
@@ -218,7 +218,7 @@ impl Filter {
                         }
                         let me = data.trace_graph.add_node(
                             (self.whoami.as_ref().unwrap().to_string(), my_indexmap));
-    
+
                         for previous_root in previous_roots {
                             data.trace_graph.add_edge(me, previous_root, String::new());
                         }
@@ -251,7 +251,7 @@ impl Filter {
          let mut b_hashmap = ids_to_properties.get_mut("b").unwrap();
          b_hashmap.insert("service_name".to_string(), "reviews-v1".to_string());
          self.target_graph = Some(utils::generate_target_graph(vertices, edges, ids_to_properties));
- 
+
     }
 
     pub fn on_incoming_requests(&mut self, mut x: Rpc) -> Vec<Rpc> {
@@ -272,12 +272,12 @@ impl Filter {
         // Insert properties to collect
         let mut prop_tuple;
         prop_tuple = Property::new(self.whoami.as_ref().unwrap().to_string(),
-                                                   "service_name".to_string(), 
+                                                   "service_name".to_string(),
                                                    self.filter_state["node.metadata.WORKLOAD_NAME"].clone());
                                              ferried_data.unassigned_properties.push(prop_tuple); prop_tuple = Property::new(self.whoami.as_ref().unwrap().to_string(),
-                                                   "service_name".to_string(), 
+                                                   "service_name".to_string(),
                                                    self.filter_state["node.metadata.WORKLOAD_NAME"].clone());
-                                             ferried_data.unassigned_properties.push(prop_tuple); 
+                                             ferried_data.unassigned_properties.push(prop_tuple);
 
         // Return ferried data to x, and store headers
         put_ferried_data_in_hdrs(&mut ferried_data, &mut x.headers);
@@ -309,7 +309,7 @@ impl Filter {
         let root_id = "productpage-v1";
             if self.whoami.as_ref().unwrap() == root_id {
          let mut trace_prop_str : String;
-        } 
+        }
 
         // 3. perform isomorphism and possibly return if root node
         if self.whoami.as_ref().unwrap() == root_id {
@@ -339,7 +339,7 @@ impl Filter {
         let mut ret_service_name = &ferried_data.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "service_name" ];
 
         value = ret_service_name.to_string();
- 
+
 
                 // Now you have the return value, so
                 // 3a. Make a storage rpc
