@@ -3,7 +3,6 @@ use indexmap::map::IndexMap;
 use petgraph::Graph;
 
 use serde::{Deserialize, Serialize};
-use serde_json;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct Property {
@@ -104,4 +103,3 @@ impl FerriedData {
         self.assign_properties();
     }
 }
-
