@@ -5,15 +5,15 @@ use petgraph::Incoming;
 use proxy_wasm::traits::*;
 use proxy_wasm::types::*;
 use std::convert::TryFrom;
-use std::fmt;
 use std::time::Duration;
+
 use utils::graph::iso::find_mapping_shamir_centralized;
 use utils::graph::serde::FerriedData;
 use utils::graph::serde::Property;
 use utils::graph::utils::generate_target_graph;
 use utils::graph::utils::get_node_with_id;
+use utils::misc::headers::*;
 
-// TODO: All of these functions should be in utils
 fn fetch_data_from_headers(ctx: &HttpHeaders, request_type: HttpType) -> FerriedData {
     let data_str_opt: Option<String>;
     if request_type == HttpType::Request {
@@ -38,11 +38,7 @@ fn fetch_data_from_headers(ctx: &HttpHeaders, request_type: HttpType) -> Ferried
     return FerriedData::default();
 }
 
-fn join_str(str_vec: &Vec<&str>) -> String {
-    return str_vec.join(".");
-}
-
-fn fetch_property(prop_query: &Vec<&str>, ctx: &HttpHeaders) -> Option<Property> {
+fn fetch_property(node_name: &str, prop_query: &Vec<&str>, ctx: &HttpHeaders) -> Option<Property> {
     // Insert properties to collect
     let prop_tuple;
     let property_str: String;
@@ -61,7 +57,7 @@ fn fetch_property(prop_query: &Vec<&str>, ctx: &HttpHeaders) -> Option<Property>
     }
     //FIXME Adjust the format of this property
     prop_tuple = Property::new(
-        join_str(prop_query),
+        node_name.to_string(),
         join_str(prop_query),
         property_str.clone(),
     );
@@ -92,20 +88,6 @@ fn get_shared_data(trace_id: &str, ctx: &HttpHeaders) -> Option<FerriedData> {
     return Some(stored_data);
 }
 
-fn data_to_str(stored_data: &FerriedData) -> Option<String> {
-    let stored_data_str: String;
-    match serde_json::to_string(&stored_data) {
-        Ok(stored_data_str_) => {
-            stored_data_str = stored_data_str_;
-        }
-        Err(e) => {
-            log::error!("Could not translate stored data to json string: {0}\n", e);
-            return None;
-        }
-    }
-    return Some(stored_data_str);
-}
-
 fn store_data(stored_data_str: &String, trace_id: &str, ctx: &HttpHeaders) {
     let stored_data_bytes = Some(stored_data_str.as_bytes());
     let store_result = ctx.set_shared_data(&trace_id, stored_data_bytes, None);
@@ -127,42 +109,6 @@ pub fn _start() {
             target_graph: create_target_graph(),
         })
     });
-}
-
-#[repr(i64)]
-#[derive(Debug, PartialEq)]
-enum TrafficDirection {
-    Unspecified = 0,
-    Inbound = 1,
-    Outbound = 2,
-}
-impl From<i64> for TrafficDirection {
-    fn from(orig: i64) -> Self {
-        match orig {
-            0x1 => return TrafficDirection::Inbound,
-            0x2 => return TrafficDirection::Outbound,
-            _ => return TrafficDirection::Unspecified,
-        };
-    }
-}
-
-impl fmt::Display for TrafficDirection {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            TrafficDirection::Unspecified => write!(f, "unspecified"),
-            TrafficDirection::Inbound => write!(f, "inbound"),
-            TrafficDirection::Outbound => write!(f, "outbound"),
-        }
-    }
-}
-
-#[repr(u8)]
-#[derive(Debug, PartialEq)]
-#[allow(dead_code)]
-enum HttpType {
-    Unspecified = 0,
-    Request = 1,
-    Response = 2,
 }
 
 struct HttpHeadersRoot {
@@ -292,7 +238,11 @@ impl HttpHeaders {
         let mut ferried_data = fetch_data_from_headers(self, HttpType::Request);
 
         // Handle the properties
-        let prop_option_0 = fetch_property(&vec!["node", "metadata", "WORKLOAD_NAME"], self);
+        let prop_option_0 = fetch_property(
+            &self.workload_name,
+            &vec!["node", "metadata", "WORKLOAD_NAME"],
+            self,
+        );
         if let Some(prop_tuple) = prop_option_0 {
             ferried_data.unassigned_properties.push(prop_tuple);
         } else {
@@ -373,7 +323,7 @@ impl HttpHeaders {
         let mut my_indexmap = IndexMap::new();
         my_indexmap.insert(
             join_str(&vec!["node", "metadata", "WORKLOAD_NAME"]),
-            join_str(&vec!["node", "metadata", "WORKLOAD_NAME"]),
+            self.workload_name.clone(),
         );
 
         // Retrieve the data we have stored
@@ -423,7 +373,7 @@ impl HttpHeaders {
                 let value: String;
                 let node_ptr = get_node_with_id(&self.target_graph, "a".to_string());
                 if node_ptr.is_none() {
-                    log::warn!("Node a not found");
+                    log::error!("Node a not found");
                     return;
                 }
                 let mut trace_node_index = None;
@@ -442,7 +392,7 @@ impl HttpHeaders {
                         .contains_key(&join_str(&vec!["node", "metadata", "WORKLOAD_NAME"]))
                 {
                     // we have not yet collected the return property or have a mapping error
-                    log::warn!("Mapping error.");
+                    log::error!("Mapping error.");
                     return;
                 }
                 let ret_service_name = &stored_data
@@ -452,7 +402,7 @@ impl HttpHeaders {
                     .1[&join_str(&vec!["node", "metadata", "WORKLOAD_NAME"])];
                 value = ret_service_name.to_string();
 
-                let key = self.workload_name.clone();
+                let key = join_str(&vec!["node", "metadata", "WORKLOAD_NAME"]);
 
                 let call_result = self.dispatch_http_call(
                     "storage-upstream",
@@ -470,7 +420,15 @@ impl HttpHeaders {
                 if let Err(e) = call_result {
                     log::error!("Failed to make a call to storage {:?}", e);
                 }
+            } else {
+                log::error!("Mapping not found");
             }
+        } else {
+            log::warn!(
+                "Node {:?} is not the expected root node {:?}",
+                self.workload_name,
+                "productpage-v1"
+            );
         }
 
         // Now store the data again after we have computed over it
@@ -484,7 +442,7 @@ impl HttpHeaders {
         let stored_data_str = stored_data_str_opt.unwrap();
         // Set the header
         log::warn!("Attaching {:?}", stored_data_str);
-        self.set_http_request_header("ferried_data", Some(&stored_data_str));
+        self.set_http_response_header("ferried_data", Some(&stored_data_str));
     }
 
     fn on_http_response_headers_outbound(&mut self, _num_headers: usize) {
@@ -497,40 +455,18 @@ impl HttpHeaders {
             return;
         }
         // Fetch ferried data
-        let mut ferried_data = fetch_data_from_headers(self, HttpType::Response);
+        let ferried_data = fetch_data_from_headers(self, HttpType::Response);
 
-        // Handle the properties
-        let prop_option_0 = fetch_property(&vec!["node", "metadata", "WORKLOAD_NAME"], self);
-        if let Some(prop_tuple) = prop_option_0 {
-            ferried_data.unassigned_properties.push(prop_tuple);
-        } else {
-            // We failed to collect the property.
-            // This might lead to wrong results, abort
-            return;
-        }
-
-        // Retrieve the data we have stored
-        let stored_data_opt = get_shared_data(&trace_id, self);
-        if stored_data_opt.is_none() {
-            // We failed to deserialize the shared data.
-            // This might lead to wrong results, abort.
-            return;
-        }
-        // Unpack the data we have
-        let mut stored_data = stored_data_opt.unwrap();
-        // Merge with the new information that is carried forward
-        stored_data.merge(ferried_data);
-        // Now store the data again after we have merged it
         // First, get a string
-        let stored_data_str_opt = data_to_str(&stored_data);
-        if stored_data_str_opt.is_none() {
+        let ferried_data_str_opt = data_to_str(&ferried_data);
+        if ferried_data_str_opt.is_none() {
             // We failed to serialize the shared data.
             // This might lead to wrong results, abort.
             return;
         }
         // Unpack the data we have
-        let stored_data_str = stored_data_str_opt.unwrap();
-        store_data(&stored_data_str, &trace_id, self);
+        let ferried_data_str = ferried_data_str_opt.unwrap();
+        store_data(&ferried_data_str, &trace_id, self);
     }
 }
 
