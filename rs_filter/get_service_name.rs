@@ -285,29 +285,33 @@ impl HttpHeaders {
             return;
         }
 
-        // Retrieve the data we have stored
-        let stored_data_opt = get_shared_data(&trace_id, self);
+        // TODO: Okay this does nothing in the original
+        // I am not sure about the logic here
+        // There may be a bug in the original code
 
-        if stored_data_opt.is_none() {
-            // We failed to parse the shared data, this might lead to wrong results
-            // Abort
-            return;
-        }
-        // Unpack the data we have
-        let stored_data = stored_data_opt.unwrap();
+        // // Retrieve the data we have stored
+        // let stored_data_opt = get_shared_data(&trace_id, self);
 
-        // Now store the data again after we have merged it
-        let stored_data_str_opt = data_to_str(&stored_data);
-        if stored_data_str_opt.is_none() {
-            // We failed to serialize the shared data.
-            // This might lead to wrong results, abort.
-            return;
-        }
-        // Unpack the data we have
-        let stored_data_str = stored_data_str_opt.unwrap();
-        // Set the header
-        log::warn!("Attaching {:?}", stored_data_str);
-        self.set_http_request_header("ferried_data", Some(&stored_data_str));
+        // if stored_data_opt.is_none() {
+        //     // We failed to parse the shared data, this might lead to wrong results
+        //     // Abort
+        //     return;
+        // }
+        // // Unpack the data we have
+        // let stored_data = stored_data_opt.unwrap();
+
+        // // Now store the data again after we have merged it
+        // let stored_data_str_opt = data_to_str(&stored_data);
+        // if stored_data_str_opt.is_none() {
+        //     // We failed to serialize the shared data.
+        //     // This might lead to wrong results, abort.
+        //     return;
+        // }
+        // // Unpack the data we have
+        // let stored_data_str = stored_data_str_opt.unwrap();
+        // // Set the header
+        // log::warn!("Attaching {:?}", stored_data_str);
+        // self.set_http_request_header("ferried_data", Some(&stored_data_str));
     }
 
     fn on_http_response_headers_inbound(&mut self, _num_headers: usize) {
@@ -366,33 +370,33 @@ impl HttpHeaders {
         if self.workload_name == "productpage-v1" {
             // 2. calculate UDFs and store result, and check trace level properties
 
-            let mapping =
+            let mapping_opt =
                 find_mapping_shamir_centralized(&stored_data.trace_graph, &self.target_graph);
-            if mapping.is_some() {
-                let m = mapping.unwrap();
-                let value: String;
+            if let Some(mapping) = mapping_opt {
                 let node_ptr = get_node_with_id(&self.target_graph, "a".to_string());
                 if node_ptr.is_none() {
                     log::error!("Node a not found");
+                    // TODO: This should not abort I believe
                     return;
                 }
                 let mut trace_node_index = None;
-                for map in m {
+                for map in mapping {
                     if self.target_graph.node_weight(map.0).unwrap().0 == "a" {
                         trace_node_index = Some(map.1);
                         break;
                     }
                 }
-                if trace_node_index == None
-                    || !&stored_data
-                        .trace_graph
-                        .node_weight(trace_node_index.unwrap())
-                        .unwrap()
-                        .1
-                        .contains_key(&join_str(&vec!["node", "metadata", "WORKLOAD_NAME"]))
-                {
+                // TODO: This looks odd, further cleaning required.
+                let contains_key = stored_data
+                    .trace_graph
+                    .node_weight(trace_node_index.unwrap())
+                    .unwrap()
+                    .1
+                    .contains_key(&join_str(&vec!["node", "metadata", "WORKLOAD_NAME"]));
+                if trace_node_index == None || !contains_key {
                     // we have not yet collected the return property or have a mapping error
                     log::error!("Mapping error.");
+                    // TODO: This should not abort I believe
                     return;
                 }
                 let ret_service_name = &stored_data
@@ -400,9 +404,9 @@ impl HttpHeaders {
                     .node_weight(trace_node_index.unwrap())
                     .unwrap()
                     .1[&join_str(&vec!["node", "metadata", "WORKLOAD_NAME"])];
-                value = ret_service_name.to_string();
 
                 let key = join_str(&vec!["node", "metadata", "WORKLOAD_NAME"]);
+                let value = ret_service_name.to_string();
 
                 let call_result = self.dispatch_http_call(
                     "storage-upstream",
@@ -487,6 +491,6 @@ pub fn create_target_graph() -> Graph<
     ids_to_properties.insert("b".to_string(), IndexMap::new());
     ids_to_properties.insert("c".to_string(), IndexMap::new());
     let b_hashmap = ids_to_properties.get_mut("b").unwrap();
-    b_hashmap.insert("service_name".to_string(), "reviews-v1".to_string());
+    b_hashmap.insert("service_name".to_string(), "reviews-v3".to_string());
     return generate_target_graph(vertices, edges, ids_to_properties);
 }
