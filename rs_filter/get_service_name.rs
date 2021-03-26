@@ -13,6 +13,112 @@ use utils::graph::serde::Property;
 use utils::graph::utils::generate_target_graph;
 use utils::graph::utils::get_node_with_id;
 
+// TODO: All of these functions should be in utils
+fn fetch_data_from_headers(ctx: &HttpHeaders, request_type: HttpType) -> FerriedData {
+    let data_str_opt: Option<String>;
+    if request_type == HttpType::Request {
+        data_str_opt = ctx.get_http_request_header("ferried_data");
+    } else if request_type == HttpType::Response {
+        data_str_opt = ctx.get_http_response_header("ferried_data");
+    } else {
+        log::error!("Unsupported http type {:?}", request_type);
+        return FerriedData::default();
+    }
+    if let Some(ferried_data_str) = data_str_opt {
+        match serde_json::from_str(&ferried_data_str) {
+            Ok(fd) => {
+                log::warn!("Successfully parsed ferried_data from header.");
+                return fd;
+            }
+            Err(e) => {
+                log::error!("Could not translate stored data to json string: {0}\n", e);
+            }
+        }
+    }
+    return FerriedData::default();
+}
+
+fn join_str(str_vec: &Vec<&str>) -> String {
+    return str_vec.join(".");
+}
+
+fn fetch_property(prop_query: &Vec<&str>, ctx: &HttpHeaders) -> Option<Property> {
+    // Insert properties to collect
+    let prop_tuple;
+    let property_str: String;
+    // Seems like we need a copy here, a little bit annoying
+    if let Some(property) = ctx.get_property(prop_query.to_vec()) {
+        match String::from_utf8(property) {
+            Ok(cast_string) => property_str = cast_string,
+            Err(_e) => {
+                log::error!("Failed to serialize property: {:?}\n", prop_query);
+                return None;
+            }
+        }
+    } else {
+        log::error!("Failed to retrieve property: {:?}\n", prop_query);
+        return None;
+    }
+    //FIXME Adjust the format of this property
+    prop_tuple = Property::new(
+        join_str(prop_query),
+        join_str(prop_query),
+        property_str.clone(),
+    );
+    return Some(prop_tuple);
+}
+
+fn get_shared_data(trace_id: &str, ctx: &HttpHeaders) -> Option<FerriedData> {
+    let mut stored_data: FerriedData = FerriedData::default();
+    if let (Some(data), _) = ctx.get_shared_data(&trace_id) {
+        let msg = format!("Unable to convert {:?} into a string ", data);
+        // Add a header on the response.
+        // FIXME: There must be  a nicer way to resolve this
+        match String::from_utf8(data) {
+            Ok(cast_string) => match serde_json::from_str(&cast_string) {
+                Ok(d) => {
+                    stored_data = d;
+                }
+                Err(e) => {
+                    log::error!("Could not parse envoy shared data: {0}\n", e);
+                    return None;
+                }
+            },
+            Err(_e) => log::error!("{}", msg),
+        }
+    } else {
+        log::warn!("Trace key {:?} not found in shared data.", trace_id);
+    }
+    return Some(stored_data);
+}
+
+fn data_to_str(stored_data: &FerriedData) -> Option<String> {
+    let stored_data_str: String;
+    match serde_json::to_string(&stored_data) {
+        Ok(stored_data_str_) => {
+            stored_data_str = stored_data_str_;
+        }
+        Err(e) => {
+            log::error!("Could not translate stored data to json string: {0}\n", e);
+            return None;
+        }
+    }
+    return Some(stored_data_str);
+}
+
+fn store_data(stored_data_str: &String, trace_id: &str, ctx: &HttpHeaders) {
+    let stored_data_bytes = Some(stored_data_str.as_bytes());
+    let store_result = ctx.set_shared_data(&trace_id, stored_data_bytes, None);
+    if let Err(ref e) = store_result {
+        log::error!(
+            "Failed to store key {:?} and value {:?}: {:?}",
+            trace_id,
+            store_result,
+            e
+        );
+    }
+}
+
 #[no_mangle]
 pub fn _start() {
     proxy_wasm::set_log_level(LogLevel::Trace);
@@ -144,6 +250,7 @@ impl HttpContext for HttpHeaders {
         trace!("#{} completed.", self.context_id);
     }
 }
+
 impl HttpHeaders {
     // Retrieves the traffic direction from the configuration context.
     fn get_traffic_direction(&self) -> TrafficDirection {
@@ -157,17 +264,17 @@ impl HttpHeaders {
         return 0i64.into();
     }
 
-    fn print_headers(&self, direction: HttpType) {
-        if direction == HttpType::Request {
+    fn print_headers(&self, request_type: HttpType) {
+        if request_type == HttpType::Request {
             for (name, value) in &self.get_http_request_headers() {
                 log::warn!("#{} -> {}: {}", self.context_id, name, value);
             }
-        } else if direction == HttpType::Response {
+        } else if request_type == HttpType::Response {
             for (name, value) in &self.get_http_response_headers() {
                 log::warn!("#{} -> {}: {}", self.context_id, name, value);
             }
         } else {
-            log::error!("Unsupported http type {:?}", direction);
+            log::error!("Unsupported http type {:?}", request_type);
         }
     }
 
@@ -182,92 +289,40 @@ impl HttpHeaders {
         }
 
         // Fetch ferried data
-        let mut ferried_data: FerriedData = FerriedData::default();
-        if let Some(ferried_data_str) = self.get_http_request_header("ferried_data") {
-            match serde_json::from_str(&ferried_data_str) {
-                Ok(fd) => {
-                    log::warn!("Successfully parsed ferried_data from header.");
-                    ferried_data = fd;
-                }
-                Err(e) => {
-                    log::error!("Could not translate stored data to json string: {0}\n", e);
-                }
-            }
-        }
+        let mut ferried_data = fetch_data_from_headers(self, HttpType::Request);
 
-        // Insert properties to collect
-        let prop_tuple;
-        let property_str: String;
-        if let Some(property) = self.get_property(vec!["node", "metadata", "WORKLOAD_NAME"]) {
-            match String::from_utf8(property) {
-                Ok(cast_string) => property_str = cast_string,
-                Err(_e) => {
-                    log::error!(
-                        "Failed to serialize property: {:?}\n",
-                        vec!["node", "metadata", "WORKLOAD_NAME"]
-                    );
-                    return;
-                }
-            }
+        // Handle the properties
+        let prop_option_0 = fetch_property(&vec!["node", "metadata", "WORKLOAD_NAME"], self);
+        if let Some(prop_tuple) = prop_option_0 {
+            ferried_data.unassigned_properties.push(prop_tuple);
         } else {
-            log::error!(
-                "Failed to retrieve property: {:?}\n",
-                vec!["node", "metadata", "WORKLOAD_NAME"]
-            );
+            // We failed to collect the property.
+            // This might lead to wrong results, abort
             return;
         }
-        prop_tuple = Property::new(
-            self.workload_name.clone(),
-            "service_name".to_string(),
-            property_str.clone(),
-        );
-        ferried_data.unassigned_properties.push(prop_tuple);
 
-        let mut stored_data: FerriedData = FerriedData::default();
-
-        // Try to access some result we have stored before and attach it
-        if let (Some(data), _) = self.get_shared_data(&trace_id) {
-            let msg = format!("Unable to convert {:?} into a string ", data);
-            // Add a header on the response.
-            // FIXME: There must be  a nicer way to resolve this
-            match String::from_utf8(data) {
-                Ok(cast_string) => match serde_json::from_str(&cast_string) {
-                    Ok(d) => {
-                        stored_data = d;
-                    }
-                    Err(e) => {
-                        log::error!("Could not parse envoy shared data: {0}\n", e);
-                        return;
-                    }
-                },
-                Err(_e) => log::error!("{}", msg),
-            }
-        } else {
-            log::warn!("Trace key {:?} not found in shared data.", trace_id);
+        // Retrieve the data we have stored
+        let stored_data_opt = get_shared_data(&trace_id, self);
+        if stored_data_opt.is_none() {
+            // We failed to deserialize the shared data.
+            // This might lead to wrong results, abort.
+            return;
         }
-
+        // Unpack the data we have
+        let mut stored_data = stored_data_opt.unwrap();
+        // Merge with the new information that is carried forward
         stored_data.merge(ferried_data);
-
-        let stored_data_str: String;
-        match serde_json::to_string(&stored_data) {
-            Ok(stored_data_str_) => {
-                stored_data_str = stored_data_str_;
-            }
-            Err(e) => {
-                log::error!("Could not translate stored data to json string: {0}\n", e);
-                return;
-            }
+        // Now store the data again after we have merged it
+        // First, get a string
+        let stored_data_str_opt = data_to_str(&stored_data);
+        if stored_data_str_opt.is_none() {
+            // We failed to serialize the shared data.
+            // This might lead to wrong results, abort.
+            return;
         }
-        let stored_data_bytes = Some(stored_data_str.as_bytes());
-        let store_result = self.set_shared_data(&trace_id, stored_data_bytes, None);
-        if let Err(ref e) = store_result {
-            log::error!(
-                "Failed to store key {:?} and value {:?}: {:?}",
-                trace_id,
-                store_result,
-                e
-            );
-        }
+        // Unpack the data we have
+        let stored_data_str = stored_data_str_opt.unwrap();
+        store_data(&stored_data_str, &trace_id, self);
     }
 
     fn on_http_request_headers_outbound(&mut self, _num_headers: usize) {
@@ -280,38 +335,27 @@ impl HttpHeaders {
             return;
         }
 
-        let mut ferried_data: FerriedData = FerriedData::default();
-        if let (Some(data), _) = self.get_shared_data(&trace_id) {
-            let msg = format!("Unable to convert {:?} into a string ", data);
-            // Add a header on the response.
-            // FIXME: There must be  a nicer way to resolve this
-            match String::from_utf8(data) {
-                Ok(cast_string) => match serde_json::from_str(&cast_string) {
-                    Ok(d) => {
-                        ferried_data = d;
-                    }
-                    Err(e) => {
-                        log::error!("Could not parse envoy shared data: {0}\n", e);
-                        return;
-                    }
-                },
-                Err(_e) => log::error!("{}", msg),
-            }
-        } else {
-            log::warn!("Trace key {:?} not found in shared data.", trace_id);
-        }
+        // Retrieve the data we have stored
+        let stored_data_opt = get_shared_data(&trace_id, self);
 
-        // Finally set the header with the newly merged data structure
-        let stored_data_str: String;
-        match serde_json::to_string(&ferried_data) {
-            Ok(stored_data_str_) => {
-                stored_data_str = stored_data_str_;
-            }
-            Err(e) => {
-                log::error!("Could not translate stored data to json string: {0}\n", e);
-                return;
-            }
+        if stored_data_opt.is_none() {
+            // We failed to parse the shared data, this might lead to wrong results
+            // Abort
+            return;
         }
+        // Unpack the data we have
+        let stored_data = stored_data_opt.unwrap();
+
+        // Now store the data again after we have merged it
+        let stored_data_str_opt = data_to_str(&stored_data);
+        if stored_data_str_opt.is_none() {
+            // We failed to serialize the shared data.
+            // This might lead to wrong results, abort.
+            return;
+        }
+        // Unpack the data we have
+        let stored_data_str = stored_data_str_opt.unwrap();
+        // Set the header
         log::warn!("Attaching {:?}", stored_data_str);
         self.set_http_request_header("ferried_data", Some(&stored_data_str));
     }
@@ -325,135 +369,122 @@ impl HttpHeaders {
             log::error!("Response inbound: x-request-id not found in header!",);
             return;
         }
+        // TODO:  Do not really understand the purpose of this yet
         let mut my_indexmap = IndexMap::new();
         my_indexmap.insert(
-            "node.metadata.WORKLOAD_NAME".to_string(),
-            self.workload_name.clone(),
+            join_str(&vec!["node", "metadata", "WORKLOAD_NAME"]),
+            join_str(&vec!["node", "metadata", "WORKLOAD_NAME"]),
         );
-        let mut stored_data: FerriedData = FerriedData::default();
-        if let (Some(data), _) = self.get_shared_data(&trace_id) {
-            let msg = format!("Unable to convert {:?} into a string ", data);
-            // Add a header on the response.
-            // FIXME: There must be  a nicer way to resolve this
-            match String::from_utf8(data) {
-                Ok(cast_string) => match serde_json::from_str(&cast_string) {
-                    Ok(d) => {
-                        stored_data = d;
-                        let mut previous_roots = Vec::new();
-                        for node in stored_data.trace_graph.node_indices() {
-                            if stored_data
-                                .trace_graph
-                                .neighbors_directed(node, Incoming)
-                                .count()
-                                == 0
-                            {
-                                previous_roots.push(node);
-                            }
-                        }
-                        let me = stored_data
-                            .trace_graph
-                            .add_node((self.workload_name.clone(), my_indexmap));
 
-                        for previous_root in previous_roots {
-                            stored_data
-                                .trace_graph
-                                .add_edge(me, previous_root, String::new());
-                        }
-                        stored_data.assign_properties();
-                    }
-                    Err(e) => {
-                        log::error!("Could not parse envoy shared data: {0}\n", e);
-                        return;
-                    }
-                },
-                Err(_e) => log::error!("{}", msg),
-            }
-        } else {
-            log::warn!("Trace key {:?} not found in shared data.", trace_id);
-            stored_data
-                .trace_graph
-                .add_node((self.workload_name.clone(), my_indexmap));
-        }
-
-        // Finally set the header with the newly merged data structure
-        let stored_data_str: String;
-        match serde_json::to_string(&stored_data) {
-            Ok(stored_data_str_) => {
-                stored_data_str = stored_data_str_;
-            }
-            Err(e) => {
-                log::error!("Could not translate stored data to json string: {0}\n", e);
-                return;
-            }
-        }
-        // if we are not the root id, return
-        if self.workload_name != "productpage-v1" {
-            log::warn!(
-                "Not the root node. Response: Attaching {:?}",
-                stored_data_str
-            );
-            self.set_http_response_header("ferried_data", Some(&stored_data_str));
+        // Retrieve the data we have stored
+        let stored_data_opt = get_shared_data(&trace_id, self);
+        if stored_data_opt.is_none() {
+            // We failed to deserialize the shared data.
+            // This might lead to wrong results, abort.
             return;
         }
-        // 2. calculate UDFs and store result, and check trace level properties
+        // Unpack the data we have
+        let mut stored_data = stored_data_opt.unwrap();
 
-        let mapping = find_mapping_shamir_centralized(&stored_data.trace_graph, &self.target_graph);
-        if mapping.is_some() {
-            let m = mapping.unwrap();
-            let value: String;
-
-            let node_ptr = get_node_with_id(&self.target_graph, "a".to_string());
-            if node_ptr.is_none() {
-                log::warn!("Node a not found");
-                return;
+        // Figure out what needs to be done here
+        // Also handle case where stored data is fresh?
+        // TODO: Make this a function? What is this?
+        let mut previous_roots = Vec::new();
+        for node in stored_data.trace_graph.node_indices() {
+            if stored_data
+                .trace_graph
+                .neighbors_directed(node, Incoming)
+                .count()
+                == 0
+            {
+                previous_roots.push(node);
             }
-            let mut trace_node_index = None;
-            for map in m {
-                if self.target_graph.node_weight(map.0).unwrap().0 == "a" {
-                    trace_node_index = Some(map.1);
-                    break;
+        }
+        let me = stored_data
+            .trace_graph
+            .add_node((self.workload_name.clone(), my_indexmap));
+
+        for previous_root in previous_roots {
+            stored_data
+                .trace_graph
+                .add_edge(me, previous_root, String::new());
+        }
+        stored_data.assign_properties();
+
+        // if we are not the root id, return
+        // TODO:: Add some diagnostic when we are not the root node
+        if self.workload_name == "productpage-v1" {
+            // 2. calculate UDFs and store result, and check trace level properties
+
+            let mapping =
+                find_mapping_shamir_centralized(&stored_data.trace_graph, &self.target_graph);
+            if mapping.is_some() {
+                let m = mapping.unwrap();
+                let value: String;
+                let node_ptr = get_node_with_id(&self.target_graph, "a".to_string());
+                if node_ptr.is_none() {
+                    log::warn!("Node a not found");
+                    return;
                 }
-            }
-            if trace_node_index == None
-                || !&stored_data
+                let mut trace_node_index = None;
+                for map in m {
+                    if self.target_graph.node_weight(map.0).unwrap().0 == "a" {
+                        trace_node_index = Some(map.1);
+                        break;
+                    }
+                }
+                if trace_node_index == None
+                    || !&stored_data
+                        .trace_graph
+                        .node_weight(trace_node_index.unwrap())
+                        .unwrap()
+                        .1
+                        .contains_key(&join_str(&vec!["node", "metadata", "WORKLOAD_NAME"]))
+                {
+                    // we have not yet collected the return property or have a mapping error
+                    log::warn!("Mapping error.");
+                    return;
+                }
+                let ret_service_name = &stored_data
                     .trace_graph
                     .node_weight(trace_node_index.unwrap())
                     .unwrap()
-                    .1
-                    .contains_key("service_name")
-            {
-                // we have not yet collected the return property or have a mapping error
-                log::warn!("Mapping error.");
-                return;
-            }
-            let ret_service_name = &stored_data
-                .trace_graph
-                .node_weight(trace_node_index.unwrap())
-                .unwrap()
-                .1["service_name"];
-            value = ret_service_name.to_string();
+                    .1[&join_str(&vec!["node", "metadata", "WORKLOAD_NAME"])];
+                value = ret_service_name.to_string();
 
-            let key = self.workload_name.clone();
+                let key = self.workload_name.clone();
 
-            let call_result = self.dispatch_http_call(
-                "storage-upstream",
-                vec![
-                    (":method", "GET"),
-                    (":path", "/store"),
-                    (":authority", "storage-upstream"),
-                    ("key", &key),
-                    ("value", &value),
-                ],
-                None,
-                vec![],
-                Duration::from_secs(5),
-            );
-            if let Err(e) = call_result {
-                log::error!("Failed to make a call to storage {:?}", e);
+                let call_result = self.dispatch_http_call(
+                    "storage-upstream",
+                    vec![
+                        (":method", "GET"),
+                        (":path", "/store"),
+                        (":authority", "storage-upstream"),
+                        ("key", &key),
+                        ("value", &value),
+                    ],
+                    None,
+                    vec![],
+                    Duration::from_secs(5),
+                );
+                if let Err(e) = call_result {
+                    log::error!("Failed to make a call to storage {:?}", e);
+                }
             }
         }
-        log::warn!("Response: Attaching {:?}", stored_data_str);
-        self.set_http_response_header("ferried_data", Some(&stored_data_str));
+
+        // Now store the data again after we have computed over it
+        let stored_data_str_opt = data_to_str(&stored_data);
+        if stored_data_str_opt.is_none() {
+            // We failed to serialize the shared data.
+            // This might lead to wrong results, abort.
+            return;
+        }
+        // Unpack the data we have
+        let stored_data_str = stored_data_str_opt.unwrap();
+        // Set the header
+        log::warn!("Attaching {:?}", stored_data_str);
+        self.set_http_request_header("ferried_data", Some(&stored_data_str));
     }
 
     fn on_http_response_headers_outbound(&mut self, _num_headers: usize) {
@@ -465,66 +496,41 @@ impl HttpHeaders {
             log::error!("Response outbound: x-request-id not found in header!",);
             return;
         }
-
         // Fetch ferried data
-        let mut ferried_data: FerriedData = FerriedData::default();
-        if let Some(ferried_data_str) = self.get_http_response_header("ferried_data") {
-            match serde_json::from_str(&ferried_data_str) {
-                Ok(fd) => {
-                    log::warn!("Successfully parsed ferried_data from header.");
-                    ferried_data = fd;
-                }
-                Err(e) => {
-                    log::error!("Could not translate stored data to json string: {0}\n", e);
-                }
-            }
-        }
+        let mut ferried_data = fetch_data_from_headers(self, HttpType::Response);
 
-        let mut stored_data: FerriedData = FerriedData::default();
-
-        // Try to access some result we have stored before and attach it
-        if let (Some(data), _) = self.get_shared_data(&trace_id) {
-            let msg = format!("Unable to convert {:?} into a string ", data);
-            // Add a header on the response.
-            // FIXME: There must be  a nicer way to resolve this
-            match String::from_utf8(data) {
-                Ok(cast_string) => match serde_json::from_str(&cast_string) {
-                    Ok(d) => {
-                        stored_data = d;
-                    }
-                    Err(e) => {
-                        log::error!("Could not parse envoy shared data: {0}\n", e);
-                        return;
-                    }
-                },
-                Err(_e) => log::error!("{}", msg),
-            }
+        // Handle the properties
+        let prop_option_0 = fetch_property(&vec!["node", "metadata", "WORKLOAD_NAME"], self);
+        if let Some(prop_tuple) = prop_option_0 {
+            ferried_data.unassigned_properties.push(prop_tuple);
         } else {
-            log::warn!("Trace key {:?} not found in shared data.", trace_id);
+            // We failed to collect the property.
+            // This might lead to wrong results, abort
+            return;
         }
 
+        // Retrieve the data we have stored
+        let stored_data_opt = get_shared_data(&trace_id, self);
+        if stored_data_opt.is_none() {
+            // We failed to deserialize the shared data.
+            // This might lead to wrong results, abort.
+            return;
+        }
+        // Unpack the data we have
+        let mut stored_data = stored_data_opt.unwrap();
+        // Merge with the new information that is carried forward
         stored_data.merge(ferried_data);
-
-        let stored_data_str: String;
-        match serde_json::to_string(&stored_data) {
-            Ok(stored_data_str_) => {
-                stored_data_str = stored_data_str_;
-            }
-            Err(e) => {
-                log::error!("Could not translate stored data to json string: {0}\n", e);
-                return;
-            }
+        // Now store the data again after we have merged it
+        // First, get a string
+        let stored_data_str_opt = data_to_str(&stored_data);
+        if stored_data_str_opt.is_none() {
+            // We failed to serialize the shared data.
+            // This might lead to wrong results, abort.
+            return;
         }
-        let stored_data_bytes = Some(stored_data_str.as_bytes());
-        let store_result = self.set_shared_data(&trace_id, stored_data_bytes, None);
-        if let Err(ref e) = store_result {
-            log::error!(
-                "Failed to store key {:?} and value {:?}: {:?}",
-                trace_id,
-                store_result,
-                e
-            );
-        }
+        // Unpack the data we have
+        let stored_data_str = stored_data_str_opt.unwrap();
+        store_data(&stored_data_str, &trace_id, self);
     }
 }
 
