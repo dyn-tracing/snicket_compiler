@@ -262,7 +262,7 @@ impl CodeGenSimulator {
                 if ! ( ferried_data.trace_graph.node_weight(root_node).unwrap().1.contains_key(\"{prop_name}\") &&
                     ferried_data.trace_graph.node_weight(root_node).unwrap().1[\"{prop_name}\"] == \"{value}\" ){{
                     // TODO:  replace ferried_data
-                    match serde_json::to_string(&ferried_data) {{
+                    match serde_yaml::to_string(&ferried_data) {{
                         Ok(fd_str) => {{
                             original_rpc.headers.insert(\"ferried_data\".to_string(), fd_str);
                             return vec![original_rpc];
