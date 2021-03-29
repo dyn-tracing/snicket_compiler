@@ -142,19 +142,17 @@ fn main() {
             // TODO: support multiple UDF files
             let codegen_object =
                 codegen_simulator::CodeGenSimulator::generate_code_blocks(visitor_results, udfs);
+            let handle_bar_str: &str;
             if distributed.is_none() {
-                write_to_handlebars(
-                    &codegen_object,
-                    bin_dir.join("filter.rs.handlebars"),
-                    PathBuf::from(matches.value_of("output").unwrap()),
-                );
+                handle_bar_str = "filter.rs.handlebars";
             } else {
-                write_to_handlebars(
-                    &codegen_object,
-                    bin_dir.join("distributed_filter.rs.handlebars"),
-                    PathBuf::from(matches.value_of("output").unwrap()),
-                );
+                handle_bar_str = "distributed_filter.rs.handlebars";
             }
+            write_to_handlebars(
+                &codegen_object,
+                bin_dir.join(handle_bar_str),
+                PathBuf::from(matches.value_of("output").unwrap()),
+            );
         }
         "cpp" => {
             // TODO: not yet implemented
