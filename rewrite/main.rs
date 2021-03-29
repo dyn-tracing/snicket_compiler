@@ -154,7 +154,6 @@ fn main() {
                     bin_dir.join("distributed_filter.rs.handlebars"),
                     PathBuf::from(matches.value_of("output").unwrap()),
                 );
-
             }
         }
         "cpp" => {
