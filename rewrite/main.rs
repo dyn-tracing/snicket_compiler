@@ -95,6 +95,14 @@ fn main() {
                 .help("Sets what to compile to:  the simulator (sim) or cpp wasm filter (cpp)"),
         )
         .arg(
+            Arg::with_name("distributed")
+                .short("d")
+                .long("distributed")
+                .value_name("DISTRUBTED")
+                .takes_value(true)
+                .help("If flagged, makes isomorphism distributed"),
+        )
+        .arg(
             Arg::with_name("output")
                 .short("o")
                 .long("out-file")
@@ -116,6 +124,7 @@ fn main() {
     // Read query from file specified by command line argument.
     let query_file = matches.value_of("query").unwrap();
     let root_id = matches.value_of("root_node").unwrap();
+    let distributed = matches.value_of("distributed");
     let query: String = fs::read_to_string(query_file).unwrap();
     let query_stream = InputStream::new_owned(query.into_boxed_str());
     let lexer = CypherLexer::new_with_token_factory(query_stream, &tf);
@@ -133,11 +142,20 @@ fn main() {
             // TODO: support multiple UDF files
             let codegen_object =
                 codegen_simulator::CodeGenSimulator::generate_code_blocks(visitor_results, udfs);
-            write_to_handlebars(
-                &codegen_object,
-                bin_dir.join("filter.rs.handlebars"),
-                PathBuf::from(matches.value_of("output").unwrap()),
-            );
+            if distributed.is_none() {
+                write_to_handlebars(
+                    &codegen_object,
+                    bin_dir.join("filter.rs.handlebars"),
+                    PathBuf::from(matches.value_of("output").unwrap()),
+                );
+            } else {
+                write_to_handlebars(
+                    &codegen_object,
+                    bin_dir.join("distributed_filter.rs.handlebars"),
+                    PathBuf::from(matches.value_of("output").unwrap()),
+                );
+
+            }
         }
         "cpp" => {
             // TODO: not yet implemented
