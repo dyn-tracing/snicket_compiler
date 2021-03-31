@@ -7,11 +7,11 @@ use proxy_wasm::types::*;
 use std::convert::TryFrom;
 use std::time::Duration;
 
+use utils::graph::graph_utils::generate_target_graph;
+use utils::graph::graph_utils::get_node_with_id;
 use utils::graph::iso::find_mapping_shamir_centralized;
 use utils::graph::serde::FerriedData;
 use utils::graph::serde::Property;
-use utils::graph::graph_utils::generate_target_graph;
-use utils::graph::graph_utils::get_node_with_id;
 use utils::misc::headers::*;
 
 // ---------------------- General Helper Functions ----------------------------
@@ -121,11 +121,17 @@ pub fn create_target_graph() -> Graph<
     ids_to_properties.insert("b".to_string(), IndexMap::new());
     ids_to_properties.insert("c".to_string(), IndexMap::new());
     let b_hashmap = ids_to_properties.get_mut("b").unwrap();
-    b_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "reviews-v3".to_string());
+    b_hashmap.insert(
+        "node.metadata.WORKLOAD_NAME".to_string(),
+        "reviews-v3".to_string(),
+    );
     return generate_target_graph(vertices, edges, ids_to_properties);
 }
 
-pub fn collect_envoy_properties(http_headers: &HttpHeaders, fd: &mut FerriedData) -> Result<(),()> {
+pub fn collect_envoy_properties(
+    http_headers: &HttpHeaders,
+    fd: &mut FerriedData,
+) -> Result<(), ()> {
     // Handle the properties
     let prop_option_0 = fetch_property(
         &http_headers.workload_name,
@@ -146,9 +152,16 @@ pub fn execute_udfs(_fd: &mut FerriedData) {
     // Empty for this query, but in general, will be useful
 }
 
-pub fn get_value_for_storage(target_graph: &Graph<(std::string::String, IndexMap<std::string::String, std::string::String>), std::string::String>,
-                             mapping: &Vec<(NodeIndex, NodeIndex)>,
-                             stored_data: &FerriedData
+pub fn get_value_for_storage(
+    target_graph: &Graph<
+        (
+            std::string::String,
+            IndexMap<std::string::String, std::string::String>,
+        ),
+        std::string::String,
+    >,
+    mapping: &Vec<(NodeIndex, NodeIndex)>,
+    stored_data: &FerriedData,
 ) -> Option<String> {
     let node_ptr = get_node_with_id(target_graph, "a".to_string());
     if node_ptr.is_none() {
@@ -180,13 +193,10 @@ pub fn get_value_for_storage(target_graph: &Graph<(std::string::String, IndexMap
         .trace_graph
         .node_weight(trace_node_index.unwrap())
         .unwrap()
-        .1[&join_str(&vec!["node", "metadata", "WORKLOAD_NAME"])].clone();
+        .1[&join_str(&vec!["node", "metadata", "WORKLOAD_NAME"])]
+        .clone();
     return Some(ret_service_name);
-
-
-
 }
-
 
 // ---------------------------- Filter ------------------------------------
 
@@ -327,8 +337,10 @@ impl HttpHeaders {
         let mut ferried_data = fetch_data_from_headers(self, HttpType::Request);
 
         match collect_envoy_properties(self, &mut ferried_data) {
-            Ok(_) => { }
-            Err(_) => { return; }
+            Ok(_) => {}
+            Err(_) => {
+                return;
+            }
         }
 
         // Retrieve the data we have stored
@@ -455,8 +467,11 @@ impl HttpHeaders {
             if let Some(mapping) = mapping_opt {
                 log::info!("found mapping!");
                 let key = join_str(&vec!["node", "metadata", "WORKLOAD_NAME"]);
-                let value_wrapped = get_value_for_storage(&self.target_graph, &mapping, &stored_data);
-                if value_wrapped.is_none() { return; }
+                let value_wrapped =
+                    get_value_for_storage(&self.target_graph, &mapping, &stored_data);
+                if value_wrapped.is_none() {
+                    return;
+                }
                 let value = value_wrapped.unwrap();
 
                 let call_result = self.dispatch_http_call(
@@ -524,4 +539,3 @@ impl HttpHeaders {
         store_data(&ferried_data_str, &trace_id, self);
     }
 }
-
