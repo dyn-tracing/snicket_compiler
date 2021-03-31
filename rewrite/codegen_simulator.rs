@@ -104,14 +104,14 @@ impl CodeGenSimulator {
 
     fn collect_envoy_property(&mut self, property: String) {
         let get_prop_block = format!(
-            "prop_tuple = Property::new(self.whoami.as_ref().unwrap().to_string(),
+            "prop_tuple = Property::new(filter.whoami.as_ref().unwrap().to_string(),
                                                    \"{property}\".to_string(), 
-                                                   self.filter_state[\"{envoy_property}\"].clone());
+                                                   filter.filter_state[\"{envoy_property}\"].clone());
                                             ",
             property = property,
             envoy_property = self.envoy_properties_to_access_names[&property]
         );
-        let insert_hdr_block = "ferried_data.unassigned_properties.push(prop_tuple);".to_string();
+        let insert_hdr_block = "fd.unassigned_properties.push(prop_tuple);".to_string();
         self.request_blocks.push(get_prop_block);
         self.request_blocks.push(insert_hdr_block);
     }
@@ -119,17 +119,17 @@ impl CodeGenSimulator {
     fn collect_udf_property(&mut self, udf_id: String) {
         let get_udf_vals = format!(
             "let my_{id}_value;
-            let child_iterator = ferried_data.trace_graph.neighbors_directed(
-                graph_utils::get_node_with_id(&ferried_data.trace_graph, self.whoami.as_ref().unwrap().clone()).unwrap(),
+            let child_iterator = fd.trace_graph.neighbors_directed(
+                graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap().clone()).unwrap(),
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
             for child in child_iterator {{
-                child_values.push(ferried_data.trace_graph.node_weight(child).unwrap().1[\"{id}\"].clone());
+                child_values.push(fd.trace_graph.node_weight(child).unwrap().1[\"{id}\"].clone());
             }}
             if child_values.len() == 0 {{
-                my_{id}_value = {leaf_func}(&ferried_data.trace_graph).to_string();
+                my_{id}_value = {leaf_func}(&fd.trace_graph).to_string();
             }} else {{
-                my_{id}_value = {mid_func}(&ferried_data.trace_graph, child_values).to_string();
+                my_{id}_value = {mid_func}(&fd.trace_graph, child_values).to_string();
             }}
 
         ",
@@ -140,11 +140,11 @@ impl CodeGenSimulator {
         self.udf_blocks.push(get_udf_vals);
 
         let save_udf_vals = format!("
-        let node = graph_utils::get_node_with_id(&ferried_data.trace_graph, self.whoami.as_ref().unwrap().to_string()).unwrap();
+        let node = graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap().to_string()).unwrap();
         // if we already have the property, don't add it
-        if !( ferried_data.trace_graph.node_weight(node).unwrap().1.contains_key(\"{id}\") &&
-               ferried_data.trace_graph.node_weight(node).unwrap().1[\"{id}\"] == my_{id}_value ) {{
-           ferried_data.trace_graph.node_weight_mut(node).unwrap().1.insert(
+        if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key(\"{id}\") &&
+               fd.trace_graph.node_weight(node).unwrap().1[\"{id}\"] == my_{id}_value ) {{
+           fd.trace_graph.node_weight_mut(node).unwrap().1.insert(
                \"{id}\".to_string(), my_{id}_value);
         }}
         ", id=udf_id);
@@ -224,14 +224,23 @@ impl CodeGenSimulator {
                 );
                 self.target_blocks.push(get_hashmap);
                 for property_name in struct_filter.properties[node].keys() {
+                    let mut envoy_filtered_property_name = property_name;
+                    // TODO:  more efficient way to do this
+                    for envoy_prop in self.envoy_properties_to_access_names.keys() {
+                        print!("envoy prop: {:?}\n", envoy_prop);
+                        print!("property name: {:?}\n", property_name);
+                        if property_name == envoy_prop {
+                            envoy_filtered_property_name = &self.envoy_properties_to_access_names[envoy_prop];
+                        }
+                    }
                     let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
                                                    node=node,
-                                                   property_name=property_name,
+                                                   property_name=envoy_filtered_property_name,
                                                    property_value=struct_filter.properties[node][property_name]);
                     self.target_blocks.push(fill_in_hashmap);
                 }
             }
-            let make_graph = "        self.target_graph = Some(graph_utils::generate_target_graph(vertices, edges, ids_to_properties));\n".to_string();
+            let make_graph = "        return graph_utils::generate_target_graph(vertices, edges, ids_to_properties);\n".to_string();
             self.target_blocks.push(make_graph);
         }
     }
@@ -243,7 +252,7 @@ impl CodeGenSimulator {
 
         let if_root_block = format!(
             "let root_id = \"{root_id}\";
-            if self.whoami.as_ref().unwrap() == root_id {{\n",
+            if filter.whoami.as_ref().unwrap() == root_id {{\n",
             root_id = self.ir.root_id
         );
         self.udf_blocks.push(if_root_block);
@@ -258,21 +267,20 @@ impl CodeGenSimulator {
                 }
                 let trace_filter_block = format!(
                 "
-                let root_node = graph_utils::get_node_with_id(&ferried_data.trace_graph, \"{root_id}\".to_string()).unwrap();
-                if ! ( ferried_data.trace_graph.node_weight(root_node).unwrap().1.contains_key(\"{prop_name}\") &&
-                    ferried_data.trace_graph.node_weight(root_node).unwrap().1[\"{prop_name}\"] == \"{value}\" ){{
-                    // TODO:  replace ferried_data
-                    match serde_yaml::to_string(&ferried_data) {{
+                let root_node = graph_utils::get_node_with_id(&fd.trace_graph, \"{root_id}\".to_string()).unwrap();
+                if ! ( fd.trace_graph.node_weight(root_node).unwrap().1.contains_key(\"{prop_name}\") &&
+                    fd.trace_graph.node_weight(root_node).unwrap().1[\"{prop_name}\"] == \"{value}\" ){{
+                    // TODO:  replace fd
+                    match serde_yaml::to_string(&fd) {{
                         Ok(fd_str) => {{
-                            original_rpc.headers.insert(\"ferried_data\".to_string(), fd_str);
-                            return vec![original_rpc];
+                            return false;
                         }}
                         Err(e) => {{
                             log::error!(\"could not serialize baggage {{0}}\n\", e);
-                            return vec![original_rpc];
+                            return false;
                         }}
                      }}
-                     return vec![original_rpc];
+                     return false;
                 }}
                 ", root_id=self.ir.root_id, prop_name=prop, value=attr_filter.value);
                 self.udf_blocks.push(trace_filter_block);
@@ -285,12 +293,12 @@ impl CodeGenSimulator {
 
     fn make_storage_rpc_value_from_trace(&mut self, entity: String, property: String) {
         let ret_block = format!(
-        "let trace_node_index = graph_utils::get_node_with_id(&ferried_data.trace_graph, \"{node_id}\".to_string());
+        "let trace_node_index = graph_utils::get_node_with_id(&fd.trace_graph, \"{node_id}\".to_string());
         if trace_node_index.is_none() {{
            log::warn!(\"Node {node_id} not found\");
-                return vec![original_rpc];
+                return None;
         }}
-        let mut ret_{prop} = &ferried_data.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
+        let mut ret_{prop} = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
         value = ret_{prop}.to_string();\n",
                 node_id = entity,
                 prop = property
@@ -300,23 +308,23 @@ impl CodeGenSimulator {
     }
     fn make_storage_rpc_value_from_target(&mut self, entity: String, property: String) {
         let ret_block = format!(
-        "let node_ptr = graph_utils::get_node_with_id(&self.target_graph.as_ref().unwrap(), \"{node_id}\".to_string());
+        "let node_ptr = graph_utils::get_node_with_id(target_graph, \"{node_id}\".to_string());
         if node_ptr.is_none() {{
            log::warn!(\"Node {node_id} not found\");
-                return vec![original_rpc];
+                return None;
         }}
         let mut trace_node_index = None;
-        for map in m {{
-            if self.target_graph.as_ref().unwrap().node_weight(map.0).unwrap().0 == \"{node_id}\" {{
+        for map in mapping {{
+            if target_graph.node_weight(map.0).unwrap().0 == \"{node_id}\" {{
                 trace_node_index = Some(map.1);
                 break;
             }}
         }}
-        if trace_node_index == None || !&ferried_data.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key(\"{prop}\") {{
+        if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key(\"{prop}\") {{
             // we have not yet collected the return property or have a mapping error
-            return vec![original_rpc];
+            return None;
         }}
-        let mut ret_{prop} = &ferried_data.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
+        let mut ret_{prop} = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
         value = ret_{prop}.to_string();\n",
                 node_id = entity,
                 prop = property
