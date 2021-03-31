@@ -120,7 +120,7 @@ impl CodeGenSimulator {
         let get_udf_vals = format!(
             "let my_{id}_value;
             let child_iterator = ferried_data.trace_graph.neighbors_directed(
-                utils::get_node_with_id(&ferried_data.trace_graph, self.whoami.as_ref().unwrap().clone()).unwrap(),
+                graph_utils::get_node_with_id(&ferried_data.trace_graph, self.whoami.as_ref().unwrap().clone()).unwrap(),
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
             for child in child_iterator {{
@@ -140,7 +140,7 @@ impl CodeGenSimulator {
         self.udf_blocks.push(get_udf_vals);
 
         let save_udf_vals = format!("
-        let node = utils::get_node_with_id(&ferried_data.trace_graph, self.whoami.as_ref().unwrap().to_string()).unwrap();
+        let node = graph_utils::get_node_with_id(&ferried_data.trace_graph, self.whoami.as_ref().unwrap().to_string()).unwrap();
         // if we already have the property, don't add it
         if !( ferried_data.trace_graph.node_weight(node).unwrap().1.contains_key(\"{id}\") &&
                ferried_data.trace_graph.node_weight(node).unwrap().1[\"{id}\"] == my_{id}_value ) {{
@@ -231,7 +231,7 @@ impl CodeGenSimulator {
                     self.target_blocks.push(fill_in_hashmap);
                 }
             }
-            let make_graph = "        self.target_graph = Some(utils::generate_target_graph(vertices, edges, ids_to_properties));\n".to_string();
+            let make_graph = "        self.target_graph = Some(graph_utils::generate_target_graph(vertices, edges, ids_to_properties));\n".to_string();
             self.target_blocks.push(make_graph);
         }
     }
@@ -258,7 +258,7 @@ impl CodeGenSimulator {
                 }
                 let trace_filter_block = format!(
                 "
-                let root_node = utils::get_node_with_id(&ferried_data.trace_graph, \"{root_id}\".to_string()).unwrap();
+                let root_node = graph_utils::get_node_with_id(&ferried_data.trace_graph, \"{root_id}\".to_string()).unwrap();
                 if ! ( ferried_data.trace_graph.node_weight(root_node).unwrap().1.contains_key(\"{prop_name}\") &&
                     ferried_data.trace_graph.node_weight(root_node).unwrap().1[\"{prop_name}\"] == \"{value}\" ){{
                     // TODO:  replace ferried_data
@@ -285,7 +285,7 @@ impl CodeGenSimulator {
 
     fn make_storage_rpc_value_from_trace(&mut self, entity: String, property: String) {
         let ret_block = format!(
-        "let trace_node_index = utils::get_node_with_id(&ferried_data.trace_graph, \"{node_id}\".to_string());
+        "let trace_node_index = graph_utils::get_node_with_id(&ferried_data.trace_graph, \"{node_id}\".to_string());
         if trace_node_index.is_none() {{
            log::warn!(\"Node {node_id} not found\");
                 return vec![original_rpc];
@@ -300,7 +300,7 @@ impl CodeGenSimulator {
     }
     fn make_storage_rpc_value_from_target(&mut self, entity: String, property: String) {
         let ret_block = format!(
-        "let node_ptr = utils::get_node_with_id(&self.target_graph.as_ref().unwrap(), \"{node_id}\".to_string());
+        "let node_ptr = graph_utils::get_node_with_id(&self.target_graph.as_ref().unwrap(), \"{node_id}\".to_string());
         if node_ptr.is_none() {{
            log::warn!(\"Node {node_id} not found\");
                 return vec![original_rpc];
