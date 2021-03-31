@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct Property {
-    entity: String,
-    property_name: String,
-    value: String,
+    pub entity: String,
+    pub property_name: String,
+    pub value: String,
 }
 
 impl Property {
@@ -28,6 +28,7 @@ impl Property {
         }
     }
 }
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FerriedData {
     pub trace_graph: Graph<(String, IndexMap<String, String>), String>,
@@ -63,7 +64,6 @@ impl FerriedData {
     pub fn merge(&mut self, other_data: FerriedData) {
         //  Merge the graphs by simply adding other data's to self's
 
-        log::warn!("my trace graph size is {:?}", self.trace_graph.node_count());
         // add nodes
         for node in other_data.trace_graph.node_indices() {
             //let node_name = &other_data.trace_graph.node_weight(node).unwrap().0;
@@ -72,7 +72,6 @@ impl FerriedData {
                     .add_node(other_data.trace_graph.node_weight(node).unwrap().clone());
             //}
         }
-        log::warn!("my trace graph size is now {:?}", self.trace_graph.node_count());
         // add edges
         for edge in other_data.trace_graph.edge_indices() {
             match other_data.trace_graph.edge_endpoints(edge) {
