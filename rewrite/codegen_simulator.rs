@@ -42,7 +42,7 @@ pub struct CodeGenSimulator {
     udf_blocks: Vec<String>, // code blocks to be used in outgoing responses, to compute UDF before matching
     trace_lvl_prop_blocks: Vec<String>, // code blocks to be used in outgoing responses, to compute UDF before matching
     udf_table: IndexMap<String, Udf>,   // where we store udf implementations
-    envoy_properties_to_access_names: IndexMap<String, String>,
+    envoy_properties: Vec<String>,
     collected_properties: Vec<String>, // all the properties we collect
 }
 
@@ -56,19 +56,21 @@ impl CodeGenSimulator {
             udf_blocks: Vec::new(),
             trace_lvl_prop_blocks: Vec::new(),
             udf_table: IndexMap::default(),
-            envoy_properties_to_access_names: IndexMap::new(),
+            envoy_properties: Vec::new(),
             collected_properties: Vec::new(),
         };
+        for udf in &udfs {
+            log::info!("udf: {:?}\n\n\n\n", udf);
+        }
         for udf in udfs {
             to_return.parse_udf(udf);
         }
         to_return
-            .envoy_properties_to_access_names
-            .insert("request_size".to_string(), "request.total_size".to_string());
-        to_return.envoy_properties_to_access_names.insert(
-            "service_name".to_string(),
-            "node.metadata.WORKLOAD_NAME".to_string(),
-        );
+            .envoy_properties
+            .push("request.total_size".to_string());
+        to_return
+            .envoy_properties
+            .push("node.metadata.WORKLOAD_NAME".to_string());
         to_return.get_maps();
         to_return.make_struct_filter_blocks();
         to_return.make_attr_filter_blocks();
@@ -111,7 +113,7 @@ impl CodeGenSimulator {
                                                    filter.filter_state[\"{envoy_property}\"].clone());
                                             ",
             property = property,
-            envoy_property = self.envoy_properties_to_access_names[&property]
+            envoy_property = property
         );
         let insert_hdr_block = "fd.unassigned_properties.push(prop_tuple);".to_string();
         self.request_blocks.push(get_prop_block);
@@ -168,17 +170,12 @@ impl CodeGenSimulator {
                 // we might have duplicates bc some have preceding periods
                 if !self.udf_table.contains_key(&map_name)
                     && !map_name.is_empty()
-                    && !self
-                        .envoy_properties_to_access_names
-                        .contains_key(&map_name)
+                    && !self.envoy_properties.contains(&map_name)
                 {
-                    panic!("unrecognized UDF");
+                    panic!("unrecognized UDF {:?}", map_name);
                 }
                 self.collected_properties.push(map_name.clone());
-                if self
-                    .envoy_properties_to_access_names
-                    .contains_key(&map_name)
-                {
+                if self.envoy_properties.contains(&map_name) {
                     self.collect_envoy_property(map_name);
                 } else {
                     self.collect_udf_property(map_name);
@@ -226,19 +223,24 @@ impl CodeGenSimulator {
                 );
                 self.target_blocks.push(get_hashmap);
                 for property_name in struct_filter.properties[node].keys() {
-                    let mut envoy_filtered_property_name = property_name;
-                    // TODO:  more efficient way to do this
-                    for envoy_prop in self.envoy_properties_to_access_names.keys() {
-                        if property_name == envoy_prop {
-                            envoy_filtered_property_name =
-                                &self.envoy_properties_to_access_names[envoy_prop];
-                        }
-                    }
                     let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
                                                    node=node,
-                                                   property_name=envoy_filtered_property_name,
+                                                   property_name=property_name,
                                                    property_value=struct_filter.properties[node][property_name]);
                     self.target_blocks.push(fill_in_hashmap);
+                }
+                for property_filter in &self.ir.attr_filters {
+                    if property_filter.node != "trace" {
+                        let mut property_name_without_period = property_filter.property.clone();
+                        if property_name_without_period.starts_with('.') {
+                            property_name_without_period.remove(0);
+                        }
+                        let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
+                                                       node=property_filter.node,
+                                                       property_name=property_name_without_period,
+                                                       property_value=property_filter.value);
+                        self.target_blocks.push(fill_in_hashmap);
+                    }
                 }
             }
             let make_graph = "        return graph_utils::generate_target_graph(vertices, edges, ids_to_properties);\n".to_string();
@@ -291,21 +293,26 @@ impl CodeGenSimulator {
     }
 
     fn make_storage_rpc_value_from_trace(&mut self, entity: String, property: String) {
+        let mut prop_wo_periods = property.clone();
+        prop_wo_periods.retain(|c| c != '.');
         let ret_block = format!(
         "let trace_node_index = graph_utils::get_node_with_id(&fd.trace_graph, \"{node_id}\".to_string());
         if trace_node_index.is_none() {{
            log::warn!(\"Node {node_id} not found\");
                 return None;
         }}
-        let mut ret_{prop} = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
-        value = ret_{prop}.to_string();\n",
+        let mut ret_{prop_var} = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
+        value = ret_{prop_var}.to_string();\n",
                 node_id = entity,
+                prop_var = prop_wo_periods,
                 prop = property
         );
 
         self.response_blocks.push(ret_block);
     }
     fn make_storage_rpc_value_from_target(&mut self, entity: String, property: String) {
+        let mut prop_wo_periods = property.clone();
+        prop_wo_periods.retain(|c| c != '.');
         let ret_block = format!(
         "let node_ptr = graph_utils::get_node_with_id(target_graph, \"{node_id}\".to_string());
         if node_ptr.is_none() {{
@@ -323,9 +330,10 @@ impl CodeGenSimulator {
             // we have not yet collected the return property or have a mapping error
             return None;
         }}
-        let mut ret_{prop} = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
-        value = ret_{prop}.to_string();\n",
+        let mut ret_{prop_var} = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
+        value = ret_{prop_var}.to_string();\n",
                 node_id = entity,
+                prop_var = prop_wo_periods,
                 prop = property
         );
 
@@ -423,7 +431,16 @@ mod tests {
     #[test]
     fn get_codegen_doesnt_throw_error() {
         let result =
-            get_codegen_from_query("MATCH (a) -[]-> (b)-[]->(c) RETURN a.count".to_string());
+            get_codegen_from_query("MATCH (a) -[]-> (b {})-[]->(c) RETURN a.count".to_string());
+        assert!(!result.struct_filters.is_empty());
+        let _codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());
+    }
+
+    #[test]
+    fn get_codegen_doesnt_throw_error_with_mult_periods() {
+        let result = get_codegen_from_query(
+            "MATCH (a) -[]-> (b {})-[]->(c) RETURN a.node.metadata.WORKLOAD_NAME".to_string(),
+        );
         assert!(!result.struct_filters.is_empty());
         let _codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());
     }
@@ -431,7 +448,7 @@ mod tests {
     #[test]
     fn get_group_by() {
         let result = get_codegen_from_query(
-            "MATCH (a {service_name: \"productpage-v1\"}) RETURN a.count, agg".to_string(),
+            "MATCH (a {}) WHERE a.node.metadata.WORKLOAD_NAME = 'productpage-v1' RETURN a.count, agg".to_string(),
         );
         assert!(!result.struct_filters.is_empty());
         let _codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());
@@ -443,7 +460,7 @@ mod tests {
     #[test]
     fn test_where() {
         let result = get_codegen_from_query(
-            "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) WHERE trace.request_size = 1 RETURN a.request_size, avg(a.request_size)".to_string(),
+            "MATCH (a) -[]-> (b)-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' AND trace.request.total_size = 1 RETURN a.request.total_size, avg(a.request.total_size)".to_string(),
         );
         assert!(!result.struct_filters.is_empty());
         let _codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());

@@ -50,12 +50,9 @@ pub fn collect_envoy_properties(
     filter: &Filter,
     fd: &mut FerriedData,
 ) {
-    let mut prop_tuple;
+    let mut prop_tuple: Property;
     prop_tuple = Property::new(filter.whoami.as_ref().unwrap().to_string(),
-                                                   "service_name".to_string(), 
-                                                   filter.filter_state["node.metadata.WORKLOAD_NAME"].clone());
-                                             fd.unassigned_properties.push(prop_tuple); prop_tuple = Property::new(filter.whoami.as_ref().unwrap().to_string(),
-                                                   "service_name".to_string(), 
+                                                   "node.metadata.WORKLOAD_NAME".to_string(), 
                                                    filter.filter_state["node.metadata.WORKLOAD_NAME"].clone());
                                              fd.unassigned_properties.push(prop_tuple); 
 }
@@ -93,13 +90,13 @@ pub fn get_value_for_storage(
                 break;
             }
         }
-        if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("service_name") {
+        if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("node.metadata.WORKLOAD_NAME") {
             // we have not yet collected the return property or have a mapping error
             return None;
         }
-        let mut ret_service_name = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "service_name" ];
+        let mut ret_nodemetadataWORKLOAD_NAME = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "node.metadata.WORKLOAD_NAME" ];
 
-        value = ret_service_name.to_string();
+        value = ret_nodemetadataWORKLOAD_NAME.to_string();
  
     return Some(value);
 
@@ -122,7 +119,7 @@ impl Filter {
             target_graph: None,
             filter_state: IndexMap::new(),
             envoy_shared_data: IndexMap::<String, String>::new(),
-            collected_properties: vec!( "service_name".to_string(), "service_name".to_string(),  ),
+            collected_properties: vec!( "node.metadata.WORKLOAD_NAME".to_string(),  ),
          }))
     }
 
@@ -133,7 +130,7 @@ impl Filter {
                                    target_graph: None,
                                    filter_state: string_data,
                                    envoy_shared_data: IndexMap::new(),
-                                   collected_properties: vec!("service_name".to_string(), "service_name".to_string(),  ),
+                                   collected_properties: vec!("node.metadata.WORKLOAD_NAME".to_string(),  ),
                                }))
      }
 

@@ -71,9 +71,9 @@ pub fn collect_envoy_properties(
     filter: &Filter,
     fd: &mut FerriedData,
 ) {
-    let mut prop_tuple;
+    let mut prop_tuple: Property;
     prop_tuple = Property::new(filter.whoami.as_ref().unwrap().to_string(),
-                                                   "service_name".to_string(), 
+                                                   "node.metadata.WORKLOAD_NAME".to_string(), 
                                                    filter.filter_state["node.metadata.WORKLOAD_NAME"].clone());
                                              fd.unassigned_properties.push(prop_tuple); 
 }
@@ -162,7 +162,7 @@ impl Filter {
             target_graph: None,
             filter_state: IndexMap::new(),
             envoy_shared_data: IndexMap::<String, String>::new(),
-            collected_properties: vec!( "service_name".to_string(), "height".to_string(),  ),
+            collected_properties: vec!( "node.metadata.WORKLOAD_NAME".to_string(), "height".to_string(),  ),
          }))
     }
 
@@ -173,7 +173,7 @@ impl Filter {
                                    target_graph: None,
                                    filter_state: string_data,
                                    envoy_shared_data: IndexMap::new(),
-                                   collected_properties: vec!("service_name".to_string(), "height".to_string(),  ),
+                                   collected_properties: vec!("node.metadata.WORKLOAD_NAME".to_string(), "height".to_string(),  ),
                                }))
      }
 
