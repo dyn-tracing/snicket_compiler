@@ -226,21 +226,21 @@ impl CodeGenSimulator {
                 );
                 self.target_blocks.push(get_hashmap);
                 for property_name in struct_filter.properties[node].keys() {
-                    let mut property_name_without_period = property_name.clone();
-                    if property_name_without_period.starts_with('.') {
-                        property_name_without_period.remove(0);
-                    }
                     let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
                                                    node=node,
-                                                   property_name=property_name_without_period,
+                                                   property_name=property_name,
                                                    property_value=struct_filter.properties[node][property_name]);
                     self.target_blocks.push(fill_in_hashmap);
                 }
                 for property_filter in &self.ir.attr_filters {
                     if property_filter.node != "trace" {
+                        let mut property_name_without_period = property_filter.property.clone();
+                        if property_name_without_period.starts_with('.') {
+                            property_name_without_period.remove(0);
+                        }
                         let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
                                                        node=property_filter.node,
-                                                       property_name=property_filter.property,
+                                                       property_name=property_name_without_period,
                                                        property_value=property_filter.value);
                         self.target_blocks.push(fill_in_hashmap);
                     }
@@ -296,21 +296,26 @@ impl CodeGenSimulator {
     }
 
     fn make_storage_rpc_value_from_trace(&mut self, entity: String, property: String) {
+        let mut prop_wo_periods = property.clone();
+        prop_wo_periods.retain(|c| c!='.');
         let ret_block = format!(
         "let trace_node_index = graph_utils::get_node_with_id(&fd.trace_graph, \"{node_id}\".to_string());
         if trace_node_index.is_none() {{
            log::warn!(\"Node {node_id} not found\");
                 return None;
         }}
-        let mut ret_{prop} = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
-        value = ret_{prop}.to_string();\n",
+        let mut ret_{prop_var} = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
+        value = ret_{prop_var}.to_string();\n",
                 node_id = entity,
+                prop_var = prop_wo_periods,
                 prop = property
         );
 
         self.response_blocks.push(ret_block);
     }
     fn make_storage_rpc_value_from_target(&mut self, entity: String, property: String) {
+        let mut prop_wo_periods = property.clone();
+        prop_wo_periods.retain(|c| c!='.');
         let ret_block = format!(
         "let node_ptr = graph_utils::get_node_with_id(target_graph, \"{node_id}\".to_string());
         if node_ptr.is_none() {{
@@ -328,9 +333,10 @@ impl CodeGenSimulator {
             // we have not yet collected the return property or have a mapping error
             return None;
         }}
-        let mut ret_{prop} = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
-        value = ret_{prop}.to_string();\n",
+        let mut ret_{prop_var} = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
+        value = ret_{prop_var}.to_string();\n",
                 node_id = entity,
+                prop_var = prop_wo_periods,
                 prop = property
         );
 

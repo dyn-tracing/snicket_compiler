@@ -101,9 +101,9 @@ pub fn get_value_for_storage(
            log::warn!("Node productpage-v1 not found");
                 return None;
         }
-        let mut ret_request.total_size = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "request.total_size" ];
+        let mut ret_requesttotal_size = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "request.total_size" ];
 
-        value = ret_request.total_size.to_string();
+        value = ret_requesttotal_size.to_string();
  
     return Some(value);
 

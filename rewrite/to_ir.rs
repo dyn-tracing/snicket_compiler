@@ -419,7 +419,9 @@ mod tests {
         );
         let mut visitor = ReturnVisitor::default();
         let _res = result.accept(&mut visitor);
-        assert!(visitor.return_expr.unwrap().entity == "a");
+        let ret = visitor.return_expr.unwrap();
+        assert!(ret.entity == "a");
+        assert!(ret.property == ".request_size", "property is {:?}", ret.property);
     }
 
     #[test]

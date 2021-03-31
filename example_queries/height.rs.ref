@@ -61,7 +61,7 @@ pub fn create_target_graph() -> Graph<
          ids_to_properties.insert("b".to_string(), IndexMap::new());
          ids_to_properties.insert("c".to_string(), IndexMap::new());
          let mut b_hashmap = ids_to_properties.get_mut("b").unwrap();
-         b_hashmap.insert(".node.metadata.WORKLOAD_NAME".to_string(), "reviews-v1".to_string());
+         b_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "reviews-v1".to_string());
          return graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
  
 

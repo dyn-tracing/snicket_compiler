@@ -40,7 +40,7 @@ pub fn create_target_graph() -> Graph<
          ids_to_properties.insert("b".to_string(), IndexMap::new());
          ids_to_properties.insert("c".to_string(), IndexMap::new());
          let mut b_hashmap = ids_to_properties.get_mut("b").unwrap();
-         b_hashmap.insert(".node.metadata.WORKLOAD_NAME".to_string(), "reviews-v1".to_string());
+         b_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "reviews-v1".to_string());
          return graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
  
 
@@ -97,9 +97,9 @@ pub fn get_value_for_storage(
             // we have not yet collected the return property or have a mapping error
             return None;
         }
-        let mut ret_request.total_size = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "request.total_size" ];
+        let mut ret_requesttotal_size = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "request.total_size" ];
 
-        value = ret_request.total_size.to_string();
+        value = ret_requesttotal_size.to_string();
  
     return Some(value);
 
