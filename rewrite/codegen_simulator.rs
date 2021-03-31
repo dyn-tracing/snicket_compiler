@@ -40,6 +40,7 @@ pub struct CodeGenSimulator {
     response_blocks: Vec<String>,     // code blocks in outgoing responses, after matching
     target_blocks: Vec<String>,       // code blocks to create target graph
     udf_blocks: Vec<String>, // code blocks to be used in outgoing responses, to compute UDF before matching
+    trace_lvl_prop_blocks: Vec<String>, // code blocks to be used in outgoing responses, to compute UDF before matching
     udf_table: IndexMap<String, Udf>, // where we store udf implementations
     envoy_properties_to_access_names: IndexMap<String, String>,
     collected_properties: Vec<String>, // all the properties we collect
@@ -53,6 +54,7 @@ impl CodeGenSimulator {
             response_blocks: Vec::new(),
             target_blocks: Vec::new(),
             udf_blocks: Vec::new(),
+            trace_lvl_prop_blocks: Vec::new(),
             udf_table: IndexMap::default(),
             envoy_properties_to_access_names: IndexMap::new(),
             collected_properties: Vec::new(),
@@ -250,14 +252,11 @@ impl CodeGenSimulator {
         // collection will make the attribute filtering happen at the same time as
         // the struct filtering.  This is not the case for trace-level attributes
 
-        let if_root_block = format!(
-            "let root_id = \"{root_id}\";
-            if filter.whoami.as_ref().unwrap() == root_id {{\n",
-            root_id = self.ir.root_id
-        );
-        self.udf_blocks.push(if_root_block);
+        let mut if_root_block ="
+            if filter.whoami.as_ref().unwrap()== root_id {".to_string();
+        self.trace_lvl_prop_blocks.push(if_root_block);
         let init_trace_prop_str = "        let mut trace_prop_str : String;\n".to_string();
-        self.udf_blocks.push(init_trace_prop_str);
+        self.trace_lvl_prop_blocks.push(init_trace_prop_str);
 
         for attr_filter in &self.ir.attr_filters {
             if attr_filter.node == "trace" {
@@ -283,12 +282,12 @@ impl CodeGenSimulator {
                      return false;
                 }}
                 ", root_id=self.ir.root_id, prop_name=prop, value=attr_filter.value);
-                self.udf_blocks.push(trace_filter_block);
+                self.trace_lvl_prop_blocks.push(trace_filter_block);
             }
         }
 
         let end_root_block = "       }".to_string();
-        self.udf_blocks.push(end_root_block);
+        self.trace_lvl_prop_blocks.push(end_root_block);
     }
 
     fn make_storage_rpc_value_from_trace(&mut self, entity: String, property: String) {

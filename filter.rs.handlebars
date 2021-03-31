@@ -47,6 +47,8 @@ pub fn collect_envoy_properties(
 
 pub fn execute_udfs_and_check_trace_lvl_prop(filter: &Filter, fd: &mut FerriedData) -> bool{
     {{#each udf_blocks}}{{{this}}} {{/each}}
+    let root_id = "{{this.ir.root_id}}";
+    {{#each trace_lvl_prop_blocks}}{{{this}}}{{/each}}
     return true;
 }
 

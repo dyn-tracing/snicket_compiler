@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct Property {
-    entity: String,
-    property_name: String,
-    value: String,
+    pub entity: String,
+    pub property_name: String,
+    pub value: String,
 }
 
 impl Property {
