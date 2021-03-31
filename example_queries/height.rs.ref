@@ -4,65 +4,13 @@ use petgraph::graph::{Graph, NodeIndex};
 use petgraph::Incoming;
 use utils::graph::graph_utils;
 use utils::graph::iso::find_mapping_shamir_centralized;
+use utils::graph::serde::FerriedData;
+use utils::graph::serde::Property;
+
 use serde::{Serialize, Deserialize};
 extern crate serde_yaml;
 
 pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub struct Property {
-    entity: String,
-    property_name: String,
-    value: String,
-}
-
-impl Property {
-    fn default() -> Property {
-        Property {
-            entity: String::new(),
-            property_name: String::new(),
-            value: String::new()
-        }
-    }
-
-    fn new(entity: String, property_name: String, value: String) -> Property {
-        Property {
-            entity,
-            property_name,
-            value
-        }
-    }
-}
-#[derive(Debug, Serialize, Deserialize)]
-pub struct FerriedData {
-    trace_graph: Graph<(String, IndexMap<String, String>), String>,
-    unassigned_properties: Vec<Property>, // entity property value
-}
-
-impl FerriedData {
-    fn default() -> FerriedData {
-        FerriedData {
-            trace_graph: Graph::new(),
-            unassigned_properties: Vec::new(),
-            
-        }
-    }
-
-    // take any unassigned properties that apply to nodes in the graph,
-    // and associate them with those nodes
-    fn assign_properties(&mut self) {
-        let mut to_delete = Vec::new();
-        for property in &mut self.unassigned_properties {
-            let node = graph_utils::get_node_with_id(&self.trace_graph, property.entity.clone());
-            if node.is_some() {
-                self.trace_graph.node_weight_mut(node.unwrap()).unwrap().1.insert(property.property_name.clone(), property.value.clone());
-                to_delete.push(property.clone());
-            }
-        }
-        self.unassigned_properties.retain(|x| !to_delete.contains(&x));
-
-    }
-}
 
 fn put_ferried_data_in_hdrs(fd: &mut FerriedData, hdr: &mut IndexMap<String,String>) {
     match serde_yaml::to_string(fd) {
@@ -74,7 +22,6 @@ fn put_ferried_data_in_hdrs(fd: &mut FerriedData, hdr: &mut IndexMap<String,Stri
         }
     }
 }
-
 
 // user defined functions:
 // udf_type: Scalar
@@ -100,6 +47,103 @@ fn mid_height(_graph: &Graph<(String, IndexMap<String, String>), String>, childr
 }
 
 
+pub fn create_target_graph() -> Graph<
+    (
+        std::string::String,
+        IndexMap<std::string::String, std::string::String>,
+    ),
+    std::string::String,
+> {
+     let vertices = vec!(  "a".to_string(), "b".to_string(), "c".to_string(),  );
+         let edges = vec!(   ("a".to_string(), "b".to_string() ),   ("b".to_string(), "c".to_string() ),   );
+         let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
+         ids_to_properties.insert("a".to_string(), IndexMap::new());
+         ids_to_properties.insert("b".to_string(), IndexMap::new());
+         ids_to_properties.insert("c".to_string(), IndexMap::new());
+         let mut b_hashmap = ids_to_properties.get_mut("b").unwrap();
+         b_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "reviews-v1".to_string());
+         return graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
+ 
+
+}
+
+pub fn collect_envoy_properties(
+    filter: &Filter,
+    fd: &mut FerriedData,
+) {
+    let mut prop_tuple;
+    prop_tuple = Property::new(filter.whoami.as_ref().unwrap().to_string(),
+                                                   "service_name".to_string(), 
+                                                   filter.filter_state["node.metadata.WORKLOAD_NAME"].clone());
+                                             fd.unassigned_properties.push(prop_tuple); 
+}
+
+pub fn execute_udfs_and_check_trace_lvl_prop(filter: &Filter, fd: &mut FerriedData) -> bool{
+    let my_height_value;
+            let child_iterator = fd.trace_graph.neighbors_directed(
+                graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap().clone()).unwrap(),
+                petgraph::Outgoing);
+            let mut child_values = Vec::new();
+            for child in child_iterator {
+                child_values.push(fd.trace_graph.node_weight(child).unwrap().1["height"].clone());
+            }
+            if child_values.len() == 0 {
+                my_height_value = leaf_height(&fd.trace_graph).to_string();
+            } else {
+                my_height_value = mid_height(&fd.trace_graph, child_values).to_string();
+            }
+
+         
+        let node = graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap().to_string()).unwrap();
+        // if we already have the property, don't add it
+        if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key("height") &&
+               fd.trace_graph.node_weight(node).unwrap().1["height"] == my_height_value ) {
+           fd.trace_graph.node_weight_mut(node).unwrap().1.insert(
+               "height".to_string(), my_height_value);
+        }
+         
+    let root_id = "productpage-v1";
+    
+            if filter.whoami.as_ref().unwrap()== root_id {        let mut trace_prop_str : String;
+       }
+    return true;
+}
+
+pub fn get_value_for_storage(                                                   
+    target_graph: &Graph<                                                       
+        (                                                                       
+            std::string::String,                                                
+            IndexMap<std::string::String, std::string::String>,                 
+        ),                                                                      
+        std::string::String,                                                    
+    >,                                                                          
+    mapping: &Vec<(NodeIndex, NodeIndex)>,                                      
+    fd: &FerriedData,                                                  
+) -> Option<String> {
+    let mut value : String;
+    let node_ptr = graph_utils::get_node_with_id(target_graph, "a".to_string());
+        if node_ptr.is_none() {
+           log::warn!("Node a not found");
+                return None;
+        }
+        let mut trace_node_index = None;
+        for map in mapping {
+            if target_graph.node_weight(map.0).unwrap().0 == "a" {
+                trace_node_index = Some(map.1);
+                break;
+            }
+        }
+        if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("height") {
+            // we have not yet collected the return property or have a mapping error
+            return None;
+        }
+        let mut ret_height = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "height" ];
+
+        value = ret_height.to_string();
+ 
+    return Some(value);
+
+}
 
 #[derive(Clone, Debug)]
 pub struct Filter {
@@ -135,7 +179,7 @@ impl Filter {
 
     pub fn init_filter(&mut self) {
         if self.whoami.is_none() { self.set_whoami(); assert!(self.whoami.is_some()); }
-        if self.target_graph.is_none() { self.create_target_graph(); } 
+        if self.target_graph.is_none() { self.target_graph = Some(create_target_graph()); } 
         assert!(self.whoami.is_some());
     }
 
@@ -261,19 +305,6 @@ impl Filter {
         return new_rpc_headers;
     }
 
-    pub fn create_target_graph(&mut self) {
-         let vertices = vec!(  "a".to_string(), "b".to_string(), "c".to_string(),  );
-         let edges = vec!(   ("a".to_string(), "b".to_string() ),   ("b".to_string(), "c".to_string() ),   );
-         let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
-         ids_to_properties.insert("a".to_string(), IndexMap::new());
-         ids_to_properties.insert("b".to_string(), IndexMap::new());
-         ids_to_properties.insert("c".to_string(), IndexMap::new());
-         let mut b_hashmap = ids_to_properties.get_mut("b").unwrap();
-         b_hashmap.insert("service_name".to_string(), "reviews-v1".to_string());
-         self.target_graph = Some(graph_utils::generate_target_graph(vertices, edges, ids_to_properties));
- 
-    }
-
     pub fn on_incoming_requests(&mut self, mut x: Rpc) -> Vec<Rpc> {
         // Fetch ferried data
         let mut ferried_data: FerriedData;
@@ -290,11 +321,7 @@ impl Filter {
         }
 
         // Insert properties to collect
-        let mut prop_tuple;
-        prop_tuple = Property::new(self.whoami.as_ref().unwrap().to_string(),
-                                                   "service_name".to_string(), 
-                                                   self.filter_state["node.metadata.WORKLOAD_NAME"].clone());
-                                             ferried_data.unassigned_properties.push(prop_tuple); 
+        collect_envoy_properties(self, &mut ferried_data);
 
         // Return ferried data to x, and store headers
         put_ferried_data_in_hdrs(&mut ferried_data, &mut x.headers);
@@ -322,67 +349,24 @@ impl Filter {
             }
         }
 
-        // 2. calculate UDFs and store result, and check trace level properties
-        let my_height_value;
-            let child_iterator = ferried_data.trace_graph.neighbors_directed(
-                graph_utils::get_node_with_id(&ferried_data.trace_graph, self.whoami.as_ref().unwrap().clone()).unwrap(),
-                petgraph::Outgoing);
-            let mut child_values = Vec::new();
-            for child in child_iterator {
-                child_values.push(ferried_data.trace_graph.node_weight(child).unwrap().1["height"].clone());
-            }
-            if child_values.len() == 0 {
-                my_height_value = leaf_height(&ferried_data.trace_graph).to_string();
-            } else {
-                my_height_value = mid_height(&ferried_data.trace_graph, child_values).to_string();
-            }
-
-         
-        let node = graph_utils::get_node_with_id(&ferried_data.trace_graph, self.whoami.as_ref().unwrap().to_string()).unwrap();
-        // if we already have the property, don't add it
-        if !( ferried_data.trace_graph.node_weight(node).unwrap().1.contains_key("height") &&
-               ferried_data.trace_graph.node_weight(node).unwrap().1["height"] == my_height_value ) {
-           ferried_data.trace_graph.node_weight_mut(node).unwrap().1.insert(
-               "height".to_string(), my_height_value);
-        }
-         let root_id = "productpage-v1";
-            if self.whoami.as_ref().unwrap() == root_id {
-         let mut trace_prop_str : String;
-        } 
-
+        let root_id = "productpage-v1";
+        let trace_prop_sat = execute_udfs_and_check_trace_lvl_prop(self, &mut ferried_data);
         // 3. perform isomorphism and possibly return if root node
-        if self.whoami.as_ref().unwrap() == root_id {
+        if trace_prop_sat && self.whoami.as_ref().unwrap() == root_id {
             let mapping = find_mapping_shamir_centralized(
                 &ferried_data.trace_graph,
                 self.target_graph.as_ref().unwrap(),
             );
             if mapping.is_some() {
                 let m = mapping.unwrap();
-                let mut value : String;
-                let node_ptr = graph_utils::get_node_with_id(&self.target_graph.as_ref().unwrap(), "a".to_string());
-        if node_ptr.is_none() {
-           log::warn!("Node a not found");
-                return vec![original_rpc];
-        }
-        let mut trace_node_index = None;
-        for map in m {
-            if self.target_graph.as_ref().unwrap().node_weight(map.0).unwrap().0 == "a" {
-                trace_node_index = Some(map.1);
-                break;
-            }
-        }
-        if trace_node_index == None || !&ferried_data.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("height") {
-            // we have not yet collected the return property or have a mapping error
-            return vec![original_rpc];
-        }
-        let mut ret_height = &ferried_data.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "height" ];
-
-        value = ret_height.to_string();
- 
-
+                let value = get_value_for_storage(self.target_graph.as_ref().unwrap(), &m, &ferried_data);
+                if value.is_none() {
+                    put_ferried_data_in_hdrs(&mut ferried_data, &mut original_rpc.headers);
+                    return vec![original_rpc];
+                }
                 // Now you have the return value, so
                 // 3a. Make a storage rpc
-                storage_rpc = Rpc::new_with_src(&value, self.whoami.as_ref().unwrap());
+                storage_rpc = Rpc::new_with_src(&value.unwrap(), self.whoami.as_ref().unwrap());
                 storage_rpc
                     .headers
                     .insert("dest".to_string(), "storage".to_string());

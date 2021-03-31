@@ -35,13 +35,13 @@ struct Udf {
 /********************************/
 #[derive(Serialize)]
 pub struct CodeGenSimulator {
-    ir: VisitorResults,               // the IR, as defined in to_ir.rs
-    request_blocks: Vec<String>,      // code blocks used in incoming requests
-    response_blocks: Vec<String>,     // code blocks in outgoing responses, after matching
-    target_blocks: Vec<String>,       // code blocks to create target graph
+    ir: VisitorResults,                 // the IR, as defined in to_ir.rs
+    request_blocks: Vec<String>,        // code blocks used in incoming requests
+    response_blocks: Vec<String>,       // code blocks in outgoing responses, after matching
+    target_blocks: Vec<String>,         // code blocks to create target graph
     udf_blocks: Vec<String>, // code blocks to be used in outgoing responses, to compute UDF before matching
     trace_lvl_prop_blocks: Vec<String>, // code blocks to be used in outgoing responses, to compute UDF before matching
-    udf_table: IndexMap<String, Udf>, // where we store udf implementations
+    udf_table: IndexMap<String, Udf>,   // where we store udf implementations
     envoy_properties_to_access_names: IndexMap<String, String>,
     collected_properties: Vec<String>, // all the properties we collect
 }
@@ -229,10 +229,9 @@ impl CodeGenSimulator {
                     let mut envoy_filtered_property_name = property_name;
                     // TODO:  more efficient way to do this
                     for envoy_prop in self.envoy_properties_to_access_names.keys() {
-                        print!("envoy prop: {:?}\n", envoy_prop);
-                        print!("property name: {:?}\n", property_name);
                         if property_name == envoy_prop {
-                            envoy_filtered_property_name = &self.envoy_properties_to_access_names[envoy_prop];
+                            envoy_filtered_property_name =
+                                &self.envoy_properties_to_access_names[envoy_prop];
                         }
                     }
                     let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
@@ -252,8 +251,9 @@ impl CodeGenSimulator {
         // collection will make the attribute filtering happen at the same time as
         // the struct filtering.  This is not the case for trace-level attributes
 
-        let mut if_root_block ="
-            if filter.whoami.as_ref().unwrap()== root_id {".to_string();
+        let if_root_block = "
+            if filter.whoami.as_ref().unwrap()== root_id {"
+            .to_string();
         self.trace_lvl_prop_blocks.push(if_root_block);
         let init_trace_prop_str = "        let mut trace_prop_str : String;\n".to_string();
         self.trace_lvl_prop_blocks.push(init_trace_prop_str);
