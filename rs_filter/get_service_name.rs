@@ -1,6 +1,6 @@
 use indexmap::IndexMap;
 use log::trace;
-use petgraph::Graph;
+use petgraph::graph::{Graph, NodeIndex};
 use petgraph::Incoming;
 use proxy_wasm::traits::*;
 use proxy_wasm::types::*;
@@ -14,6 +14,7 @@ use utils::graph::utils::generate_target_graph;
 use utils::graph::utils::get_node_with_id;
 use utils::misc::headers::*;
 
+// ---------------------- General Helper Functions ----------------------------
 fn fetch_data_from_headers(ctx: &HttpHeaders, request_type: HttpType) -> FerriedData {
     let data_str_opt: Option<String>;
     if request_type == HttpType::Request {
@@ -100,6 +101,94 @@ fn store_data(stored_data_str: &String, trace_id: &str, ctx: &HttpHeaders) {
         );
     }
 }
+// ---------------------- Generated Functions ----------------------------
+// TODO: insert UDFs here
+
+pub fn create_target_graph() -> Graph<
+    (
+        std::string::String,
+        IndexMap<std::string::String, std::string::String>,
+    ),
+    std::string::String,
+> {
+    let vertices = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+    let edges = vec![
+        ("a".to_string(), "b".to_string()),
+        ("b".to_string(), "c".to_string()),
+    ];
+    let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
+    ids_to_properties.insert("a".to_string(), IndexMap::new());
+    ids_to_properties.insert("b".to_string(), IndexMap::new());
+    ids_to_properties.insert("c".to_string(), IndexMap::new());
+    let b_hashmap = ids_to_properties.get_mut("b").unwrap();
+    b_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "reviews-v3".to_string());
+    return generate_target_graph(vertices, edges, ids_to_properties);
+}
+
+pub fn collect_envoy_properties(http_headers: &HttpHeaders, fd: &mut FerriedData) -> Result<(),()> {
+    // Handle the properties
+    let prop_option_0 = fetch_property(
+        &http_headers.workload_name,
+        &vec!["node", "metadata", "WORKLOAD_NAME"],
+        http_headers,
+    );
+    if let Some(prop_tuple) = prop_option_0 {
+        fd.unassigned_properties.push(prop_tuple);
+    } else {
+        // We failed to collect the property.
+        // This might lead to wrong results, abort
+        return Err(());
+    }
+    return Ok(());
+}
+
+pub fn execute_udfs(_fd: &mut FerriedData) {
+    // Empty for this query, but in general, will be useful
+}
+
+pub fn get_value_for_storage(target_graph: &Graph<(std::string::String, IndexMap<std::string::String, std::string::String>), std::string::String>,
+                             mapping: &Vec<(NodeIndex, NodeIndex)>,
+                             stored_data: &FerriedData
+) -> Option<String> {
+    let node_ptr = get_node_with_id(target_graph, "a".to_string());
+    if node_ptr.is_none() {
+        log::error!("Node a not found");
+        // TODO: This should not abort I believe
+        return None;
+    }
+    let mut trace_node_index = None;
+    for map in mapping {
+        if target_graph.node_weight(map.0).unwrap().0 == "a" {
+            trace_node_index = Some(map.1);
+            break;
+        }
+    }
+    // TODO: This looks odd, further cleaning required.
+    let contains_key = stored_data
+        .trace_graph
+        .node_weight(trace_node_index.unwrap())
+        .unwrap()
+        .1
+        .contains_key(&join_str(&vec!["node", "metadata", "WORKLOAD_NAME"]));
+    if trace_node_index == None || !contains_key {
+        // we have not yet collected the return property or have a mapping error
+        log::error!("Mapping error.");
+        // TODO: This should not abort I believe
+        return None;
+    }
+    let ret_service_name = stored_data
+        .trace_graph
+        .node_weight(trace_node_index.unwrap())
+        .unwrap()
+        .1[&join_str(&vec!["node", "metadata", "WORKLOAD_NAME"])].clone();
+    return Some(ret_service_name);
+
+
+
+}
+
+
+// ---------------------------- Filter ------------------------------------
 
 #[no_mangle]
 pub fn _start() {
@@ -146,7 +235,7 @@ impl RootContext for HttpHeadersRoot {
     }
 }
 
-struct HttpHeaders {
+pub struct HttpHeaders {
     context_id: u32,
     workload_name: String,
     target_graph: Graph<(String, IndexMap<String, String>), String>,
@@ -237,18 +326,9 @@ impl HttpHeaders {
         // Fetch ferried data
         let mut ferried_data = fetch_data_from_headers(self, HttpType::Request);
 
-        // Handle the properties
-        let prop_option_0 = fetch_property(
-            &self.workload_name,
-            &vec!["node", "metadata", "WORKLOAD_NAME"],
-            self,
-        );
-        if let Some(prop_tuple) = prop_option_0 {
-            ferried_data.unassigned_properties.push(prop_tuple);
-        } else {
-            // We failed to collect the property.
-            // This might lead to wrong results, abort
-            return;
+        match collect_envoy_properties(self, &mut ferried_data) {
+            Ok(_) => { }
+            Err(_) => { return; }
         }
 
         // Retrieve the data we have stored
@@ -373,40 +453,11 @@ impl HttpHeaders {
             let mapping_opt =
                 find_mapping_shamir_centralized(&stored_data.trace_graph, &self.target_graph);
             if let Some(mapping) = mapping_opt {
-                let node_ptr = get_node_with_id(&self.target_graph, "a".to_string());
-                if node_ptr.is_none() {
-                    log::error!("Node a not found");
-                    // TODO: This should not abort I believe
-                    return;
-                }
-                let mut trace_node_index = None;
-                for map in mapping {
-                    if self.target_graph.node_weight(map.0).unwrap().0 == "a" {
-                        trace_node_index = Some(map.1);
-                        break;
-                    }
-                }
-                // TODO: This looks odd, further cleaning required.
-                let contains_key = stored_data
-                    .trace_graph
-                    .node_weight(trace_node_index.unwrap())
-                    .unwrap()
-                    .1
-                    .contains_key(&join_str(&vec!["node", "metadata", "WORKLOAD_NAME"]));
-                if trace_node_index == None || !contains_key {
-                    // we have not yet collected the return property or have a mapping error
-                    log::error!("Mapping error.");
-                    // TODO: This should not abort I believe
-                    return;
-                }
-                let ret_service_name = &stored_data
-                    .trace_graph
-                    .node_weight(trace_node_index.unwrap())
-                    .unwrap()
-                    .1[&join_str(&vec!["node", "metadata", "WORKLOAD_NAME"])];
-
+                log::info!("found mapping!");
                 let key = join_str(&vec!["node", "metadata", "WORKLOAD_NAME"]);
-                let value = ret_service_name.to_string();
+                let value_wrapped = get_value_for_storage(&self.target_graph, &mapping, &stored_data);
+                if value_wrapped.is_none() { return; }
+                let value = value_wrapped.unwrap();
 
                 let call_result = self.dispatch_http_call(
                     "storage-upstream",
@@ -474,23 +525,3 @@ impl HttpHeaders {
     }
 }
 
-pub fn create_target_graph() -> Graph<
-    (
-        std::string::String,
-        IndexMap<std::string::String, std::string::String>,
-    ),
-    std::string::String,
-> {
-    let vertices = vec!["a".to_string(), "b".to_string(), "c".to_string()];
-    let edges = vec![
-        ("a".to_string(), "b".to_string()),
-        ("b".to_string(), "c".to_string()),
-    ];
-    let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
-    ids_to_properties.insert("a".to_string(), IndexMap::new());
-    ids_to_properties.insert("b".to_string(), IndexMap::new());
-    ids_to_properties.insert("c".to_string(), IndexMap::new());
-    let b_hashmap = ids_to_properties.get_mut("b").unwrap();
-    b_hashmap.insert("service_name".to_string(), "reviews-v3".to_string());
-    return generate_target_graph(vertices, edges, ids_to_properties);
-}
