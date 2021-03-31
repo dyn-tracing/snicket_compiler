@@ -66,9 +66,11 @@ impl CodeGenSimulator {
             to_return.parse_udf(udf);
         }
         to_return
-            .envoy_properties.push("request.total_size".to_string());
-        to_return.
-            envoy_properties.push("node.metadata.WORKLOAD_NAME".to_string());
+            .envoy_properties
+            .push("request.total_size".to_string());
+        to_return
+            .envoy_properties
+            .push("node.metadata.WORKLOAD_NAME".to_string());
         to_return.get_maps();
         to_return.make_struct_filter_blocks();
         to_return.make_attr_filter_blocks();
@@ -168,17 +170,12 @@ impl CodeGenSimulator {
                 // we might have duplicates bc some have preceding periods
                 if !self.udf_table.contains_key(&map_name)
                     && !map_name.is_empty()
-                    && !self
-                        .envoy_properties
-                        .contains(&map_name)
+                    && !self.envoy_properties.contains(&map_name)
                 {
                     panic!("unrecognized UDF {:?}", map_name);
                 }
                 self.collected_properties.push(map_name.clone());
-                if self
-                    .envoy_properties
-                    .contains(&map_name)
-                {
+                if self.envoy_properties.contains(&map_name) {
                     self.collect_envoy_property(map_name);
                 } else {
                     self.collect_udf_property(map_name);
@@ -297,7 +294,7 @@ impl CodeGenSimulator {
 
     fn make_storage_rpc_value_from_trace(&mut self, entity: String, property: String) {
         let mut prop_wo_periods = property.clone();
-        prop_wo_periods.retain(|c| c!='.');
+        prop_wo_periods.retain(|c| c != '.');
         let ret_block = format!(
         "let trace_node_index = graph_utils::get_node_with_id(&fd.trace_graph, \"{node_id}\".to_string());
         if trace_node_index.is_none() {{
@@ -315,7 +312,7 @@ impl CodeGenSimulator {
     }
     fn make_storage_rpc_value_from_target(&mut self, entity: String, property: String) {
         let mut prop_wo_periods = property.clone();
-        prop_wo_periods.retain(|c| c!='.');
+        prop_wo_periods.retain(|c| c != '.');
         let ret_block = format!(
         "let node_ptr = graph_utils::get_node_with_id(target_graph, \"{node_id}\".to_string());
         if node_ptr.is_none() {{
@@ -441,8 +438,9 @@ mod tests {
 
     #[test]
     fn get_codegen_doesnt_throw_error_with_mult_periods() {
-        let result =
-            get_codegen_from_query("MATCH (a) -[]-> (b {})-[]->(c) RETURN a.node.metadata.WORKLOAD_NAME".to_string());
+        let result = get_codegen_from_query(
+            "MATCH (a) -[]-> (b {})-[]->(c) RETURN a.node.metadata.WORKLOAD_NAME".to_string(),
+        );
         assert!(!result.struct_filters.is_empty());
         let _codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());
     }

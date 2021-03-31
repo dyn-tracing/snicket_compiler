@@ -270,11 +270,10 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
 /// * `visitor` - A visitor that already has its filters, returns, and aggregations filled in
 pub fn get_map_functions(mut results: VisitorResults) -> VisitorResults {
     let mut unknown_properties: IndexSet<String> = IndexSet::new();
-    let mut known_properties: IndexSet<String> = IndexSet::new();
     for struct_filter in &results.struct_filters {
         for property_map in struct_filter.properties.values() {
             for property in property_map.keys() {
-                if !known_properties.contains(property.as_str()) {
+                if !unknown_properties.contains(property.as_str()) {
                     unknown_properties.insert(property.to_string());
                 }
             }
@@ -282,7 +281,7 @@ pub fn get_map_functions(mut results: VisitorResults) -> VisitorResults {
     }
 
     for attribute_filter in &results.attr_filters {
-        if !known_properties.contains(&attribute_filter.property) {
+        if !unknown_properties.contains(&attribute_filter.property) {
             unknown_properties.insert(attribute_filter.property.to_string());
         }
     }
@@ -290,12 +289,12 @@ pub fn get_map_functions(mut results: VisitorResults) -> VisitorResults {
     // aggregate and return expression are exclusive
     if let Some(ref return_expr) = results.return_expr {
         let prop = &return_expr.property;
-        if !known_properties.contains(prop) {
+        if !unknown_properties.contains(prop) {
             unknown_properties.insert(prop.to_string());
         }
     } else if let Some(ref aggregate) = results.aggregate {
         let prop = &aggregate.property;
-        if !known_properties.contains(prop) {
+        if !unknown_properties.contains(prop) {
             unknown_properties.insert(prop.to_string());
         }
     }
@@ -314,7 +313,7 @@ pub fn visit_result(result: Rc<OC_CypherContextAll>, root_id: String) -> Visitor
         attr_filter.value.retain(|c| c != '\'');
     }
     let _res = result.accept(&mut return_visitor);
-    
+
     let results = VisitorResults {
         struct_filters: filter_visitor.struct_filters,
         attr_filters: filter_visitor.attr_filters,
@@ -368,7 +367,11 @@ mod tests {
         let _res = result.accept(&mut visitor);
         assert!(visitor.attr_filters[0].node == "b");
         assert!(visitor.attr_filters[0].property == ".node.metadata.WORKLOAD_NAME");
-        assert!(visitor.attr_filters[0].value == "\'reviews-v1\'", "value is {:?}", visitor.attr_filters[0].value);
+        assert!(
+            visitor.attr_filters[0].value == "\'reviews-v1\'",
+            "value is {:?}",
+            visitor.attr_filters[0].value
+        );
         assert!(visitor.struct_filters[0].vertices == vec!["a", "b", "c"]);
         assert!(
             visitor.struct_filters[0].edges
@@ -376,14 +379,18 @@ mod tests {
                     ("a".to_string(), "b".to_string()),
                     ("b".to_string(), "c".to_string())
                 ],
-            "edges are {:?}", visitor.struct_filters[0].edges
+            "edges are {:?}",
+            visitor.struct_filters[0].edges
         );
     }
 
     #[test]
     fn test_match_where() {
         let tf = CommonTokenFactory::default();
-        let result = run_parser(&tf, "MATCH (a) -[]-> (b {})-[]->(c) WHERE trace.latency = 500 RETURN a.request_size");
+        let result = run_parser(
+            &tf,
+            "MATCH (a) -[]-> (b {})-[]->(c) WHERE trace.latency = 500 RETURN a.request_size",
+        );
         let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
         assert!(!visitor.struct_filters.is_empty());
@@ -421,13 +428,20 @@ mod tests {
         let _res = result.accept(&mut visitor);
         let ret = visitor.return_expr.unwrap();
         assert!(ret.entity == "a");
-        assert!(ret.property == ".request_size", "property is {:?}", ret.property);
+        assert!(
+            ret.property == ".request_size",
+            "property is {:?}",
+            ret.property
+        );
     }
 
     #[test]
     fn test_aggregate() {
         let tf = CommonTokenFactory::default();
-        let result = run_parser(&tf, "MATCH (a) -[]-> (b {})-[]->(c) RETURN a.return_code, histogram(a.request_size) ");
+        let result = run_parser(
+            &tf,
+            "MATCH (a) -[]-> (b {})-[]->(c) RETURN a.return_code, histogram(a.request_size) ",
+        );
         let mut visitor = ReturnVisitor::default();
         let _res = result.accept(&mut visitor);
         assert!(visitor.aggregate.as_ref().unwrap().udf_id == "histogram(a.request_size)");
@@ -453,7 +467,9 @@ mod tests {
         };
         results = get_map_functions(results);
         assert!(results.maps.len() == 2);
-        assert!(results.maps.contains(&".node.metadata.WORKLOAD_NAME".to_string()));
+        assert!(results
+            .maps
+            .contains(&".node.metadata.WORKLOAD_NAME".to_string()));
         assert!(results.maps.contains(&".return_code".to_string()));
     }
 }
