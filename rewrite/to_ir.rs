@@ -271,7 +271,6 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
 pub fn get_map_functions(mut results: VisitorResults) -> VisitorResults {
     let mut unknown_properties: IndexSet<String> = IndexSet::new();
     let mut known_properties: IndexSet<String> = IndexSet::new();
-    known_properties.insert(".id".to_string()); // TODO:  are there any other built in properties besides id?
     for struct_filter in &results.struct_filters {
         for property_map in struct_filter.properties.values() {
             for property in property_map.keys() {
@@ -310,7 +309,12 @@ pub fn visit_result(result: Rc<OC_CypherContextAll>, root_id: String) -> Visitor
     let mut filter_visitor = FilterVisitor::default();
     let mut return_visitor = ReturnVisitor::default();
     let _res = result.accept(&mut filter_visitor);
+    // before we return, strip off the extra quotes if there are any
+    for attr_filter in &mut filter_visitor.attr_filters {
+        attr_filter.value.retain(|c| c != '\'');
+    }
     let _res = result.accept(&mut return_visitor);
+    
     let results = VisitorResults {
         struct_filters: filter_visitor.struct_filters,
         attr_filters: filter_visitor.attr_filters,
@@ -345,7 +349,7 @@ mod tests {
         let tf = CommonTokenFactory::default();
         let result = run_parser(
             &tf,
-            "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.request_size",
+            "MATCH (a) -[]-> (b)-[]->(c) WHERE b.metadata.WORKLOAD_NAME = 'reviews-v1' RETURN a.request_size",
         );
         let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
@@ -357,27 +361,29 @@ mod tests {
         let tf = CommonTokenFactory::default();
         let result = run_parser(
             &tf,
-            "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.request_size",
+            "MATCH (a {}) -[]->(b {}) -[]->(c {}) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' RETURN a.request_size"
+            // "MATCH (a) -[]-> (b) -[]-> (c) RETURN a.request_size",
         );
         let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
+        assert!(visitor.attr_filters[0].node == "b");
+        assert!(visitor.attr_filters[0].property == ".node.metadata.WORKLOAD_NAME");
+        assert!(visitor.attr_filters[0].value == "\'reviews-v1\'", "value is {:?}", visitor.attr_filters[0].value);
         assert!(visitor.struct_filters[0].vertices == vec!["a", "b", "c"]);
         assert!(
             visitor.struct_filters[0].edges
                 == vec![
                     ("a".to_string(), "b".to_string()),
                     ("b".to_string(), "c".to_string())
-                ]
+                ],
+            "edges are {:?}", visitor.struct_filters[0].edges
         );
-        assert!(visitor.struct_filters[0].properties.contains_key("b"));
-        assert!(visitor.struct_filters[0].properties["b"].contains_key("service_name"));
-        assert!(visitor.struct_filters[0].properties["b"]["service_name"] == "reviews-v1");
     }
 
     #[test]
     fn test_match_where() {
         let tf = CommonTokenFactory::default();
-        let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) WHERE trace.latency = 500 RETURN a.request_size");
+        let result = run_parser(&tf, "MATCH (a) -[]-> (b {})-[]->(c) WHERE trace.latency = 500 RETURN a.request_size");
         let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
         assert!(!visitor.struct_filters.is_empty());
@@ -390,18 +396,18 @@ mod tests {
     #[test]
     fn test_match_multiple_where() {
         let tf = CommonTokenFactory::default();
-        let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) WHERE trace.latency = 500 AND trace.client = xyz RETURN a.request_size");
+        let result = run_parser(&tf, "MATCH (a) -[]-> (b {})-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' AND b.latency = 500 AND trace.client = xyz RETURN a.request_size");
         let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
         assert!(!visitor.struct_filters.is_empty());
-        assert!(visitor.attr_filters.len() == 2);
-        assert!(visitor.attr_filters[0].node == "trace".to_string());
-        assert!(visitor.attr_filters[0].property == ".latency".to_string());
-        assert!(visitor.attr_filters[0].value == "500".to_string());
+        assert!(visitor.attr_filters.len() == 3);
+        assert!(visitor.attr_filters[1].node == "b".to_string());
+        assert!(visitor.attr_filters[1].property == ".latency".to_string());
+        assert!(visitor.attr_filters[1].value == "500".to_string());
 
-        assert!(visitor.attr_filters[1].node == "trace".to_string());
-        assert!(visitor.attr_filters[1].property == ".client".to_string());
-        assert!(visitor.attr_filters[1].value == "xyz".to_string());
+        assert!(visitor.attr_filters[2].node == "trace".to_string());
+        assert!(visitor.attr_filters[2].property == ".client".to_string());
+        assert!(visitor.attr_filters[2].value == "xyz".to_string());
     }
 
     #[test]
@@ -409,7 +415,7 @@ mod tests {
         let tf = CommonTokenFactory::default();
         let result = run_parser(
             &tf,
-            "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.request_size",
+            "MATCH (a) -[]-> (b {})-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' RETURN a.request_size",
         );
         let mut visitor = ReturnVisitor::default();
         let _res = result.accept(&mut visitor);
@@ -419,7 +425,7 @@ mod tests {
     #[test]
     fn test_aggregate() {
         let tf = CommonTokenFactory::default();
-        let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.return_code, histogram(a.request_size) ");
+        let result = run_parser(&tf, "MATCH (a) -[]-> (b {})-[]->(c) RETURN a.return_code, histogram(a.request_size) ");
         let mut visitor = ReturnVisitor::default();
         let _res = result.accept(&mut visitor);
         assert!(visitor.aggregate.as_ref().unwrap().udf_id == "histogram(a.request_size)");
@@ -430,7 +436,7 @@ mod tests {
     #[test]
     fn test_map() {
         let tf = CommonTokenFactory::default();
-        let result = run_parser(&tf, "MATCH (a) -[]-> (b {service_name: reviews-v1})-[]->(c) RETURN a.return_code, histogram(a.request_size) ");
+        let result = run_parser(&tf, "MATCH (a) -[]-> (b)-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' RETURN a.return_code, histogram(a.request_size) ");
         let mut filter_visitor = FilterVisitor::default();
         let mut return_visitor = ReturnVisitor::default();
         let _res = result.accept(&mut filter_visitor);
@@ -445,7 +451,7 @@ mod tests {
         };
         results = get_map_functions(results);
         assert!(results.maps.len() == 2);
-        assert!(results.maps.contains(&"service_name".to_string()));
+        assert!(results.maps.contains(&".node.metadata.WORKLOAD_NAME".to_string()));
         assert!(results.maps.contains(&".return_code".to_string()));
     }
 }

@@ -40,7 +40,7 @@ pub fn create_target_graph() -> Graph<
          ids_to_properties.insert("b".to_string(), IndexMap::new());
          ids_to_properties.insert("c".to_string(), IndexMap::new());
          let mut b_hashmap = ids_to_properties.get_mut("b").unwrap();
-         b_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "reviews-v1".to_string());
+         b_hashmap.insert(".node.metadata.WORKLOAD_NAME".to_string(), "'reviews-v1'".to_string());
          return graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
  
 
@@ -50,12 +50,12 @@ pub fn collect_envoy_properties(
     filter: &Filter,
     fd: &mut FerriedData,
 ) {
-    let mut prop_tuple;
+    let mut prop_tuple: Property;
     prop_tuple = Property::new(filter.whoami.as_ref().unwrap().to_string(),
-                                                   "service_name".to_string(), 
+                                                   "node.metadata.WORKLOAD_NAME".to_string(), 
                                                    filter.filter_state["node.metadata.WORKLOAD_NAME"].clone());
                                              fd.unassigned_properties.push(prop_tuple); prop_tuple = Property::new(filter.whoami.as_ref().unwrap().to_string(),
-                                                   "request_size".to_string(), 
+                                                   "request.total_size".to_string(), 
                                                    filter.filter_state["request.total_size"].clone());
                                              fd.unassigned_properties.push(prop_tuple); 
 }
@@ -67,8 +67,8 @@ pub fn execute_udfs_and_check_trace_lvl_prop(filter: &Filter, fd: &mut FerriedDa
             if filter.whoami.as_ref().unwrap()== root_id {        let mut trace_prop_str : String;
 
                 let root_node = graph_utils::get_node_with_id(&fd.trace_graph, "productpage-v1".to_string()).unwrap();
-                if ! ( fd.trace_graph.node_weight(root_node).unwrap().1.contains_key("request_size") &&
-                    fd.trace_graph.node_weight(root_node).unwrap().1["request_size"] == "1" ){
+                if ! ( fd.trace_graph.node_weight(root_node).unwrap().1.contains_key("request.total_size") &&
+                    fd.trace_graph.node_weight(root_node).unwrap().1["request.total_size"] == "1" ){
                     // TODO:  replace fd
                     match serde_yaml::to_string(&fd) {
                         Ok(fd_str) => {
@@ -110,13 +110,13 @@ pub fn get_value_for_storage(
                 break;
             }
         }
-        if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("request_size") {
+        if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("request.total_size") {
             // we have not yet collected the return property or have a mapping error
             return None;
         }
-        let mut ret_request_size = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "request_size" ];
+        let mut ret_request.total_size = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "request.total_size" ];
 
-        value = ret_request_size.to_string();
+        value = ret_request.total_size.to_string();
  
     return Some(value);
 
@@ -139,7 +139,7 @@ impl Filter {
             target_graph: None,
             filter_state: IndexMap::new(),
             envoy_shared_data: IndexMap::<String, String>::new(),
-            collected_properties: vec!( "service_name".to_string(), "request_size".to_string(),  ),
+            collected_properties: vec!( "node.metadata.WORKLOAD_NAME".to_string(), "request.total_size".to_string(),  ),
          }))
     }
 
@@ -150,7 +150,7 @@ impl Filter {
                                    target_graph: None,
                                    filter_state: string_data,
                                    envoy_shared_data: IndexMap::new(),
-                                   collected_properties: vec!("service_name".to_string(), "request_size".to_string(),  ),
+                                   collected_properties: vec!("node.metadata.WORKLOAD_NAME".to_string(), "request.total_size".to_string(),  ),
                                }))
      }
 
