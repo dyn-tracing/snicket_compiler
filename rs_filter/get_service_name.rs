@@ -10,8 +10,8 @@ use std::time::Duration;
 use utils::graph::iso::find_mapping_shamir_centralized;
 use utils::graph::serde::FerriedData;
 use utils::graph::serde::Property;
-use utils::graph::utils::generate_target_graph;
-use utils::graph::utils::get_node_with_id;
+use utils::graph::graph_utils::generate_target_graph;
+use utils::graph::graph_utils::get_node_with_id;
 use utils::misc::headers::*;
 
 // ---------------------- General Helper Functions ----------------------------

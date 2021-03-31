@@ -1,10 +1,9 @@
 use rpc_lib::rpc::Rpc;
 use indexmap::map::IndexMap;
-use petgraph::graph::NodeIndex;
-use petgraph::Graph;
+use petgraph::graph::{Graph, NodeIndex};
 use petgraph::Incoming;
-use graph_utils::utils;
-use graph_utils::iso::find_mapping_shamir_centralized;
+use utils::graph::graph_utils;
+use utils::graph::iso::find_mapping_shamir_centralized;
 use serde::{Serialize, Deserialize};
 extern crate serde_yaml;
 
@@ -54,7 +53,7 @@ impl FerriedData {
     fn assign_properties(&mut self) {
         let mut to_delete = Vec::new();
         for property in &mut self.unassigned_properties {
-            let node = utils::get_node_with_id(&self.trace_graph, property.entity.clone());
+            let node = graph_utils::get_node_with_id(&self.trace_graph, property.entity.clone());
             if node.is_some() {
                 self.trace_graph.node_weight_mut(node.unwrap()).unwrap().1.insert(property.property_name.clone(), property.value.clone());
                 to_delete.push(property.clone());
@@ -169,8 +168,8 @@ impl Filter {
                 Some((edge0, edge1)) => {
                     let edge0_weight = &data.trace_graph.node_weight(edge0).unwrap().0;
                     let edge1_weight = &data.trace_graph.node_weight(edge1).unwrap().0;
-                    let edge0_in_stored_graph = utils::get_node_with_id(&stored_data.trace_graph, edge0_weight.to_string()).unwrap();
-                    let edge1_in_stored_graph = utils::get_node_with_id(&stored_data.trace_graph, edge1_weight.to_string()).unwrap();
+                    let edge0_in_stored_graph = graph_utils::get_node_with_id(&stored_data.trace_graph, edge0_weight.to_string()).unwrap();
+                    let edge1_in_stored_graph = graph_utils::get_node_with_id(&stored_data.trace_graph, edge1_weight.to_string()).unwrap();
                     stored_data.trace_graph.add_edge(edge0_in_stored_graph, edge1_in_stored_graph, String::new());
                 }
                 None => {

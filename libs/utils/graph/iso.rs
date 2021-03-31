@@ -3,7 +3,7 @@
 /// Another thing to consider, but is not implemented here, is
 /// http://chasewoerner.org/popl87.pdf
 ///
-use super::utils::{find_leaves, find_root, get_node_with_id, has_property_subset};
+use super::graph_utils::{find_leaves, find_root, get_node_with_id, has_property_subset};
 use indexmap::map::IndexMap;
 use pathfinding::directed::edmonds_karp::*;
 use petgraph::graph::{Graph, NodeIndex};

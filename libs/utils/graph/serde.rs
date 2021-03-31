@@ -1,4 +1,4 @@
-use super::utils;
+use super::graph_utils;
 use indexmap::map::IndexMap;
 use petgraph::Graph;
 
@@ -47,7 +47,7 @@ impl FerriedData {
     pub fn assign_properties(&mut self) {
         let mut to_delete = Vec::new();
         for property in &mut self.unassigned_properties {
-            let node = utils::get_node_with_id(&self.trace_graph, property.entity.clone());
+            let node = graph_utils::get_node_with_id(&self.trace_graph, property.entity.clone());
             if node.is_some() {
                 self.trace_graph
                     .node_weight_mut(node.unwrap())
@@ -63,11 +63,16 @@ impl FerriedData {
     pub fn merge(&mut self, other_data: FerriedData) {
         //  Merge the graphs by simply adding other data's to self's
 
+        log::warn!("my trace graph size is {:?}", self.trace_graph.node_count());
         // add nodes
         for node in other_data.trace_graph.node_indices() {
-            self.trace_graph
-                .add_node(other_data.trace_graph.node_weight(node).unwrap().clone());
+            //let node_name = &other_data.trace_graph.node_weight(node).unwrap().0;
+            //if utils::get_node_with_id(&self.trace_graph, node_name.to_string()).is_none() {
+                self.trace_graph
+                    .add_node(other_data.trace_graph.node_weight(node).unwrap().clone());
+            //}
         }
+        log::warn!("my trace graph size is now {:?}", self.trace_graph.node_count());
         // add edges
         for edge in other_data.trace_graph.edge_indices() {
             match other_data.trace_graph.edge_endpoints(edge) {
@@ -75,10 +80,10 @@ impl FerriedData {
                     let edge0_weight = &other_data.trace_graph.node_weight(edge0).unwrap().0;
                     let edge1_weight = &other_data.trace_graph.node_weight(edge1).unwrap().0;
                     let edge0_in_stored_graph =
-                        utils::get_node_with_id(&self.trace_graph, edge0_weight.to_string())
+                        graph_utils::get_node_with_id(&self.trace_graph, edge0_weight.to_string())
                             .unwrap();
                     let edge1_in_stored_graph =
-                        utils::get_node_with_id(&self.trace_graph, edge1_weight.to_string())
+                        graph_utils::get_node_with_id(&self.trace_graph, edge1_weight.to_string())
                             .unwrap();
                     self.trace_graph.add_edge(
                         edge0_in_stored_graph,

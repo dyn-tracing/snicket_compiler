@@ -1,3 +1,3 @@
 pub mod iso;
-pub mod utils;
+pub mod graph_utils;
 pub mod serde;
