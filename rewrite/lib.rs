@@ -11,6 +11,7 @@ pub mod lexer;
 pub mod parser;
 
 pub mod codegen_simulator;
+pub mod codegen_envoy;
 pub mod ir;
 pub mod listener;
 pub mod to_ir;

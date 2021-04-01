@@ -3,6 +3,7 @@ use antlr_rust::token_factory::CommonTokenFactory;
 use antlr_rust::InputStream;
 use clap::{App, Arg};
 use dyntracing::codegen_simulator;
+use dyntracing::codegen_envoy;
 use dyntracing::lexer::CypherLexer;
 use dyntracing::parser::CypherParser;
 use handlebars::Handlebars;
@@ -21,7 +22,9 @@ use std::path::{Path, PathBuf};
  * @template_path_name: the path leading to a handlebars template
  * @output_filename: where the output is written
  */
-fn write_to_handlebars(
+ // TODO: use weird pseudo-inheritance thing to make writing to handlebars the same
+ // regardless of simulator/envoy
+fn write_to_handlebars_sim(
     code_gen: &codegen_simulator::CodeGenSimulator,
     template_path: PathBuf,
     output_filename: PathBuf,
@@ -48,6 +51,35 @@ fn write_to_handlebars(
     let mut file = File::create(output_filename).expect("file create failed.");
     file.write_all(output.as_bytes()).expect("write failed");
 }
+
+fn write_to_handlebars_envoy(
+    code_gen: &codegen_envoy::CodeGenEnvoy,
+    template_path: PathBuf,
+    output_filename: PathBuf,
+) {
+    let display = template_path.display();
+    let mut template_file = match File::open(&template_path) {
+        Err(msg) => panic!("Failed to open {}: {}", display, msg),
+        Ok(file) => file,
+    };
+
+    let mut template_str = String::new();
+    match template_file.read_to_string(&mut template_str) {
+        Err(msg) => panic!("Failed to read {}: {}", display, msg),
+        Ok(_) => log::info!("Successfully read {}", display),
+    }
+
+    let handlebars = Handlebars::new();
+
+    let output = handlebars
+        .render_template(&template_str, &code_gen)
+        .expect("handlebar render failed");
+
+    log::info!("Writing output to: {:?}", output_filename);
+    let mut file = File::create(output_filename).expect("file create failed.");
+    file.write_all(output.as_bytes()).expect("write failed");
+}
+
 fn main() {
     // Set up logging
     let mut builder = env_logger::Builder::from_default_env();
@@ -144,18 +176,32 @@ fn main() {
                 codegen_simulator::CodeGenSimulator::generate_code_blocks(visitor_results, udfs);
             let handle_bar_str: &str;
             if distributed.is_none() {
-                handle_bar_str = "filter.rs.handlebars";
+                handle_bar_str = "simulation_filter.rs.handlebars";
             } else {
-                handle_bar_str = "distributed_filter.rs.handlebars";
+                handle_bar_str = "simulation_filter_distributed.rs.handlebars";
             }
-            write_to_handlebars(
+            write_to_handlebars_sim(
                 &codegen_object,
                 bin_dir.join(handle_bar_str),
                 PathBuf::from(matches.value_of("output").unwrap()),
             );
         }
         "cpp" => {
-            // TODO: not yet implemented
+            let codegen_object =
+                codegen_envoy::CodeGenEnvoy::generate_code_blocks(visitor_results, udfs);
+            let handle_bar_str: &str;
+            if distributed.is_none() {
+                handle_bar_str = "envoy_filter.rs.handlebars";
+            } else {
+                // TODO: implement distributed version
+                log::error!("envoy distributed not yet implemented");
+                handle_bar_str = "simulation_filter_distributed.rs.handlebars";
+            }
+            write_to_handlebars_envoy(
+                &codegen_object,
+                bin_dir.join(handle_bar_str),
+                PathBuf::from(matches.value_of("output").unwrap()),
+            );
         }
         _ => {
             panic!("That is not a valid compilation mode.  Valid modes are:  sim, cpp");
