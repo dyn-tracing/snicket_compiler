@@ -108,8 +108,8 @@ impl CodeGenEnvoy {
 
     fn collect_envoy_property(&mut self, property: String) {
         let get_prop_block = format!(
-            "prop_tuple_wrapped = Property::new(http_headers.workload_name,
-                                        \"{property}\".split(\".\").collect(), 
+            "prop_tuple_wrapped = fetch_property(&http_headers.workload_name,
+                                        &\"{property}\".split(\".\").collect(), 
                                         http_headers);
                                             ",
             property = property,
