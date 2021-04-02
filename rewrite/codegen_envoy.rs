@@ -127,7 +127,7 @@ impl CodeGenEnvoy {
         let get_udf_vals = format!(
             "let my_{id}_value;
             let child_iterator = fd.trace_graph.neighbors_directed(
-                get_node_with_id(&fd.trace_graph, &http_headers.workload_name).unwrap(),
+                get_node_with_id(&fd.trace_graph, http_headers.workload_name.clone()).unwrap(),
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
             for child in child_iterator {{
@@ -147,7 +147,7 @@ impl CodeGenEnvoy {
         self.udf_blocks.push(get_udf_vals);
 
         let save_udf_vals = format!("
-        let node = get_node_with_id(&fd.trace_graph, &http_headers.workload_name).unwrap();
+        let node = get_node_with_id(&fd.trace_graph, http_headers.workload_name.clone()).unwrap();
         // if we already have the property, don't add it
         if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key(\"{id}\") &&
                fd.trace_graph.node_weight(node).unwrap().1[\"{id}\"] == my_{id}_value ) {{
