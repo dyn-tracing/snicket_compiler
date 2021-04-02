@@ -2,8 +2,8 @@ use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::token_factory::CommonTokenFactory;
 use antlr_rust::InputStream;
 use clap::{App, Arg};
-use dyntracing::codegen_simulator;
 use dyntracing::codegen_envoy;
+use dyntracing::codegen_simulator;
 use dyntracing::lexer::CypherLexer;
 use dyntracing::parser::CypherParser;
 use handlebars::Handlebars;
@@ -22,8 +22,8 @@ use std::path::{Path, PathBuf};
  * @template_path_name: the path leading to a handlebars template
  * @output_filename: where the output is written
  */
- // TODO: use weird pseudo-inheritance thing to make writing to handlebars the same
- // regardless of simulator/envoy
+// TODO: use weird pseudo-inheritance thing to make writing to handlebars the same
+// regardless of simulator/envoy
 fn write_to_handlebars_sim(
     code_gen: &codegen_simulator::CodeGenSimulator,
     template_path: PathBuf,

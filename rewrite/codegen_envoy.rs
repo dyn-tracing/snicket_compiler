@@ -119,7 +119,8 @@ impl CodeGenEnvoy {
             fd.unassigned_properties.push(prop_tuple);
             } else {
                 return Err(());
-            }".to_string();
+            }"
+        .to_string();
         self.request_blocks.push(push_block);
     }
 
@@ -146,7 +147,8 @@ impl CodeGenEnvoy {
         );
         self.udf_blocks.push(get_udf_vals);
 
-        let save_udf_vals = format!("
+        let save_udf_vals = format!(
+            "
         let node = get_node_with_id(&fd.trace_graph, http_headers.workload_name.clone()).unwrap();
         // if we already have the property, don't add it
         if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key(\"{id}\") &&
@@ -154,7 +156,9 @@ impl CodeGenEnvoy {
            fd.trace_graph.node_weight_mut(node).unwrap().1.insert(
                \"{id}\".to_string(), my_{id}_value);
         }}
-        ", id=udf_id);
+        ",
+            id = udf_id
+        );
 
         self.udf_blocks.push(save_udf_vals);
     }
@@ -246,7 +250,9 @@ impl CodeGenEnvoy {
                     }
                 }
             }
-            let make_graph = "        return generate_target_graph(vertices, edges, ids_to_properties);\n".to_string();
+            let make_graph =
+                "        return generate_target_graph(vertices, edges, ids_to_properties);\n"
+                    .to_string();
             self.target_blocks.push(make_graph);
         }
     }
