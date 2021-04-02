@@ -10,6 +10,7 @@ pub mod lexer;
 #[allow(clippy::all)]
 pub mod parser;
 
+pub mod codegen_envoy;
 pub mod codegen_simulator;
 pub mod ir;
 pub mod listener;
