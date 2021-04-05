@@ -7,7 +7,7 @@ edition = "2018"
 
 [lib]
 name = "filter"
-path = "get_service_name.rs"
+path = "filter.rs"
 crate-type = ["cdylib"]
 
 [profile.release]
@@ -19,7 +19,7 @@ proxy-wasm = { version = "0.1.*", features = ["wee_alloc"] }
 indexmap = { version = "1.6.1", features = ["serde-1"] }
 petgraph = {version =  "0.*", features = ["serde-1"] }
 serde = { version = "1.0", features = ["derive"] }
-serde_yaml = "0.8"
+serde_json = "*"
 
 utils = { path = "../libs/utils" }
 

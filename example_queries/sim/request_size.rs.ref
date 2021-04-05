@@ -84,8 +84,6 @@ pub fn create_target_graph() -> Graph<
          ids_to_properties.insert("a".to_string(), IndexMap::new());
          ids_to_properties.insert("b".to_string(), IndexMap::new());
          ids_to_properties.insert("c".to_string(), IndexMap::new());
-         let mut b_hashmap = ids_to_properties.get_mut("b").unwrap();
-         b_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "reviews-v1".to_string());
          return graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
  
 
@@ -97,10 +95,10 @@ pub fn collect_envoy_properties(
 ) {
     let mut prop_tuple: Property;
     prop_tuple = Property::new(filter.whoami.as_ref().unwrap().to_string(),
-                                                   "node.metadata.WORKLOAD_NAME".to_string(), 
+                                                   "node.metadata.WORKLOAD_NAME".to_string(),
                                                    filter.filter_state["node.metadata.WORKLOAD_NAME"].clone());
                                              fd.unassigned_properties.push(prop_tuple); prop_tuple = Property::new(filter.whoami.as_ref().unwrap().to_string(),
-                                                   "request.total_size".to_string(), 
+                                                   "request.total_size".to_string(),
                                                    filter.filter_state["request.total_size"].clone());
                                              fd.unassigned_properties.push(prop_tuple); 
 }

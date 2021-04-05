@@ -37,6 +37,7 @@ impl Default for AttributeFilter {
 }
 
 impl AttributeFilter {
+    #[allow(dead_code)]
     pub fn insert_values(&mut self, node: String, property: String, value: String) {
         self.node = node;
         self.property = property;

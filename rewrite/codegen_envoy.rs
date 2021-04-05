@@ -1,34 +1,12 @@
+use crate::codegen_common::Udf;
+use crate::codegen_common::UdfType;
 use crate::ir::VisitorResults;
+use crate::CodeGen;
 use indexmap::map::IndexMap;
 use regex::Regex;
 use serde::Serialize;
 use std::mem;
 use std::str::FromStr;
-use strum_macros::EnumString;
-
-/********************************/
-// Helper structs
-/********************************/
-#[derive(Serialize, PartialEq, Eq, Debug, Clone, EnumString)]
-pub enum UdfType {
-    Scalar,
-    Aggregation,
-}
-
-impl Default for UdfType {
-    fn default() -> Self {
-        UdfType::Scalar
-    }
-}
-
-#[derive(Serialize, Debug, Clone)]
-struct Udf {
-    udf_type: UdfType,
-    id: String,
-    leaf_func: String,
-    mid_func: String,
-    func_impl: String,
-}
 
 /********************************/
 // Code Generation
@@ -46,8 +24,8 @@ pub struct CodeGenEnvoy {
     collected_properties: Vec<String>, // all the properties we collect
 }
 
-impl CodeGenEnvoy {
-    pub fn generate_code_blocks(ir: VisitorResults, udfs: Vec<String>) -> Self {
+impl CodeGen for CodeGenEnvoy {
+    fn generate_code_blocks(ir: VisitorResults, udfs: Vec<String>) -> Self {
         let mut to_return = CodeGenEnvoy {
             ir,
             request_blocks: Vec::new(),
@@ -107,9 +85,10 @@ impl CodeGenEnvoy {
     }
 
     fn collect_envoy_property(&mut self, property: String) {
+        // FIXME: Properties should be lists already...
         let get_prop_block = format!(
             "prop_tuple_wrapped = fetch_property(&http_headers.workload_name,
-                                        &\"{property}\".split(\".\").collect(), 
+                                        &\"{property}\".split(\".\").collect(),
                                         http_headers);
                                             ",
             property = property,
@@ -305,12 +284,12 @@ impl CodeGenEnvoy {
         let mut prop_wo_periods = property.clone();
         prop_wo_periods.retain(|c| c != '.');
         let ret_block = format!(
-        "let trace_node_index = get_node_with_id(&fd.trace_graph, \"{node_id}\".to_string());
-        if trace_node_index.is_none() {{
+        "let trace_node_idx = get_node_with_id(&fd.trace_graph, \"{node_id}\".to_string());
+        if trace_node_idx.is_none() {{
            log::warn!(\"Node {node_id} not found\");
                 return None;
         }}
-        let mut ret_{prop_var} = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
+        let ret_{prop_var} = &fd.trace_graph.node_weight(trace_node_idx.unwrap()).unwrap().1[ \"{prop}\" ];\n
         value = ret_{prop_var}.to_string();\n",
                 node_id = entity,
                 prop_var = prop_wo_periods,
@@ -328,18 +307,31 @@ impl CodeGenEnvoy {
            log::warn!(\"Node {node_id} not found\");
                 return None;
         }}
-        let mut trace_node_index = None;
+        let mut trace_node_idx_opt = None;
         for map in mapping {{
             if target_graph.node_weight(map.0).unwrap().0 == \"{node_id}\" {{
-                trace_node_index = Some(map.1);
+                trace_node_idx_opt = Some(map.1);
                 break;
             }}
         }}
-        if trace_node_index == None || !&stored_data.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key(\"{prop}\") {{
+        if trace_node_idx_opt.is_none() {{
+            log::warn!(\"Node index {node_id} not found.\");
             // we have not yet collected the return property or have a mapping error
             return None;
         }}
-        let mut ret_{prop_var} = &stored_data.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
+        let trace_node_idx = trace_node_idx_opt.unwrap();
+        if !&stored_data
+            .trace_graph
+            .node_weight(trace_node_idx)
+            .unwrap()
+            .1
+            .contains_key(\"{prop}\")
+        {{
+            // we have not yet collected the return property
+            log::warn!(\"Missing return property {prop}\");
+            return None;
+        }}
+        let ret_{prop_var} = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ \"{prop}\" ];\n
         value = ret_{prop_var}.to_string();\n",
                 node_id = entity,
                 prop_var = prop_wo_periods,

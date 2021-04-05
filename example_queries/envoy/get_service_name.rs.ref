@@ -14,6 +14,8 @@ use utils::graph::serde::FerriedData;
 use utils::graph::serde::Property;
 use utils::misc::headers::*;
 
+extern crate serde_json;
+
 // ---------------------- General Helper Functions ----------------------------
 fn fetch_data_from_headers(ctx: &HttpHeaders, request_type: HttpType) -> FerriedData {
     let data_str_opt: Option<String>;
@@ -45,13 +47,7 @@ fn fetch_property(node_name: &str, prop_query: &Vec<&str>, ctx: &HttpHeaders) ->
     let property_str: String;
     // Seems like we need a copy here, a little bit annoying
     if let Some(property) = ctx.get_property(prop_query.to_vec()) {
-        match String::from_utf8(property) {
-            Ok(cast_string) => property_str = cast_string,
-            Err(_e) => {
-                log::error!("Failed to serialize property: {:?}\n", prop_query);
-                return None;
-            }
-        }
+        property_str = String::from_utf8_lossy(&property).to_string();
     } else {
         log::error!("Failed to retrieve property: {:?}\n", prop_query);
         return None;
@@ -68,20 +64,17 @@ fn fetch_property(node_name: &str, prop_query: &Vec<&str>, ctx: &HttpHeaders) ->
 fn get_shared_data(trace_id: &str, ctx: &HttpHeaders) -> Option<FerriedData> {
     let mut stored_data: FerriedData = FerriedData::default();
     if let (Some(data), _) = ctx.get_shared_data(&trace_id) {
-        let msg = format!("Unable to convert {:?} into a string ", data);
         // Add a header on the response.
         // FIXME: There must be  a nicer way to resolve this
-        match String::from_utf8(data) {
-            Ok(cast_string) => match serde_json::from_str(&cast_string) {
-                Ok(d) => {
-                    stored_data = d;
-                }
-                Err(e) => {
-                    log::error!("Could not parse envoy shared data: {0}\n", e);
-                    return None;
-                }
-            },
-            Err(_e) => log::error!("{}", msg),
+        let cast_string = String::from_utf8_lossy(&data).to_string();
+        match serde_json::from_str(&cast_string) {
+            Ok(d) => {
+                stored_data = d;
+            }
+            Err(e) => {
+                log::error!("Could not parse envoy shared data: {0}\n", e);
+                return None;
+            }
         }
     } else {
         log::warn!("Trace key {:?} not found in shared data.", trace_id);
@@ -102,7 +95,8 @@ fn store_data(stored_data_str: &String, trace_id: &str, ctx: &HttpHeaders) {
     }
 }
 // ---------------------- Generated Functions ----------------------------
-// TODO: insert UDFs here
+// insert UDFs here
+
 
 pub fn create_target_graph() -> Graph<
     (
@@ -111,45 +105,41 @@ pub fn create_target_graph() -> Graph<
     ),
     std::string::String,
 > {
-    let vertices = vec!["a".to_string(), "b".to_string(), "c".to_string()];
-    let edges = vec![
-        ("a".to_string(), "b".to_string()),
-        ("b".to_string(), "c".to_string()),
-    ];
-    let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
-    ids_to_properties.insert("a".to_string(), IndexMap::new());
-    ids_to_properties.insert("b".to_string(), IndexMap::new());
-    ids_to_properties.insert("c".to_string(), IndexMap::new());
-    let b_hashmap = ids_to_properties.get_mut("b").unwrap();
-    b_hashmap.insert(
-        "node.metadata.WORKLOAD_NAME".to_string(),
-        "reviews-v3".to_string(),
-    );
-    return generate_target_graph(vertices, edges, ids_to_properties);
+     let vertices = vec!( "a".to_string(),"b".to_string(),"c".to_string(), );
+        let edges = vec!(  ("a".to_string(), "b".to_string() ),  ("b".to_string(), "c".to_string() ),  );
+        let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
+        ids_to_properties.insert("a".to_string(), IndexMap::new());
+        ids_to_properties.insert("b".to_string(), IndexMap::new());
+        ids_to_properties.insert("c".to_string(), IndexMap::new());
+        return generate_target_graph(vertices, edges, ids_to_properties);
+
 }
 
 pub fn collect_envoy_properties(
     http_headers: &HttpHeaders,
     fd: &mut FerriedData,
 ) -> Result<(), ()> {
-    // Handle the properties
-    let prop_option_0 = fetch_property(
-        &http_headers.workload_name,
-        &vec!["node", "metadata", "WORKLOAD_NAME"],
-        http_headers,
-    );
-    if let Some(prop_tuple) = prop_option_0 {
-        fd.unassigned_properties.push(prop_tuple);
-    } else {
-        // We failed to collect the property.
-        // This might lead to wrong results, abort
-        return Err(());
-    }
+    let mut prop_tuple: Property;
+    let mut prop_tuple_wrapped;
+    prop_tuple_wrapped = fetch_property(&http_headers.workload_name,
+                                        &"node.metadata.WORKLOAD_NAME".split(".").collect(),
+                                        http_headers);
+                                            if let Some(prop_tuple) = prop_tuple_wrapped {
+            fd.unassigned_properties.push(prop_tuple);
+            } else {
+                return Err(());
+            }
     return Ok(());
 }
 
-pub fn execute_udfs(_fd: &mut FerriedData) {
+pub fn execute_udfs_and_check_trace_lvl_prop(http_headers: &HttpHeaders, fd: &mut FerriedData) -> bool {
     // Empty for this query, but in general, will be useful
+    
+    let root_id = "productpage-v1";
+    
+            if &http_headers.workload_name == root_id {        let mut trace_prop_str : String;
+       }
+    return true;
 }
 
 pub fn get_value_for_storage(
@@ -163,39 +153,42 @@ pub fn get_value_for_storage(
     mapping: &Vec<(NodeIndex, NodeIndex)>,
     stored_data: &FerriedData,
 ) -> Option<String> {
+    let value: String;
     let node_ptr = get_node_with_id(target_graph, "a".to_string());
-    if node_ptr.is_none() {
-        log::error!("Node a not found");
-        // TODO: This should not abort I believe
-        return None;
-    }
-    let mut trace_node_index = None;
-    for map in mapping {
-        if target_graph.node_weight(map.0).unwrap().0 == "a" {
-            trace_node_index = Some(map.1);
-            break;
+        if node_ptr.is_none() {
+           log::warn!("Node a not found");
+                return None;
         }
-    }
-    // TODO: This looks odd, further cleaning required.
-    let contains_key = stored_data
-        .trace_graph
-        .node_weight(trace_node_index.unwrap())
-        .unwrap()
-        .1
-        .contains_key(&join_str(&vec!["node", "metadata", "WORKLOAD_NAME"]));
-    if trace_node_index == None || !contains_key {
-        // we have not yet collected the return property or have a mapping error
-        log::error!("Mapping error.");
-        // TODO: This should not abort I believe
-        return None;
-    }
-    let ret_service_name = stored_data
-        .trace_graph
-        .node_weight(trace_node_index.unwrap())
-        .unwrap()
-        .1[&join_str(&vec!["node", "metadata", "WORKLOAD_NAME"])]
-        .clone();
-    return Some(ret_service_name);
+        let mut trace_node_idx_opt = None;
+        for map in mapping {
+            if target_graph.node_weight(map.0).unwrap().0 == "a" {
+                trace_node_idx_opt = Some(map.1);
+                break;
+            }
+        }
+        if trace_node_idx_opt.is_none() {
+            log::warn!("Node index a not found.");
+            // we have not yet collected the return property or have a mapping error
+            return None;
+        }
+        let trace_node_idx = trace_node_idx_opt.unwrap();
+        if !&stored_data
+            .trace_graph
+            .node_weight(trace_node_idx)
+            .unwrap()
+            .1
+            .contains_key("node.metadata.WORKLOAD_NAME")
+        {
+            // we have not yet collected the return property
+            log::warn!("Missing return property node.metadata.WORKLOAD_NAME");
+            return None;
+        }
+        let ret_nodemetadataWORKLOAD_NAME = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ "node.metadata.WORKLOAD_NAME" ];
+
+        value = ret_nodemetadataWORKLOAD_NAME.to_string();
+
+
+    return Some(value);
 }
 
 // ---------------------------- Filter ------------------------------------
@@ -459,7 +452,9 @@ impl HttpHeaders {
 
         // if we are not the root id, return
         // TODO:: Add some diagnostic when we are not the root node
-        if self.workload_name == "productpage-v1" {
+        let trace_prop_sat = execute_udfs_and_check_trace_lvl_prop(self, &mut stored_data);
+
+        if self.workload_name == "productpage-v1" && trace_prop_sat {
             // 2. calculate UDFs and store result, and check trace level properties
 
             let mapping_opt =
