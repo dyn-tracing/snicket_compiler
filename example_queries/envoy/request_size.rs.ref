@@ -82,19 +82,16 @@ fn get_shared_data(trace_id: &str, ctx: &HttpHeaders) -> Option<FerriedData> {
     return Some(stored_data);
 }
 
-fn store_data(data_to_store: FerriedData, trace_id: &str, ctx: &HttpHeaders) {
-    // 1. to make sure that we don't overwrite anything, merge with what is already in there
+fn store_data(mut data_to_store: FerriedData, trace_id: &str, ctx: &HttpHeaders) {
+   // 1. to make sure that we don't overwrite anything, merge with what is already in there
     let stored_data_opt = get_shared_data(&trace_id, ctx);
-    if stored_data_opt.is_none() {
-        // We failed to deserialize the shared data.
-        // This might lead to wrong results, abort.
-        return;
+    if stored_data_opt.is_some() {
+        let stored_data_old = stored_data_opt.unwrap();
+        data_to_store.merge(stored_data_old);
     }
-    let mut stored_data_old = stored_data_opt.unwrap();
-    stored_data_old.merge(data_to_store);
 
     // 2. convert to string, and then to bytes
-    let stored_data_str_opt = data_to_str(&stored_data_old);
+    let stored_data_str_opt = data_to_str(&data_to_store);
     if stored_data_str_opt.is_none() {
         // We failed to serialize the shared data.
         // This might lead to wrong results, abort.
@@ -142,7 +139,6 @@ pub fn collect_envoy_properties(
 ) -> Result<(), ()> {
     let mut prop_tuple: Property;
     let mut prop_tuple_wrapped;
-    log::warn!("collecting envoy properties!!!");
     prop_tuple_wrapped = fetch_property(&http_headers.workload_name,
                                         &"node.metadata.WORKLOAD_NAME".split(".").collect(),
                                         http_headers);
@@ -377,8 +373,6 @@ impl HttpHeaders {
             log::error!("Request outbound: x-request-id not found in header!",);
             return;
         }
-        let stored_data_opt = get_shared_data(&trace_id, self).unwrap();
-        log::warn!("stored data in request headrs outbound {:?}", stored_data_opt);
 
         // TODO: Okay this does nothing in the original
         // I am not sure about the logic here
@@ -430,12 +424,10 @@ impl HttpHeaders {
         if stored_data_opt.is_none() {
             // We failed to deserialize the shared data.
             // This might lead to wrong results, abort.
-            log::warn!("Aborting");
             return;
         }
         // Unpack the data we have
         let mut stored_data = stored_data_opt.unwrap();
-        log::warn!("stored data response headers inbound: {:?}", stored_data);
 
         // Figure out what needs to be done here
         // Also handle case where stored data is fresh?
@@ -460,7 +452,6 @@ impl HttpHeaders {
                 .trace_graph
                 .add_edge(me, previous_root, String::new());
         }
-
         stored_data.assign_properties();
 
         // if we are not the root id, return
@@ -514,7 +505,6 @@ impl HttpHeaders {
         if stored_data_str_opt.is_none() {
             // We failed to serialize the shared data.
             // This might lead to wrong results, abort.
-            log::warn!("Aborting");
             return;
         }
         // Unpack the data we have
