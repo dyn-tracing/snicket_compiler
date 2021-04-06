@@ -286,7 +286,7 @@ impl CodeGen for CodeGenEnvoy {
         let ret_block = format!(
         "let trace_node_idx = get_node_with_id(&fd.trace_graph, \"{node_id}\".to_string());
         if trace_node_idx.is_none() {{
-           log::warn!(\"Node {node_id} not found\");
+           log::error!(\"Node {node_id} not found\");
                 return None;
         }}
         let ret_{prop_var} = &fd.trace_graph.node_weight(trace_node_idx.unwrap()).unwrap().1[ \"{prop}\" ];\n
@@ -304,7 +304,7 @@ impl CodeGen for CodeGenEnvoy {
         let ret_block = format!(
         "let node_ptr = get_node_with_id(target_graph, \"{node_id}\".to_string());
         if node_ptr.is_none() {{
-           log::warn!(\"Node {node_id} not found\");
+           log::error!(\"Node {node_id} not found\");
                 return None;
         }}
         let mut trace_node_idx_opt = None;
@@ -315,7 +315,7 @@ impl CodeGen for CodeGenEnvoy {
             }}
         }}
         if trace_node_idx_opt.is_none() {{
-            log::warn!(\"Node index {node_id} not found.\");
+            log::error!(\"Node index {node_id} not found.\");
             // we have not yet collected the return property or have a mapping error
             return None;
         }}
@@ -328,7 +328,7 @@ impl CodeGen for CodeGenEnvoy {
             .contains_key(\"{prop}\")
         {{
             // we have not yet collected the return property
-            log::warn!(\"Missing return property {prop}\");
+            log::error!(\"Missing return property {prop}\");
             return None;
         }}
         let ret_{prop_var} = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ \"{prop}\" ];\n

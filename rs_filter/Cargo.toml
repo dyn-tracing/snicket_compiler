@@ -7,7 +7,7 @@ edition = "2018"
 
 [lib]
 name = "filter"
-path = "filter.rs"
+path = "main.rs"
 crate-type = ["cdylib"]
 
 [profile.release]
