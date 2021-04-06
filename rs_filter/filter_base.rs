@@ -2,8 +2,12 @@ use indexmap::IndexMap;
 use log::trace;
 use petgraph::graph::Graph;
 use petgraph::Incoming;
-use proxy_wasm::traits::*;
-use proxy_wasm::types::*;
+use proxy_wasm::traits::Context;
+use proxy_wasm::traits::HttpContext;
+use proxy_wasm::traits::RootContext;
+use proxy_wasm::types::Action;
+use proxy_wasm::types::ContextType;
+use proxy_wasm::types::LogLevel;
 use std::convert::TryFrom;
 use std::time::Duration;
 
@@ -17,8 +21,6 @@ use super::filter::collect_envoy_properties;
 use super::filter::create_target_graph;
 use super::filter::execute_udfs_and_check_trace_lvl_prop;
 use super::filter::get_value_for_storage;
-
-extern crate serde_json;
 
 // ---------------------- General Helper Functions ----------------------------
 fn fetch_data_from_headers(ctx: &HttpHeaders, request_type: HttpType) -> FerriedData {
@@ -80,7 +82,7 @@ fn get_shared_data(trace_id: &str, ctx: &HttpHeaders) -> Option<FerriedData> {
                 stored_data = d;
             }
             Err(e) => {
-                log::error!("Could not parse envoy shared data: {0}\n", e);
+                log::error!("Could not parse envoy shared data: {:?}\n", e);
                 return None;
             }
         }
@@ -124,7 +126,7 @@ fn store_data(data_to_store: &mut FerriedData, trace_id: &str, ctx: &HttpHeaders
 
 #[no_mangle]
 pub fn _start() {
-    proxy_wasm::set_log_level(LogLevel::Trace);
+    proxy_wasm::set_log_level(LogLevel::Info);
     proxy_wasm::set_root_context(|_| -> Box<dyn RootContext> {
         Box::new(HttpHeadersRoot {
             target_graph: create_target_graph(),
@@ -174,9 +176,19 @@ pub struct HttpHeaders {
 }
 
 impl Context for HttpHeaders {
-    fn on_http_call_response(&mut self, _: u32, _: usize, body_size: usize, _: usize) {
+    fn on_http_call_response(
+        &mut self,
+        _token_id: u32,
+        _num_headers: usize,
+        body_size: usize,
+        _: usize,
+    ) {
+        log::warn!("Received response from storage");
         if let Some(body) = self.get_http_call_response_body(0, body_size) {
-            log::warn!("Storage response: {:?}", body);
+            log::warn!("Storage body: {:?}", body);
+        }
+        for (name, value) in &self.get_http_response_headers() {
+            log::warn!("Storage Header - {}: {}", name, value);
         }
     }
 }
@@ -381,7 +393,6 @@ impl HttpHeaders {
                     return;
                 }
                 let value = value_wrapped.unwrap();
-
                 let call_result = self.dispatch_http_call(
                     "storage-upstream",
                     vec![

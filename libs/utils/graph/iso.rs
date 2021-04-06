@@ -103,6 +103,7 @@ fn max_matching<EK: EdmondsKarp<i32>>(
 }
 
 // For debugging only
+#[allow(dead_code)]
 fn print_set_s(
     graph_g: &Graph<(String, IndexMap<String, String>), String>,
     graph_h: &Graph<(String, IndexMap<String, String>), String>,
@@ -134,7 +135,7 @@ fn print_set_s(
 }
 
 fn get_mapping_from_set_s(
-    graph_g: &Graph<(String, IndexMap<String, String>), String>,
+    _graph_g: &Graph<(String, IndexMap<String, String>), String>,
     graph_h: &Graph<(String, IndexMap<String, String>), String>,
     set_s: &IndexMap<
         (NodeIndex, NodeIndex),
