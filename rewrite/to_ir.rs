@@ -49,19 +49,19 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
         &mut self,
         ctx: &OC_PropertyOrLabelsExpressionContext<'i>,
     ) {
-        log::info!("Generating IrReturn");
+        log::debug!("Generating IrReturn");
         let atom = ctx.oC_Atom().unwrap();
         let entity: String;
         if let Some(func) = atom.oC_FunctionInvocation() {
             entity = func.get_text();
             // TODO: We can make this UDF more precise
-            log::info!("Storing UDF: {:?}", entity);
+            log::debug!("Storing UDF: {:?}", entity);
         } else if let Some(var) = atom.oC_Variable() {
             entity = var.get_text();
-            log::info!("Storing var: {:?}", entity);
+            log::debug!("Storing var: {:?}", entity);
         } else if let Some(var) = atom.oC_Literal() {
             entity = var.get_text();
-            log::info!("Storing literal: {:?}", entity);
+            log::debug!("Storing literal: {:?}", entity);
         } else {
             log::error!(
                 "Unsupported expression {:?}. Has type {:?}",
@@ -76,7 +76,7 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
             // this includes the dots
             property_str.push_str(&property.get_text())
         }
-        log::info!("Property String {:?}", property_str);
+        log::debug!("Property String {:?}", property_str);
         self.return_items.push(IrReturn {
             entity,
             property: property_str,
@@ -141,9 +141,9 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
                 struct_filter
                     .properties
                     .insert(right_node.get_text(), prop_hashmap);
-                // update the left node
-                left_node = right_node;
             }
+            // update the left node
+            left_node = right_node;
         }
         self.struct_filters.push(struct_filter);
     }
@@ -194,19 +194,19 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
         &mut self,
         ctx: &OC_PropertyOrLabelsExpressionContext<'i>,
     ) {
-        log::info!("Generating IrReturn");
+        log::debug!("Generating IrReturn");
         let atom = ctx.oC_Atom().unwrap();
         let entity: String;
         if let Some(func) = atom.oC_FunctionInvocation() {
             entity = func.get_text();
             // TODO: We can make this UDF more precise
-            log::info!("Storing UDF: {:?}", entity);
+            log::debug!("Storing UDF: {:?}", entity);
         } else if let Some(var) = atom.oC_Variable() {
             entity = var.get_text();
-            log::info!("Storing var: {:?}", entity);
+            log::debug!("Storing var: {:?}", entity);
         } else if let Some(var) = atom.oC_Literal() {
             entity = var.get_text();
-            log::info!("Storing literal: {:?}", entity);
+            log::debug!("Storing literal: {:?}", entity);
         } else {
             log::error!(
                 "Unsupported expression {:?}. Has type {:?}",
@@ -221,7 +221,7 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
             // this includes the dots
             property_str.push_str(&property.get_text())
         }
-        log::info!("Property String {:?}", property_str);
+        log::debug!("Property String {:?}", property_str);
         self.return_items.push(IrReturn {
             entity,
             property: property_str,

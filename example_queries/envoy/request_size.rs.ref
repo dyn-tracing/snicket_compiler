@@ -1,0 +1,115 @@
+// ---------------------- Generated Functions ----------------------------
+
+use super::filter_base::fetch_property;
+use super::filter_base::HttpHeaders;
+use indexmap::IndexMap;
+use petgraph::graph::{Graph, NodeIndex};
+use utils::graph::graph_utils::generate_target_graph;
+use utils::graph::graph_utils::get_node_with_id;
+use utils::graph::serde::FerriedData;
+use utils::graph::serde::Property;
+
+// insert UDFs here
+
+
+pub fn create_target_graph() -> Graph<
+    (
+        std::string::String,
+        IndexMap<std::string::String, std::string::String>,
+    ),
+    std::string::String,
+> {
+     let vertices = vec!( "a".to_string(),"b".to_string(),"c".to_string(), );
+        let edges = vec!(  ("a".to_string(), "b".to_string() ),  ("b".to_string(), "c".to_string() ),  );
+        let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
+        ids_to_properties.insert("a".to_string(), IndexMap::new());
+        ids_to_properties.insert("b".to_string(), IndexMap::new());
+        ids_to_properties.insert("c".to_string(), IndexMap::new());
+        return generate_target_graph(vertices, edges, ids_to_properties);
+
+}
+
+pub fn collect_envoy_properties(
+    http_headers: &HttpHeaders,
+    fd: &mut FerriedData,
+) -> Result<(), ()> {
+    let mut prop_tuple: Property;
+    let mut prop_tuple_wrapped;
+    prop_tuple_wrapped = fetch_property(&http_headers.workload_name,
+                                        &"node.metadata.WORKLOAD_NAME".split(".").collect(),
+                                        http_headers);
+                                            if let Some(prop_tuple) = prop_tuple_wrapped {
+            fd.unassigned_properties.push(prop_tuple);
+            } else {
+                return Err(());
+            }prop_tuple_wrapped = fetch_property(&http_headers.workload_name,
+                                        &"request.total_size".split(".").collect(),
+                                        http_headers);
+                                            if let Some(prop_tuple) = prop_tuple_wrapped {
+            fd.unassigned_properties.push(prop_tuple);
+            } else {
+                return Err(());
+            }
+    return Ok(());
+}
+
+pub fn execute_udfs_and_check_trace_lvl_prop(http_headers: &HttpHeaders, fd: &mut FerriedData) -> bool {
+    // Empty for this query, but in general, will be useful
+    
+    let root_id = "productpage-v1";
+    
+            if &http_headers.workload_name == root_id {        let mut trace_prop_str : String;
+       }
+    return true;
+}
+
+pub fn get_value_for_storage(
+    target_graph: &Graph<
+        (
+            std::string::String,
+            IndexMap<std::string::String, std::string::String>,
+        ),
+        std::string::String,
+    >,
+    mapping: &Vec<(NodeIndex, NodeIndex)>,
+    stored_data: &FerriedData,
+) -> Option<String> {
+    let value: String;
+    let node_ptr = get_node_with_id(target_graph, "a".to_string());
+        if node_ptr.is_none() {
+           log::error!("Node a not found");
+                return None;
+        }
+        let mut trace_node_idx_opt = None;
+        for map in mapping {
+            if target_graph.node_weight(map.0).unwrap().0 == "a" {
+                trace_node_idx_opt = Some(map.1);
+                break;
+            }
+        }
+        if trace_node_idx_opt.is_none() {
+            log::error!("Node index a not found.");
+            // we have not yet collected the return property or have a mapping error
+            return None;
+        }
+        let trace_node_idx = trace_node_idx_opt.unwrap();
+        if !&stored_data
+            .trace_graph
+            .node_weight(trace_node_idx)
+            .unwrap()
+            .1
+            .contains_key("request.total_size")
+        {
+            // we have not yet collected the return property
+            log::error!("Missing return property request.total_size");
+            return None;
+        }
+        let ret_requesttotal_size = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ "request.total_size" ];
+
+        value = ret_requesttotal_size.to_string();
+
+
+    return Some(value);
+}
+
+

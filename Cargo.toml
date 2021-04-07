@@ -24,10 +24,6 @@ assert_cmd = "1.0.2"
 predicates = "1.0.6"
 diffy = "*"
 
-[lib]
-name = "dyntracing"
-path = "rewrite/lib.rs"
-
 [[bin]]
 name = "dtc"
 path = "rewrite/main.rs"

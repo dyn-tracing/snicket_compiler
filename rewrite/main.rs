@@ -1,13 +1,30 @@
+#![feature(try_blocks)]
+extern crate lazy_static;
+extern crate regex;
+extern crate serde;
+extern crate strum;
+extern crate strum_macros;
+
+mod codegen_common;
+mod codegen_envoy;
+mod codegen_simulator;
+mod ir;
+#[allow(clippy::all)]
+mod lexer;
+mod listener;
+#[allow(clippy::all)]
+mod parser;
+mod to_ir;
+mod visitor;
+
+use crate::codegen_common::CodeGen;
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::token_factory::CommonTokenFactory;
 use antlr_rust::InputStream;
 use clap::{App, Arg};
-use dyntracing::codegen_envoy;
-use dyntracing::codegen_simulator;
-use dyntracing::lexer::CypherLexer;
-use dyntracing::parser::CypherParser;
 use handlebars::Handlebars;
-
+use lexer::CypherLexer;
+use parser::CypherParser;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
@@ -22,41 +39,8 @@ use std::path::{Path, PathBuf};
  * @template_path_name: the path leading to a handlebars template
  * @output_filename: where the output is written
  */
-// TODO: use weird pseudo-inheritance thing to make writing to handlebars the same
-// regardless of simulator/envoy
-fn write_to_handlebars_sim(
-    code_gen: &codegen_simulator::CodeGenSimulator,
-    template_path: PathBuf,
-    output_filename: PathBuf,
-) {
-    let display = template_path.display();
-    let mut template_file = match File::open(&template_path) {
-        Err(msg) => panic!("Failed to open {}: {}", display, msg),
-        Ok(file) => file,
-    };
-
-    let mut template_str = String::new();
-    match template_file.read_to_string(&mut template_str) {
-        Err(msg) => panic!("Failed to read {}: {}", display, msg),
-        Ok(_) => log::info!("Successfully read {}", display),
-    }
-
-    let handlebars = Handlebars::new();
-
-    let output = handlebars
-        .render_template(&template_str, &code_gen)
-        .expect("handlebar render failed");
-
-    log::info!("Writing output to: {:?}", output_filename);
-    let mut file = File::create(output_filename).expect("file create failed.");
-    file.write_all(output.as_bytes()).expect("write failed");
-}
-
-fn write_to_handlebars_envoy(
-    code_gen: &codegen_envoy::CodeGenEnvoy,
-    template_path: PathBuf,
-    output_filename: PathBuf,
-) {
+// TODO: make this trait more concrete
+fn write_to_handlebars<T: CodeGen>(code_gen: &T, template_path: PathBuf, output_filename: PathBuf) {
     let display = template_path.display();
     let mut template_file = match File::open(&template_path) {
         Err(msg) => panic!("Failed to open {}: {}", display, msg),
@@ -86,12 +70,12 @@ fn main() {
     // do not want timestamp for now
     builder.default_format_timestamp(false);
     // Set default log level to info
-    builder.filter_level(log::LevelFilter::Trace);
+    builder.filter_level(log::LevelFilter::Info);
     builder.init();
 
     let bin_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let def_filter_dir = bin_dir.join("cpp_filter/filter.cc");
-    let compile_vals = ["sim", "cpp"];
+    let def_filter_dir = bin_dir.join("rs_filter/filter.rs");
+    let compile_vals = ["sim", "envoy"];
     let matches = App::new("Dynamic Tracing")
         .arg(
             Arg::with_name("query")
@@ -123,8 +107,8 @@ fn main() {
                 .value_name("COMPILATION_MODE")
                 .takes_value(true)
                 .possible_values(&compile_vals)
-                .default_value("cpp")
-                .help("Sets what to compile to:  the simulator (sim) or cpp wasm filter (cpp)"),
+                .default_value("envoy")
+                .help("Sets what to compile to:  the simulator (sim) or envoy wasm filter (rs)"),
         )
         .arg(
             Arg::with_name("distributed")
@@ -166,10 +150,12 @@ fn main() {
 
     if let Err(e) = result {
         log::error!("Error parsing query: {:?}", e);
-        return;
+        std::process::exit(-1);
     }
-    let visitor_results = dyntracing::to_ir::visit_result(result.unwrap(), root_id.to_string());
-    match matches.value_of("compilation_mode").unwrap() {
+    let visitor_results = to_ir::visit_result(result.unwrap(), root_id.to_string());
+    // TODO: Error handling
+    let comp_mode = matches.value_of("compilation_mode").unwrap();
+    match comp_mode {
         "sim" => {
             // TODO: support multiple UDF files
             let codegen_object =
@@ -180,13 +166,13 @@ fn main() {
             } else {
                 handle_bar_str = "simulation_filter_distributed.rs.handlebars";
             }
-            write_to_handlebars_sim(
+            write_to_handlebars(
                 &codegen_object,
                 bin_dir.join(handle_bar_str),
                 PathBuf::from(matches.value_of("output").unwrap()),
             );
         }
-        "cpp" => {
+        "envoy" => {
             let codegen_object =
                 codegen_envoy::CodeGenEnvoy::generate_code_blocks(visitor_results, udfs);
             let handle_bar_str: &str;
@@ -197,14 +183,18 @@ fn main() {
                 log::error!("envoy distributed not yet implemented");
                 handle_bar_str = "simulation_filter_distributed.rs.handlebars";
             }
-            write_to_handlebars_envoy(
+            write_to_handlebars(
                 &codegen_object,
                 bin_dir.join(handle_bar_str),
                 PathBuf::from(matches.value_of("output").unwrap()),
             );
         }
         _ => {
-            panic!("That is not a valid compilation mode.  Valid modes are:  sim, cpp");
+            log::error!(
+                "{:?} is not a valid compilation mode. Valid modes are: sim, envoy",
+                comp_mode
+            );
+            std::process::exit(-1);
         }
     }
 }

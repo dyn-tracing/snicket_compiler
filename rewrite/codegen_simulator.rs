@@ -1,34 +1,12 @@
+use crate::codegen_common::Udf;
+use crate::codegen_common::UdfType;
 use crate::ir::VisitorResults;
+use crate::CodeGen;
 use indexmap::map::IndexMap;
 use regex::Regex;
 use serde::Serialize;
 use std::mem;
 use std::str::FromStr;
-use strum_macros::EnumString;
-
-/********************************/
-// Helper structs
-/********************************/
-#[derive(Serialize, PartialEq, Eq, Debug, Clone, EnumString)]
-pub enum UdfType {
-    Scalar,
-    Aggregation,
-}
-
-impl Default for UdfType {
-    fn default() -> Self {
-        UdfType::Scalar
-    }
-}
-
-#[derive(Serialize, Debug, Clone)]
-struct Udf {
-    udf_type: UdfType,
-    id: String,
-    leaf_func: String,
-    mid_func: String,
-    func_impl: String,
-}
 
 /********************************/
 // Code Generation
@@ -46,8 +24,8 @@ pub struct CodeGenSimulator {
     collected_properties: Vec<String>, // all the properties we collect
 }
 
-impl CodeGenSimulator {
-    pub fn generate_code_blocks(ir: VisitorResults, udfs: Vec<String>) -> Self {
+impl CodeGen for CodeGenSimulator {
+    fn generate_code_blocks(ir: VisitorResults, udfs: Vec<String>) -> Self {
         let mut to_return = CodeGenSimulator {
             ir,
             request_blocks: Vec::new(),
@@ -109,7 +87,7 @@ impl CodeGenSimulator {
     fn collect_envoy_property(&mut self, property: String) {
         let get_prop_block = format!(
             "prop_tuple = Property::new(filter.whoami.as_ref().unwrap().to_string(),
-                                                   \"{property}\".to_string(), 
+                                                   \"{property}\".to_string(),
                                                    filter.filter_state[\"{envoy_property}\"].clone());
                                             ",
             property = property,

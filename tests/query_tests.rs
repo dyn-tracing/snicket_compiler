@@ -5,13 +5,13 @@ use std::path::Path; // Directory management
 use std::process::Command; // Run programs
 use test_case::test_case; // Parametrized tests
 
-#[test_case("get_service_name.cql", vec![]; "inconclusive - get_service_name")]
+#[test_case("get_service_name.cql", vec![]; "get_service_name")]
 #[test_case("height.cql", vec!["height.rs"]; "inconclusive - height")]
 #[test_case("histogram.cql", vec!["histogram.rs"]; "inconclusive - histogram")]
-#[test_case("request_size.cql", vec![]; "inconclusive - request_size")]
+#[test_case("request_size.cql", vec![]; "request_size")]
 #[test_case("request_size_avg.cql", vec![]; "inconclusive - request_size_avg")]
 #[test_case("latency.cql", vec!["latency.rs"]; "inconclusive - latency")]
-fn check_compilation_cc(
+fn check_compilation_envoy(
     query_name: &str,
     udf_names: Vec<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -36,15 +36,17 @@ fn check_compilation_cc(
     if !str_builder.is_empty() {
         args.push(&str_builder);
     }
-    let mut out_file = query_dir.join(query_name);
-    out_file.set_extension("cc");
+    let out_dir = query_dir.join("envoy");
+    let mut out_file = out_dir.join(query_name);
+    out_file.set_extension("rs");
     args.extend(vec!["-o", out_file.to_str().unwrap()]);
+    args.extend(vec!["-c", "envoy"]);
     args.extend(vec!["--root-node", "productpage-v1"]);
     cmd.args(args);
     cmd.assert().success();
 
-    let mut ref_file = query_dir.join(query_name);
-    ref_file.set_extension("cc.ref");
+    let mut ref_file = out_dir.join(query_name);
+    ref_file.set_extension("rs.ref");
     let out_file_str = fs::read_to_string(out_file).unwrap();
     let ref_file_str = fs::read_to_string(ref_file).unwrap();
     if out_file_str != ref_file_str {
@@ -66,7 +68,7 @@ fn check_compilation_cc(
 #[test_case("request_size_avg.cql", vec![]; "request_size_avg")]
 #[test_case("request_size_avg_trace_attr.cql", vec![]; "request_size_avg_trace_attr")]
 #[test_case("latency.cql", vec!["latency.rs"]; "inconclusive - latency")]
-fn check_compilation_rust(
+fn check_compilation_sim(
     query_name: &str,
     udf_names: Vec<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -91,7 +93,8 @@ fn check_compilation_rust(
     if !str_builder.is_empty() {
         args.push(&str_builder);
     }
-    let mut out_file = query_dir.join(query_name);
+    let out_dir = query_dir.join("sim");
+    let mut out_file = out_dir.join(query_name);
     out_file.set_extension("rs");
     args.extend(vec!["-o", out_file.to_str().unwrap()]);
     args.extend(vec!["-c", "sim"]);
@@ -99,7 +102,7 @@ fn check_compilation_rust(
     cmd.args(args);
     cmd.assert().success();
 
-    let mut ref_file = query_dir.join(query_name);
+    let mut ref_file = out_dir.join(query_name);
     ref_file.set_extension("rs.ref");
     let out_file_str = fs::read_to_string(out_file).unwrap();
     let ref_file_str = fs::read_to_string(ref_file).unwrap();
