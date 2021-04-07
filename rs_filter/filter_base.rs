@@ -231,6 +231,9 @@ pub struct HttpHeaders {
 }
 
 impl Context for HttpHeaders {
+    /// Process the callback from any http calls the filter makes for debugging.
+    /// This is usually from storage.
+    /// TODO: This is not working reliably yet. Needs some investigating.
     fn on_http_call_response(
         &mut self,
         _token_id: u32,
