@@ -1,19 +1,19 @@
 #![feature(try_blocks)]
+mod antlr_gen;
 mod codegen_common;
 mod codegen_envoy;
 mod codegen_simulator;
 mod ir;
 mod to_ir;
-mod antlr_gen;
 
 use crate::codegen_common::CodeGen;
+use antlr_gen::lexer::CypherLexer;
+use antlr_gen::parser::CypherParser;
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::token_factory::CommonTokenFactory;
 use antlr_rust::InputStream;
 use clap::{App, Arg};
 use handlebars::Handlebars;
-use antlr_gen::lexer::CypherLexer;
-use antlr_gen::parser::CypherParser;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;

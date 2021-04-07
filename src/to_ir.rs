@@ -1,6 +1,6 @@
-use super::ir::*;
 use super::antlr_gen::parser::*;
 use super::antlr_gen::visitor::CypherVisitor;
+use super::ir::*;
 use antlr_rust::tree::ParseTree;
 use antlr_rust::tree::ParseTreeVisitor;
 use antlr_rust::tree::TerminalNode;
