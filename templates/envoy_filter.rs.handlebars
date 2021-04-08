@@ -27,7 +27,7 @@ pub fn collect_envoy_properties(
     fd: &mut FerriedData,
 ) -> Result<(), ()> {
     let mut prop_tuple: Property;
-    let mut prop_tuple_wrapped;
+    let mut prop_tuple_wrapped: Option<Property>;
     {{#each request_blocks}}{{{this}}}{{/each}}
     return Ok(());
 }
