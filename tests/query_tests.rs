@@ -10,6 +10,7 @@ use test_case::test_case; // Parametrized tests
 #[test_case("histogram.cql", vec!["histogram.rs"]; "inconclusive - histogram")]
 #[test_case("request_size.cql", vec![]; "request_size")]
 #[test_case("request_size_avg.cql", vec![]; "inconclusive - request_size_avg")]
+#[test_case("return_trace.cql", vec![]; "inconclusive - return_trace")]
 #[test_case("latency.cql", vec!["latency.rs"]; "inconclusive - latency")]
 fn check_compilation_envoy(
     query_name: &str,
