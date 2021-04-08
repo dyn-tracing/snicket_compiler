@@ -65,6 +65,7 @@ fn main() {
     let bin_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let template_dir = bin_dir.join("templates");
     let def_filter_dir = bin_dir.join("filter_envoy/filter.rs");
+    let aggr_filter_dir = bin_dir.join("filter_envoy/aggr_filter.rs");
     let compile_vals = ["sim", "envoy"];
     let matches = App::new("Dynamic Tracing")
         .arg(
@@ -79,6 +80,7 @@ fn main() {
             Arg::with_name("udf")
                 .short("u")
                 .long("udf")
+                .multiple(true)
                 .value_name("UDF_FILE")
                 .help("Optionally sets user defined function file to use"),
         )
@@ -116,14 +118,24 @@ fn main() {
                 .default_value(def_filter_dir.to_str().unwrap())
                 .help("Location and name of the output file."),
         )
+        .arg(
+            Arg::with_name("aggr_output")
+                .short("a")
+                .long("aggr-out-file")
+                .value_name("AGGR_OUT_FILE")
+                .default_value(aggr_filter_dir.to_str().unwrap())
+                .help("Location and name of the aggregation filter output file."),
+        )
         .get_matches();
 
     let mut udfs = Vec::new();
-    if let Some(udf_file) = matches.value_of("udf") {
-        udfs.push(
-            std::fs::read_to_string(udf_file)
-                .unwrap_or_else(|_| panic!("failed to read file {}", udf_file)),
-        );
+    if let Some(udf_files) = matches.values_of("udf") {
+        for udf_file in udf_files {
+            udfs.push(
+                std::fs::read_to_string(udf_file)
+                    .unwrap_or_else(|_| panic!("failed to read file {}", udf_file)),
+            );
+        }
     }
 
     let tf = CommonTokenFactory::default();
@@ -160,6 +172,11 @@ fn main() {
                 &codegen_object,
                 template_dir.join(handle_bar_str),
                 PathBuf::from(matches.value_of("output").unwrap()),
+            );
+            write_to_handlebars(
+                &codegen_object,
+                template_dir.join("simulation_filter_aggregation.rs.handlebars"),
+                PathBuf::from(matches.value_of("aggr_output").unwrap()),
             );
         }
         "envoy" => {
