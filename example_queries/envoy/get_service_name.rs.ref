@@ -34,7 +34,7 @@ pub fn collect_envoy_properties(
     fd: &mut FerriedData,
 ) -> Result<(), ()> {
     let mut prop_tuple: Property;
-    let mut prop_tuple_wrapped;
+    let mut prop_tuple_wrapped: Option<Property>;
     prop_tuple_wrapped = fetch_property(&http_headers.workload_name,
                                         &"node.metadata.WORKLOAD_NAME".split(".").collect(),
                                         http_headers);
