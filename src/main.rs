@@ -1,5 +1,18 @@
+#![feature(try_blocks)]
+mod antlr_gen;
+mod codegen_common;
+mod codegen_envoy;
+mod codegen_simulator;
+mod ir;
+mod to_ir;
+
+use crate::codegen_common::CodeGen;
+use antlr_gen::lexer::CypherLexer;
+use antlr_gen::parser::CypherParser;
+use antlr_rust::common_token_stream::CommonTokenStream;
+use antlr_rust::token_factory::CommonTokenFactory;
+use antlr_rust::InputStream;
 use clap::{App, Arg};
-use dyntracing::{code_gen, lexer, parser, tree_fold::TreeFold};
 use handlebars::Handlebars;
 use std::fs;
 use std::fs::File;
@@ -15,11 +28,8 @@ use std::path::{Path, PathBuf};
  * @template_path_name: the path leading to a handlebars template
  * @output_filename: where the output is written
  */
-fn generate_code_from_codegen_with_handlebars(
-    code_gen: &code_gen::CodeGen,
-    template_path: PathBuf,
-    output_filename: PathBuf,
-) {
+// TODO: make this trait more concrete
+fn write_to_handlebars<T: CodeGen>(code_gen: &T, template_path: PathBuf, output_filename: PathBuf) {
     let display = template_path.display();
     let mut template_file = match File::open(&template_path) {
         Err(msg) => panic!("Failed to open {}: {}", display, msg),
@@ -29,7 +39,7 @@ fn generate_code_from_codegen_with_handlebars(
     let mut template_str = String::new();
     match template_file.read_to_string(&mut template_str) {
         Err(msg) => panic!("Failed to read {}: {}", display, msg),
-        Ok(_) => println!("Successfully read {}", display),
+        Ok(_) => log::info!("Successfully read {}", display),
     }
 
     let handlebars = Handlebars::new();
@@ -38,14 +48,24 @@ fn generate_code_from_codegen_with_handlebars(
         .render_template(&template_str, &code_gen)
         .expect("handlebar render failed");
 
+    log::info!("Writing output to: {:?}", output_filename);
     let mut file = File::create(output_filename).expect("file create failed.");
     file.write_all(output.as_bytes()).expect("write failed");
 }
 
 fn main() {
+    // Set up logging
+    let mut builder = env_logger::Builder::from_default_env();
+    // do not want timestamp for now
+    builder.default_format_timestamp(false);
+    // Set default log level to info
+    builder.filter_level(log::LevelFilter::Info);
+    builder.init();
+
     let bin_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let def_filter_dir = bin_dir.join("cpp_filter/filter.cc");
-    let compile_vals = ["sim", "cpp"];
+    let template_dir = bin_dir.join("templates");
+    let def_filter_dir = bin_dir.join("rs_filter/filter.rs");
+    let compile_vals = ["sim", "envoy"];
     let matches = App::new("Dynamic Tracing")
         .arg(
             Arg::with_name("query")
@@ -77,8 +97,16 @@ fn main() {
                 .value_name("COMPILATION_MODE")
                 .takes_value(true)
                 .possible_values(&compile_vals)
-                .default_value("cpp")
-                .help("Sets what to compile to:  the simulator (sim) or cpp wasm filter (cpp)"),
+                .default_value("envoy")
+                .help("Sets what to compile to:  the simulator (sim) or envoy wasm filter (rs)"),
+        )
+        .arg(
+            Arg::with_name("distributed")
+                .short("d")
+                .long("distributed")
+                .value_name("DISTRUBTED")
+                .takes_value(true)
+                .help("If flagged, makes isomorphism distributed"),
         )
         .arg(
             Arg::with_name("output")
@@ -90,46 +118,73 @@ fn main() {
         )
         .get_matches();
 
+    let mut udfs = Vec::new();
+    if let Some(udf_file) = matches.value_of("udf") {
+        udfs.push(
+            std::fs::read_to_string(udf_file)
+                .unwrap_or_else(|_| panic!("failed to read file {}", udf_file)),
+        );
+    }
+
+    let tf = CommonTokenFactory::default();
     // Read query from file specified by command line argument.
     let query_file = matches.value_of("query").unwrap();
-    let query = fs::read_to_string(query_file)
-        .unwrap_or_else(|_| panic!("failed to read file {}", query_file));
+    let root_id = matches.value_of("root_node").unwrap();
+    let distributed = matches.value_of("distributed");
+    let query: String = fs::read_to_string(query_file).unwrap();
+    let query_stream = InputStream::new_owned(query.into_boxed_str());
+    let lexer = CypherLexer::new_with_token_factory(query_stream, &tf);
+    let token_source = CommonTokenStream::new(lexer);
+    let mut parser = CypherParser::new(token_source);
+    let result = parser.oC_Cypher();
 
-    let mut config = code_gen::CodeGenConfig::new();
-    let c_mode = matches.value_of("compilation_mode").unwrap();
-    if c_mode == "sim" {
-        config.am_cpp = false;
+    if let Err(e) = result {
+        log::error!("Error parsing query: {:?}", e);
+        std::process::exit(-1);
     }
-
-    // Parse udf if any
-    if let Some(udf_file) = matches.value_of("udf") {
-        let udf = std::fs::read_to_string(udf_file)
-            .unwrap_or_else(|_| panic!("failed to read file {}", udf_file));
-        config.parse_udf(udf);
-    }
-
-    // Run parsing and code generation.
-    let tokens = lexer::get_tokens(&query);
-    let mut token_iter = tokens.iter().peekable();
-    let parse_tree = parser::parse_prog(&mut token_iter);
-
-    let mut code_gen = code_gen::CodeGen::new_with_config(config);
-    code_gen.cmd = std::env::args().collect::<Vec<String>>().join(" ");
-
-    code_gen.root_id = matches.value_of("root_node").unwrap();
-    code_gen.visit_prog(&parse_tree);
-
-    // Use the information in the code generator code_gen and format it, using handlebars
-    // to a template with all the basic filter information enclosed
-    let c_mode = matches.value_of("compilation_mode").unwrap();
-    let mut output_name = PathBuf::from(matches.value_of("output").unwrap());
-    if c_mode == "sim" {
-        let filter_name_handlebars = bin_dir.join("filter.rs.handlebars");
-        print!("writing filter to {0}", output_name.to_str().unwrap());
-        generate_code_from_codegen_with_handlebars(&code_gen, filter_name_handlebars, output_name);
-    } else {
-        let filter_handlebars_cc = bin_dir.join("filter.cc.handlebars");
-        output_name.set_extension("cc");
-        generate_code_from_codegen_with_handlebars(&code_gen, filter_handlebars_cc, output_name);
+    let visitor_results = to_ir::visit_result(result.unwrap(), root_id.to_string());
+    // TODO: Error handling
+    let comp_mode = matches.value_of("compilation_mode").unwrap();
+    match comp_mode {
+        "sim" => {
+            // TODO: support multiple UDF files
+            let codegen_object =
+                codegen_simulator::CodeGenSimulator::generate_code_blocks(visitor_results, udfs);
+            let handle_bar_str: &str;
+            if distributed.is_none() {
+                handle_bar_str = "simulation_filter.rs.handlebars";
+            } else {
+                handle_bar_str = "simulation_filter_distributed.rs.handlebars";
+            }
+            write_to_handlebars(
+                &codegen_object,
+                template_dir.join(handle_bar_str),
+                PathBuf::from(matches.value_of("output").unwrap()),
+            );
+        }
+        "envoy" => {
+            let codegen_object =
+                codegen_envoy::CodeGenEnvoy::generate_code_blocks(visitor_results, udfs);
+            let handle_bar_str: &str;
+            if distributed.is_none() {
+                handle_bar_str = "envoy_filter.rs.handlebars";
+            } else {
+                // TODO: implement distributed version
+                log::error!("envoy distributed not yet implemented");
+                handle_bar_str = "simulation_filter_distributed.rs.handlebars";
+            }
+            write_to_handlebars(
+                &codegen_object,
+                template_dir.join(handle_bar_str),
+                PathBuf::from(matches.value_of("output").unwrap()),
+            );
+        }
+        _ => {
+            log::error!(
+                "{:?} is not a valid compilation mode. Valid modes are: sim, envoy",
+                comp_mode
+            );
+            std::process::exit(-1);
+        }
     }
 }

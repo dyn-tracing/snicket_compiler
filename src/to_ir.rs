@@ -1,11 +1,6 @@
-extern crate clap;
-extern crate handlebars;
-extern crate input_stream;
-extern crate serde;
-
-use crate::ir::*;
-use crate::parser::*;
-use crate::visitor::CypherVisitor;
+use super::antlr_gen::parser::*;
+use super::antlr_gen::visitor::CypherVisitor;
+use super::ir::*;
 use antlr_rust::tree::ParseTree;
 use antlr_rust::tree::ParseTreeVisitor;
 use antlr_rust::tree::TerminalNode;
@@ -328,8 +323,8 @@ pub fn visit_result(result: Rc<OC_CypherContextAll>, root_id: String) -> Visitor
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lexer::CypherLexer;
-    use crate::parser::CypherParser;
+    use crate::antlr_gen::lexer::CypherLexer;
+    use crate::antlr_gen::parser::CypherParser;
     use antlr_rust::common_token_stream::CommonTokenStream;
     use antlr_rust::token_factory::CommonTokenFactory;
     use antlr_rust::InputStream;

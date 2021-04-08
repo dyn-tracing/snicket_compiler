@@ -23,7 +23,7 @@ fn check_compilation_envoy(
     // The input query in the folder is provided as test case
     let query_file = query_dir.join(query_name);
     // This is the binary to compile a query
-    let mut cmd = Command::new(proj_dir.join("target/debug/dtc"));
+    let mut cmd = Command::new(proj_dir.join("target/debug/snicket"));
     // Assemble the args, first the input query
     let mut args = vec!["-q", query_file.to_str().unwrap()];
     // Append every udf that is provided
@@ -80,7 +80,7 @@ fn check_compilation_sim(
     // The input query in the folder is provided as test case
     let query_file = query_dir.join(query_name);
     // This is the binary to compile a query
-    let mut cmd = Command::new(proj_dir.join("target/debug/dtc"));
+    let mut cmd = Command::new(proj_dir.join("target/debug/snicket"));
     // Assemble the args, first the input query
     let mut args = vec!["-q", query_file.to_str().unwrap()];
     // Append every udf that is provided

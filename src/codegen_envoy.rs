@@ -1,7 +1,7 @@
-use crate::codegen_common::Udf;
-use crate::codegen_common::UdfType;
-use crate::ir::VisitorResults;
-use crate::CodeGen;
+use super::codegen_common::Udf;
+use super::codegen_common::UdfType;
+use super::ir::VisitorResults;
+use super::CodeGen;
 use indexmap::map::IndexMap;
 use regex::Regex;
 use serde::Serialize;
@@ -12,7 +12,7 @@ use std::str::FromStr;
 // Code Generation
 /********************************/
 #[derive(Serialize)]
-pub struct CodeGenSimulator {
+pub struct CodeGenEnvoy {
     ir: VisitorResults,                 // the IR, as defined in to_ir.rs
     request_blocks: Vec<String>,        // code blocks used in incoming requests
     response_blocks: Vec<String>,       // code blocks in outgoing responses, after matching
@@ -24,9 +24,9 @@ pub struct CodeGenSimulator {
     collected_properties: Vec<String>, // all the properties we collect
 }
 
-impl CodeGen for CodeGenSimulator {
+impl CodeGen for CodeGenEnvoy {
     fn generate_code_blocks(ir: VisitorResults, udfs: Vec<String>) -> Self {
-        let mut to_return = CodeGenSimulator {
+        let mut to_return = CodeGenEnvoy {
             ir,
             request_blocks: Vec::new(),
             response_blocks: Vec::new(),
@@ -85,24 +85,29 @@ impl CodeGen for CodeGenSimulator {
     }
 
     fn collect_envoy_property(&mut self, property: String) {
+        // FIXME: Properties should be lists already...
         let get_prop_block = format!(
-            "prop_tuple = Property::new(filter.whoami.as_ref().unwrap().to_string(),
-                                                   \"{property}\".to_string(),
-                                                   filter.filter_state[\"{envoy_property}\"].clone());
+            "prop_tuple_wrapped = fetch_property(&http_headers.workload_name,
+                                        &\"{property}\".split(\".\").collect(),
+                                        http_headers);
                                             ",
             property = property,
-            envoy_property = property
         );
-        let insert_hdr_block = "fd.unassigned_properties.push(prop_tuple);".to_string();
         self.request_blocks.push(get_prop_block);
-        self.request_blocks.push(insert_hdr_block);
+        let push_block = "if let Some(prop_tuple) = prop_tuple_wrapped {
+            fd.unassigned_properties.push(prop_tuple);
+            } else {
+                return Err(());
+            }"
+        .to_string();
+        self.request_blocks.push(push_block);
     }
 
     fn collect_udf_property(&mut self, udf_id: String) {
         let get_udf_vals = format!(
             "let my_{id}_value;
             let child_iterator = fd.trace_graph.neighbors_directed(
-                graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap().clone()).unwrap(),
+                get_node_with_id(&fd.trace_graph, http_headers.workload_name.clone()).unwrap(),
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
             for child in child_iterator {{
@@ -121,15 +126,18 @@ impl CodeGen for CodeGenSimulator {
         );
         self.udf_blocks.push(get_udf_vals);
 
-        let save_udf_vals = format!("
-        let node = graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap().to_string()).unwrap();
+        let save_udf_vals = format!(
+            "
+        let node = get_node_with_id(&fd.trace_graph, http_headers.workload_name.clone()).unwrap();
         // if we already have the property, don't add it
         if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key(\"{id}\") &&
                fd.trace_graph.node_weight(node).unwrap().1[\"{id}\"] == my_{id}_value ) {{
            fd.trace_graph.node_weight_mut(node).unwrap().1.insert(
                \"{id}\".to_string(), my_{id}_value);
         }}
-        ", id=udf_id);
+        ",
+            id = udf_id
+        );
 
         self.udf_blocks.push(save_udf_vals);
     }
@@ -221,7 +229,9 @@ impl CodeGen for CodeGenSimulator {
                     }
                 }
             }
-            let make_graph = "        return graph_utils::generate_target_graph(vertices, edges, ids_to_properties);\n".to_string();
+            let make_graph =
+                "        return generate_target_graph(vertices, edges, ids_to_properties);\n"
+                    .to_string();
             self.target_blocks.push(make_graph);
         }
     }
@@ -232,7 +242,7 @@ impl CodeGen for CodeGenSimulator {
         // the struct filtering.  This is not the case for trace-level attributes
 
         let if_root_block = "
-            if filter.whoami.as_ref().unwrap()== root_id {"
+            if &http_headers.workload_name == root_id {"
             .to_string();
         self.trace_lvl_prop_blocks.push(if_root_block);
         let init_trace_prop_str = "        let mut trace_prop_str : String;\n".to_string();
@@ -246,7 +256,7 @@ impl CodeGen for CodeGenSimulator {
                 }
                 let trace_filter_block = format!(
                 "
-                let root_node = graph_utils::get_node_with_id(&fd.trace_graph, \"{root_id}\".to_string()).unwrap();
+                let root_node = get_node_with_id(&fd.trace_graph, \"{root_id}\".to_string()).unwrap();
                 if ! ( fd.trace_graph.node_weight(root_node).unwrap().1.contains_key(\"{prop_name}\") &&
                     fd.trace_graph.node_weight(root_node).unwrap().1[\"{prop_name}\"] == \"{value}\" ){{
                     // TODO:  replace fd
@@ -274,12 +284,12 @@ impl CodeGen for CodeGenSimulator {
         let mut prop_wo_periods = property.clone();
         prop_wo_periods.retain(|c| c != '.');
         let ret_block = format!(
-        "let trace_node_index = graph_utils::get_node_with_id(&fd.trace_graph, \"{node_id}\".to_string());
-        if trace_node_index.is_none() {{
-           log::warn!(\"Node {node_id} not found\");
+        "let trace_node_idx = get_node_with_id(&fd.trace_graph, \"{node_id}\".to_string());
+        if trace_node_idx.is_none() {{
+           log::error!(\"Node {node_id} not found\");
                 return None;
         }}
-        let mut ret_{prop_var} = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
+        let ret_{prop_var} = &fd.trace_graph.node_weight(trace_node_idx.unwrap()).unwrap().1[ \"{prop}\" ];\n
         value = ret_{prop_var}.to_string();\n",
                 node_id = entity,
                 prop_var = prop_wo_periods,
@@ -292,23 +302,36 @@ impl CodeGen for CodeGenSimulator {
         let mut prop_wo_periods = property.clone();
         prop_wo_periods.retain(|c| c != '.');
         let ret_block = format!(
-        "let node_ptr = graph_utils::get_node_with_id(target_graph, \"{node_id}\".to_string());
+        "let node_ptr = get_node_with_id(target_graph, \"{node_id}\".to_string());
         if node_ptr.is_none() {{
-           log::warn!(\"Node {node_id} not found\");
+           log::error!(\"Node {node_id} not found\");
                 return None;
         }}
-        let mut trace_node_index = None;
+        let mut trace_node_idx_opt = None;
         for map in mapping {{
             if target_graph.node_weight(map.0).unwrap().0 == \"{node_id}\" {{
-                trace_node_index = Some(map.1);
+                trace_node_idx_opt = Some(map.1);
                 break;
             }}
         }}
-        if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key(\"{prop}\") {{
+        if trace_node_idx_opt.is_none() {{
+            log::error!(\"Node index {node_id} not found.\");
             // we have not yet collected the return property or have a mapping error
             return None;
         }}
-        let mut ret_{prop_var} = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
+        let trace_node_idx = trace_node_idx_opt.unwrap();
+        if !&stored_data
+            .trace_graph
+            .node_weight(trace_node_idx)
+            .unwrap()
+            .1
+            .contains_key(\"{prop}\")
+        {{
+            // we have not yet collected the return property
+            log::error!(\"Missing return property {prop}\");
+            return None;
+        }}
+        let ret_{prop_var} = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ \"{prop}\" ];\n
         value = ret_{prop_var}.to_string();\n",
                 node_id = entity,
                 prop_var = prop_wo_periods,
@@ -343,7 +366,6 @@ impl CodeGen for CodeGenSimulator {
     }
 
     fn make_aggr_block(&mut self) {
-        // for the simulator, aggregation is the same as return
         if self.ir.aggregate.is_none() {
             return;
         }
@@ -371,8 +393,8 @@ impl CodeGen for CodeGenSimulator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lexer::CypherLexer;
-    use crate::parser::CypherParser;
+    use crate::antlr_gen::lexer::CypherLexer;
+    use crate::antlr_gen::parser::CypherParser;
     use crate::to_ir::visit_result;
     use antlr_rust::common_token_stream::CommonTokenStream;
     use antlr_rust::token_factory::CommonTokenFactory;
@@ -411,7 +433,7 @@ mod tests {
         let result =
             get_codegen_from_query("MATCH (a) -[]-> (b {})-[]->(c) RETURN a.count".to_string());
         assert!(!result.struct_filters.is_empty());
-        let _codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());
+        let _codegen = CodeGenEnvoy::generate_code_blocks(result, [COUNT.to_string()].to_vec());
     }
 
     #[test]
@@ -420,7 +442,7 @@ mod tests {
             "MATCH (a) -[]-> (b {})-[]->(c) RETURN a.node.metadata.WORKLOAD_NAME".to_string(),
         );
         assert!(!result.struct_filters.is_empty());
-        let _codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());
+        let _codegen = CodeGenEnvoy::generate_code_blocks(result, [COUNT.to_string()].to_vec());
     }
 
     #[test]
@@ -429,7 +451,7 @@ mod tests {
             "MATCH (a {}) WHERE a.node.metadata.WORKLOAD_NAME = 'productpage-v1' RETURN a.count, agg".to_string(),
         );
         assert!(!result.struct_filters.is_empty());
-        let _codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());
+        let _codegen = CodeGenEnvoy::generate_code_blocks(result, [COUNT.to_string()].to_vec());
         assert!(!_codegen.target_blocks.is_empty());
         assert!(!_codegen.ir.struct_filters.is_empty());
         assert!(!_codegen.ir.aggregate.is_none());
@@ -441,7 +463,7 @@ mod tests {
             "MATCH (a) -[]-> (b)-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' AND trace.request.total_size = 1 RETURN a.request.total_size, avg(a.request.total_size)".to_string(),
         );
         assert!(!result.struct_filters.is_empty());
-        let _codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());
+        let _codegen = CodeGenEnvoy::generate_code_blocks(result, [COUNT.to_string()].to_vec());
         assert!(!_codegen.ir.attr_filters.is_empty());
     }
 }

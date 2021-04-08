@@ -1,5 +1,5 @@
 [package]
-name = "dtc"
+name = "snicket"
 version = "0.1.0"
 authors = ["Anirudh Sivaraman <sk.anirudh@gmail.com>", "Jessica Berg <jb7399@nyu.edu>", "Fabian Ruffy <fruffy@nyu.edu>"]
 edition = "2018"
@@ -25,5 +25,5 @@ predicates = "1.0.6"
 diffy = "*"
 
 [[bin]]
-name = "dtc"
-path = "rewrite/main.rs"
+name = "snicket"
+path = "src/main.rs"

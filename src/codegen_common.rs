@@ -1,4 +1,4 @@
-use crate::ir::VisitorResults;
+use super::ir::VisitorResults;
 use indexmap::IndexMap;
 use serde::Serialize;
 use strum_macros::EnumString;
