@@ -69,7 +69,7 @@ fn put_ferried_data_in_hdrs(fd: &mut FerriedData, hdr: &mut IndexMap<String,Stri
 }
 
 // user defined functions:
-{{#each scalar_udf_table}}{{{this.func_impl}}}{{/each}}
+
 
 pub fn create_target_graph() -> Graph<
     (
@@ -78,7 +78,15 @@ pub fn create_target_graph() -> Graph<
     ),
     std::string::String,
 > {
-    {{#each target_blocks}}{{{this}}} {{/each}}
+     let vertices = vec!(  "a".to_string(), "b".to_string(), "c".to_string(),  );
+         let edges = vec!(   ("a".to_string(), "b".to_string() ),   ("b".to_string(), "c".to_string() ),   );
+         let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
+         ids_to_properties.insert("a".to_string(), IndexMap::new());
+         ids_to_properties.insert("b".to_string(), IndexMap::new());
+         ids_to_properties.insert("c".to_string(), IndexMap::new());
+         let mut b_hashmap = ids_to_properties.get_mut("b").unwrap();
+         return graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
+ 
 
 }
 
@@ -87,13 +95,15 @@ pub fn collect_envoy_properties(
     fd: &mut FerriedData,
 ) {
     let mut prop_tuple: Property;
-    {{#each request_blocks}}{{{this}}} {{/each}}
+    
 }
 
 pub fn execute_udfs_and_check_trace_lvl_prop(filter: &Filter, fd: &mut FerriedData) -> bool{
-    {{#each udf_blocks}}{{{this}}} {{/each}}
-    let root_id = "{{this.ir.root_id}}";
-    {{#each trace_lvl_prop_blocks}}{{{this}}}{{/each}}
+    
+    let root_id = "productpage-v1";
+    
+            if filter.whoami.as_ref().unwrap()== root_id {        let mut trace_prop_str : String;
+       }
     return true;
 }
 
@@ -109,7 +119,11 @@ pub fn get_value_for_storage(
     fd: &FerriedData,                                                  
 ) -> Option<String> {
     let mut value : String;
-    {{#each response_blocks}}{{{this}}} {{/each}}
+    
+        match serde_yaml::to_string(fd) {
+            Ok(trace_str) => { value = trace_str; }
+            Err(e) => { log::error!("Error:  could not translate ferried data to string"); }}
+         
     return Some(value);
 
 }
@@ -132,7 +146,7 @@ impl Filter {
             target_graph: None,
             filter_state: IndexMap::new(),
             envoy_shared_data: IndexMap::<String, String>::new(),
-            collected_properties: vec!( {{#each collected_properties}}"{{{this}}}".to_string(), {{/each}} ),
+            collected_properties: vec!( "".to_string(),  ),
          }))
     }
 
@@ -144,7 +158,7 @@ impl Filter {
                                    target_graph: None,
                                    filter_state: string_data,
                                    envoy_shared_data: IndexMap::new(),
-                                   collected_properties: vec!({{#each collected_properties}}"{{{this}}}".to_string(), {{/each}} ),
+                                   collected_properties: vec!("".to_string(),  ),
                                }))
      }
 
@@ -320,7 +334,7 @@ impl Filter {
             }
         }
 
-        let root_id = "{{this.ir.root_id}}";
+        let root_id = "productpage-v1";
         let trace_prop_sat = execute_udfs_and_check_trace_lvl_prop(self, &mut ferried_data);
         // 3. perform isomorphism and possibly return if root node
         if trace_prop_sat && self.whoami.as_ref().unwrap() == root_id {

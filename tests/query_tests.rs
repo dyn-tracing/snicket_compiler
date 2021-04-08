@@ -67,6 +67,7 @@ fn check_compilation_envoy(
 #[test_case("request_size.cql", vec![]; "request_size")]
 #[test_case("request_size_avg.cql", vec![]; "request_size_avg")]
 #[test_case("request_size_avg_trace_attr.cql", vec![]; "request_size_avg_trace_attr")]
+#[test_case("return_trace.cql", vec![]; "return_trace")]
 #[test_case("latency.cql", vec!["latency.rs"]; "inconclusive - latency")]
 fn check_compilation_sim(
     query_name: &str,

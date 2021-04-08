@@ -70,6 +70,7 @@ pub trait CodeGen: Serialize {
     fn get_maps(&mut self);
     fn make_struct_filter_blocks(&mut self);
     fn make_attr_filter_blocks(&mut self);
+    fn make_trace_rpc_value(&mut self);
     fn make_storage_rpc_value_from_trace(&mut self, entity: String, property: String);
     fn make_storage_rpc_value_from_target(&mut self, entity: String, property: String);
     fn make_return_block(&mut self);

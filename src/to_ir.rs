@@ -467,4 +467,27 @@ mod tests {
             .contains(&".node.metadata.WORKLOAD_NAME".to_string()));
         assert!(results.maps.contains(&".return_code".to_string()));
     }
+
+    #[test]
+    fn test_return_whole_trace() {
+        let tf = CommonTokenFactory::default();
+        let result = run_parser(&tf, "MATCH (a) -[]-> (b)-[]->(c) RETURN trace");
+        let mut filter_visitor = FilterVisitor::default();
+        let mut return_visitor = ReturnVisitor::default();
+        let _res = result.accept(&mut filter_visitor);
+        let _res = result.accept(&mut return_visitor);
+        let results = VisitorResults {
+            struct_filters: filter_visitor.struct_filters,
+            attr_filters: filter_visitor.attr_filters,
+            return_expr: return_visitor.return_expr,
+            aggregate: return_visitor.aggregate,
+            maps: Vec::new(),
+            root_id: "".to_string(),
+        };
+        assert!(results.return_expr.is_some());
+        assert!(results.return_expr.as_ref().unwrap().entity == "trace");
+        assert!(results.return_expr.as_ref().unwrap().property == String::new());
+
+
+    }
 }
