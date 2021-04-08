@@ -20,11 +20,21 @@ impl Default for UdfType {
 
 // TODO: Use getters
 #[derive(Serialize, Debug, Clone)]
-pub struct Udf {
+pub struct ScalarUdf {
     pub udf_type: UdfType,
     pub id: String,
     pub leaf_func: String,
     pub mid_func: String,
+    pub func_impl: String,
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct AggregationUdf {
+    pub udf_type: UdfType,
+    pub id: String,
+    pub init_func: String,
+    pub exec_func: String,
+    pub struct_name: String,
     pub func_impl: String,
 }
 
@@ -44,7 +54,9 @@ pub struct CodeGenStruct {
     // code blocks to be used in outgoing responses, to compute UDF before matching
     pub trace_lvl_prop_blocks: Vec<String>,
     // where we store udf implementations
-    pub udf_table: IndexMap<String, Udf>,
+    pub scalar_udf_table: IndexMap<String, ScalarUdf>,
+    // where we store udf implementations
+    pub aggregation_udf_table: IndexMap<String, AggregationUdf>,
     pub envoy_properties: Vec<String>,
     // all the properties we collect
     pub collected_properties: Vec<String>,

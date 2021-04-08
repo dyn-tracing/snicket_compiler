@@ -1,4 +1,5 @@
-use super::codegen_common::Udf;
+use super::codegen_common::AggregationUdf;
+use super::codegen_common::ScalarUdf;
 use super::codegen_common::UdfType;
 use super::ir::VisitorResults;
 use super::CodeGen;
@@ -13,13 +14,14 @@ use std::str::FromStr;
 /********************************/
 #[derive(Serialize)]
 pub struct CodeGenEnvoy {
-    ir: VisitorResults,                 // the IR, as defined in to_ir.rs
-    request_blocks: Vec<String>,        // code blocks used in incoming requests
-    response_blocks: Vec<String>,       // code blocks in outgoing responses, after matching
-    target_blocks: Vec<String>,         // code blocks to create target graph
+    ir: VisitorResults,                            // the IR, as defined in to_ir.rs
+    request_blocks: Vec<String>,                   // code blocks used in incoming requests
+    response_blocks: Vec<String>, // code blocks in outgoing responses, after matching
+    target_blocks: Vec<String>,   // code blocks to create target graph
     udf_blocks: Vec<String>, // code blocks to be used in outgoing responses, to compute UDF before matching
     trace_lvl_prop_blocks: Vec<String>, // code blocks to be used in outgoing responses, to compute UDF before matching
-    udf_table: IndexMap<String, Udf>,   // where we store udf implementations
+    scalar_udf_table: IndexMap<String, ScalarUdf>, // where we store udf implementations
+    aggregation_udf_table: IndexMap<String, AggregationUdf>, // where we store udf implementations
     envoy_properties: Vec<String>,
     collected_properties: Vec<String>, // all the properties we collect
 }
@@ -33,7 +35,8 @@ impl CodeGen for CodeGenEnvoy {
             target_blocks: Vec::new(),
             udf_blocks: Vec::new(),
             trace_lvl_prop_blocks: Vec::new(),
-            udf_table: IndexMap::default(),
+            scalar_udf_table: IndexMap::default(),
+            aggregation_udf_table: IndexMap::default(),
             envoy_properties: Vec::new(),
             collected_properties: Vec::new(),
         };
@@ -59,29 +62,52 @@ impl CodeGen for CodeGenEnvoy {
 
     fn parse_udf(&mut self, udf: String) {
         let udf_clone = udf.clone();
-        let re = Regex::new(
+        let scalar_re = Regex::new(
             r".*udf_type:\s+(?P<udf_type>\w+)\n.*leaf_func:\s+(?P<leaf_func>\w+)\n.*mid_func:\s+(?P<mid_func>\w+)\n.*id:\s+(?P<id>\w+)",
         ).unwrap();
 
-        let rust_caps = re
-            .captures(&udf_clone)
-            .expect("Rust UDF did not have proper header");
+        let aggr_re = Regex::new(
+            r".*udf_type:\s+(?P<udf_type>\w+)\n.*init_func:\s+(?P<init_func>\w+)\n.*exec_func:\s+(?P<exec_func>\w+)\n.*struct_name:\s+(?P<struct_name>\w+)\n.*id:\s+(?P<id>\w+)",
+        ).unwrap();
 
-        let udf_type = UdfType::from_str(rust_caps.name("udf_type").unwrap().as_str()).unwrap();
-        let leaf_func = String::from(rust_caps.name("leaf_func").unwrap().as_str());
-        let mid_func = String::from(rust_caps.name("mid_func").unwrap().as_str());
-        let id = String::from(rust_caps.name("id").unwrap().as_str());
+        let scalar_rust_caps = scalar_re.captures(&udf_clone);
+        let aggr_rust_caps = aggr_re.captures(&udf_clone);
 
-        self.udf_table.insert(
-            id.clone(),
-            Udf {
-                udf_type,
-                leaf_func,
-                mid_func,
-                func_impl: udf,
-                id,
-            },
-        );
+        if let Some(rc) = scalar_rust_caps {
+            let udf_type = UdfType::from_str(rc.name("udf_type").unwrap().as_str()).unwrap();
+            let leaf_func = String::from(rc.name("leaf_func").unwrap().as_str());
+            let mid_func = String::from(rc.name("mid_func").unwrap().as_str());
+            let id = String::from(rc.name("id").unwrap().as_str());
+
+            self.scalar_udf_table.insert(
+                id.clone(),
+                ScalarUdf {
+                    udf_type,
+                    leaf_func,
+                    mid_func,
+                    func_impl: udf,
+                    id,
+                },
+            );
+        } else if let Some(rc) = aggr_rust_caps {
+            let udf_type = UdfType::from_str(rc.name("udf_type").unwrap().as_str()).unwrap();
+            let init_func = String::from(rc.name("init_func").unwrap().as_str());
+            let exec_func = String::from(rc.name("exec_func").unwrap().as_str());
+            let struct_name = String::from(rc.name("struct_name").unwrap().as_str());
+            let id = String::from(rc.name("id").unwrap().as_str());
+
+            self.aggregation_udf_table.insert(
+                id.clone(),
+                AggregationUdf {
+                    udf_type,
+                    init_func,
+                    exec_func,
+                    struct_name,
+                    func_impl: udf,
+                    id,
+                },
+            );
+        }
     }
 
     fn collect_envoy_property(&mut self, property: String) {
@@ -121,8 +147,8 @@ impl CodeGen for CodeGenEnvoy {
 
         ",
             id = udf_id,
-            leaf_func = self.udf_table[&udf_id].leaf_func,
-            mid_func = self.udf_table[&udf_id].mid_func
+            leaf_func = self.scalar_udf_table[&udf_id].leaf_func,
+            mid_func = self.scalar_udf_table[&udf_id].mid_func
         );
         self.udf_blocks.push(get_udf_vals);
 
@@ -154,7 +180,7 @@ impl CodeGen for CodeGenEnvoy {
             }
             if !has_period || !self.ir.maps.contains(&map_name) {
                 // we might have duplicates bc some have preceding periods
-                if !self.udf_table.contains_key(&map_name)
+                if !self.scalar_udf_table.contains_key(&map_name)
                     && !map_name.is_empty()
                     && !self.envoy_properties.contains(&map_name)
                 {
@@ -418,6 +444,33 @@ mod tests {
 	    }
 	}
     ";
+
+    static AVG: &str = "
+        // udf_type: Scalar
+    // init_func: init
+    // exec_func: exec
+    // struct_name: Avg
+    // id: avg
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct Avg {
+        avg: u64,
+        total: u64,
+        num_instances: u64,
+    }
+
+    impl Avg {
+        fn new() -> Avg {
+            Avg { avg: 0, total: 0 , num_instances: 0}
+        }
+        fn execute(&mut self, _trace_id: u64, instance: String) {
+            self.total += instance.parse::<u64>().unwrap();
+            self.num_instances += 1;
+            self.avg = self.total/self.num_instances;
+            self.avg.to_string()
+        }
+    }
+    ";
     fn get_codegen_from_query(input: String) -> VisitorResults {
         let tf = CommonTokenFactory::default();
         let query_stream = InputStream::new_owned(input.to_string().into_boxed_str());
@@ -465,5 +518,17 @@ mod tests {
         assert!(!result.struct_filters.is_empty());
         let _codegen = CodeGenEnvoy::generate_code_blocks(result, [COUNT.to_string()].to_vec());
         assert!(!_codegen.ir.attr_filters.is_empty());
+    }
+
+    #[test]
+    fn test_aggr_udf() {
+        let result = get_codegen_from_query(
+            "MATCH (a) -[]-> (b)-[]->(c) RETURN a.request.total_size, avg".to_string(),
+        );
+        let _codegen = CodeGenEnvoy::generate_code_blocks(
+            result,
+            [COUNT.to_string(), AVG.to_string()].to_vec(),
+        );
+        assert!(_codegen.aggregation_udf_table.keys().count() == 1);
     }
 }
