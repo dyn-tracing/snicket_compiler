@@ -401,22 +401,22 @@ mod tests {
     use antlr_rust::InputStream;
 
     static COUNT: &str = "
-        // udf_type: Scalar
-	// leaf_func: leaf
-	// mid_func: mid
-	// id: count
+    // udf_type: Scalar
+    // leaf_func: leaf
+    // mid_func: mid
+    // id: count
 
-	use petgraph::Graph;
+    use petgraph::Graph;
 
-	struct ServiceName {
-	    fn leaf(my_node: String, graph: Graph) {
-		return 0;
-	    }
+    struct ServiceName {
+        fn leaf(my_node: String, graph: Graph) {
+        return 0;
+        }
 
-	    fn mid(my_node: String, graph: Graph) {
-		return 1;
-	    }
-	}
+        fn mid(my_node: String, graph: Graph) {
+        return 1;
+        }
+    }
     ";
     fn get_codegen_from_query(input: String) -> VisitorResults {
         let tf = CommonTokenFactory::default();
