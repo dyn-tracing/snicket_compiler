@@ -122,7 +122,7 @@ pub fn get_value_for_storage(
     
         match serde_yaml::to_string(fd) {
             Ok(trace_str) => { value = trace_str; }
-            Err(e) => { log::error!("Error:  could not translate ferried data to string"); }}
+            Err(e) => { log::error!("Error:  could not translate ferried data to string"); return None; }}
          
     return Some(value);
 
