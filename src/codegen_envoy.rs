@@ -309,7 +309,7 @@ impl CodeGen for CodeGenEnvoy {
         let ret_block = "                                                       
         match serde_yaml::to_string(fd) {                                       
             Ok(trace_str) => { value = trace_str; }                             
-            Err(e) => { log::error!(\"Error:  could not translate ferried data to string\"); }\
+            Err(e) => { log::error!(\"Error:  could not translate ferried data to string\"); return; }\
         }                                                                       
         "
         .to_string();
