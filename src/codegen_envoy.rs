@@ -311,7 +311,8 @@ impl CodeGen for CodeGenEnvoy {
             Ok(trace_str) => { value = trace_str; }                             
             Err(e) => { log::error!(\"Error:  could not translate ferried data to string\"); }\
         }                                                                       
-        ".to_string();                                                          
+        "
+        .to_string();
         self.response_blocks.push(ret_block);
     }
 

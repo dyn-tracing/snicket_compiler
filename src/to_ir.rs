@@ -487,7 +487,5 @@ mod tests {
         assert!(results.return_expr.is_some());
         assert!(results.return_expr.as_ref().unwrap().entity == "trace");
         assert!(results.return_expr.as_ref().unwrap().property == String::new());
-
-
     }
 }

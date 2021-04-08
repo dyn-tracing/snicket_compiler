@@ -180,7 +180,7 @@ impl CodeGen for CodeGenSimulator {
                 self.collected_properties.push(map_name.clone());
                 if self.envoy_properties.contains(&map_name) {
                     self.collect_envoy_property(map_name);
-                } else if map_name.len() > 0 {
+                } else if !map_name.is_empty() {
                     self.collect_udf_property(map_name);
                 }
             }
@@ -359,7 +359,7 @@ impl CodeGen for CodeGenSimulator {
         }
         let entity = self.ir.return_expr.as_ref().unwrap().clone().entity;
         let mut property = self.ir.return_expr.as_ref().unwrap().clone().property;
-        if property.len() > 0 && property.chars().next().unwrap() == ".".chars().next().unwrap() {
+        if !property.is_empty() && property.chars().next().unwrap() == ".".chars().next().unwrap() {
             property.remove(0);
         }
 
