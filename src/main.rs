@@ -188,7 +188,7 @@ fn main() {
             } else {
                 // TODO: implement distributed version
                 log::error!("envoy distributed not yet implemented");
-                handle_bar_str = "simulation_filter_distributed.rs.handlebars";
+                handle_bar_str = "distributed_envoy_filter.rs.handlebars";
             }
             write_to_handlebars(
                 &codegen_object,
