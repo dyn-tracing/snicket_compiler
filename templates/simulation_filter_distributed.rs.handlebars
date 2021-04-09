@@ -128,7 +128,7 @@ fn put_ferried_data_in_hdrs(fd: &mut FerriedData, hdr: &mut IndexMap<String,Stri
 
 
 // user defined functions:
-{{#each udf_table}}{{{this.func_impl}}}{{/each}}
+{{#each scalar_udf_table}}{{{this.func_impl}}}{{/each}}
 
 pub fn create_target_graph() -> Graph<
     (

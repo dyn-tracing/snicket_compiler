@@ -180,7 +180,7 @@ impl CodeGen for CodeGenSimulator {
                 self.collected_properties.push(map_name.clone());
                 if self.envoy_properties.contains(&map_name) {
                     self.collect_envoy_property(map_name);
-                } else {
+                } else if !map_name.is_empty() {
                     self.collect_udf_property(map_name);
                 }
             }
@@ -295,6 +295,16 @@ impl CodeGen for CodeGenSimulator {
         self.trace_lvl_prop_blocks.push(end_root_block);
     }
 
+    fn make_trace_rpc_value(&mut self) {
+        let ret_block = "
+        match serde_yaml::to_string(fd) {
+            Ok(trace_str) => { value = trace_str; }
+            Err(e) => { log::error!(\"Error:  could not translate ferried data to string\"); return None; }\
+        }
+        ".to_string();
+        self.response_blocks.push(ret_block);
+    }
+
     fn make_storage_rpc_value_from_trace(&mut self, entity: String, property: String) {
         let mut prop_wo_periods = property.clone();
         prop_wo_periods.retain(|c| c != '.');
@@ -349,12 +359,16 @@ impl CodeGen for CodeGenSimulator {
         }
         let entity = self.ir.return_expr.as_ref().unwrap().clone().entity;
         let mut property = self.ir.return_expr.as_ref().unwrap().clone().property;
-        if property.chars().next().unwrap() == ".".chars().next().unwrap() {
+        if !property.is_empty() && property.chars().next().unwrap() == ".".chars().next().unwrap() {
             property.remove(0);
         }
 
         if entity == "trace" {
-            self.make_storage_rpc_value_from_trace(self.ir.root_id.clone(), property);
+            if property != String::new() {
+                self.make_storage_rpc_value_from_trace(self.ir.root_id.clone(), property);
+            } else {
+                self.make_trace_rpc_value();
+            }
         } else {
             let num_struct_filters = self.ir.struct_filters.len();
             if !self.ir.struct_filters[num_struct_filters - 1]
