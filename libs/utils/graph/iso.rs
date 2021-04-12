@@ -9,8 +9,14 @@ use pathfinding::directed::edmonds_karp::*;
 use petgraph::graph::{Graph, NodeIndex};
 use petgraph::visit::DfsPostOrder;
 use petgraph::{Incoming, Outgoing};
+use serde::{Serialize, Deserialize};
 
 // -------------- Shamir Isomorphism Algorithm Helper Functions---------------
+#[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq)] 
+pub struct SetSKey {
+    pub val1: NodeIndex,
+    pub val2: NodeIndex
+}
 
 /// Given two sets of nodes, set x from graph g, and set y from graph h,
 /// creates a flow graph with the source connected to all nodes in x and
@@ -23,7 +29,7 @@ fn max_matching<EK: EdmondsKarp<i32>>(
     graph_g: &Graph<(String, IndexMap<String, String>), String>,
     graph_h: &Graph<(String, IndexMap<String, String>), String>,
     set_s: &IndexMap<
-        (NodeIndex, NodeIndex),
+        SetSKey,
         IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
     >,
     u_null: NodeIndex,
@@ -47,7 +53,7 @@ fn max_matching<EK: EdmondsKarp<i32>>(
 
     for u in set_x {
         for v in set_y {
-            if set_s[&(*v, *u)].contains_key(&u_null)
+            if set_s[&SetSKey{val1: *v, val2: *u}].contains_key(&u_null)
                 && has_property_subset(
                     &graph_g.node_weight(*v).unwrap().1,
                     &graph_h.node_weight(*u).unwrap().1,
@@ -108,15 +114,15 @@ fn print_set_s(
     graph_g: &Graph<(String, IndexMap<String, String>), String>,
     graph_h: &Graph<(String, IndexMap<String, String>), String>,
     set_s: &IndexMap<
-        (NodeIndex, NodeIndex),
+        SetSKey,
         IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
     >,
 ) {
     for key in set_s.keys() {
         print!(
             "key: {:?} {:?} ",
-            graph_g.node_weight(key.0).unwrap(),
-            graph_h.node_weight(key.1).unwrap()
+            graph_g.node_weight(key.val1).unwrap(),
+            graph_h.node_weight(key.val2).unwrap()
         );
         for value_key in set_s[key].keys() {
             print!("inner key: {:?} ", graph_h.node_weight(*value_key).unwrap());
@@ -138,7 +144,7 @@ fn get_mapping_from_set_s(
     _graph_g: &Graph<(String, IndexMap<String, String>), String>,
     graph_h: &Graph<(String, IndexMap<String, String>), String>,
     set_s: &IndexMap<
-        (NodeIndex, NodeIndex),
+        SetSKey,
         IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
     >,
     root_in_g: &NodeIndex,
@@ -150,8 +156,8 @@ fn get_mapping_from_set_s(
         let key = set_to_find_mapping.pop().unwrap();
         to_return.push(key);
 
-        if set_s[&(key.1, key.0)].contains_key(&key.0) {
-            for map in set_s[&(key.1, key.0)][&key.0].as_ref() {
+        if set_s[&SetSKey {val1: key.1, val2: key.0}].contains_key(&key.0) {
+            for map in set_s[&SetSKey{val1: key.1, val2: key.0}][&key.0].as_ref() {
                 for mapping in map {
                     if !to_return.contains(&(mapping.1, mapping.0)) {
                         to_return.push((mapping.1, mapping.0));
@@ -169,7 +175,7 @@ fn find_mapping_shamir_inner_loop(
     graph_g: &Graph<(String, IndexMap<String, String>), String>,
     graph_h: &Graph<(String, IndexMap<String, String>), String>,
     set_s: &mut IndexMap<
-        (NodeIndex, NodeIndex),
+        SetSKey,
         IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
     >,
 ) -> (bool, Option<NodeIndex>) {
@@ -192,9 +198,9 @@ fn find_mapping_shamir_inner_loop(
             u,
         );
         if cost == u_neighbors.len() {
-            if set_s[&(v, u)].contains_key(&u) {
+            if set_s[&SetSKey{val1: v, val2: u}].contains_key(&u) {
             } else {
-                set_s.get_mut(&(v, u)).unwrap().insert(u, Some(path));
+                set_s.get_mut(&SetSKey{ val1: v, val2: u}).unwrap().insert(u, Some(path));
             }
         }
 
@@ -211,10 +217,10 @@ fn find_mapping_shamir_inner_loop(
                 u,
             );
             if cost == new_x_set.len() {
-                if set_s[&(v, u)].contains_key(&vertex_id) {
+                if set_s[&SetSKey{ val1: v, val2: u}].contains_key(&vertex_id) {
                 } else {
                     set_s
-                        .get_mut(&(v, u))
+                        .get_mut(&SetSKey { val1: v, val2: u})
                         .unwrap()
                         .insert(vertex_id, Some(path));
                 }
@@ -222,7 +228,7 @@ fn find_mapping_shamir_inner_loop(
         }
 
         // lines 12-14
-        if set_s[&(v, root_h)].contains_key(&root_h) {
+        if set_s[&SetSKey{ val1: v, val2: root_h}].contains_key(&root_h) {
             if has_property_subset(
                 &graph_g.node_weight(v).unwrap().1,
                 &graph_h.node_weight(root_h).unwrap().1,
@@ -240,26 +246,26 @@ fn find_mapping_shamir_inner_loop(
 fn initialize_s(
     graph_g: &Graph<(String, IndexMap<String, String>), String>,
     graph_h: &Graph<(String, IndexMap<String, String>), String>,
-) -> IndexMap<(NodeIndex, NodeIndex), IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>> {
+) -> IndexMap<SetSKey, IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>> {
     let mut s = IndexMap::<
-        (NodeIndex, NodeIndex),
+        SetSKey,
         IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
     >::new();
     for node_g in graph_g.node_indices() {
         for u in graph_h.node_indices() {
             // initialize S entry as empty set
-            s.insert((node_g, u), IndexMap::new());
+            s.insert(SetSKey{ val1: node_g, val2: u}, IndexMap::new());
         }
     }
     let root_g = find_root(&graph_g);
     let root_h = find_root(&graph_h);
     for leaf_g in find_leaves(root_g, &graph_g) {
         for leaf_h in find_leaves(root_h, &graph_h) {
-            s.get_mut(&(leaf_g, leaf_h))
+            s.get_mut(&SetSKey{ val1: leaf_g, val2: leaf_h})
                 .unwrap()
                 .insert(leaf_h, Some(vec![(leaf_h, leaf_g)]));
             for neighbor in graph_h.neighbors_directed(leaf_h, Incoming) {
-                s.get_mut(&(leaf_g, leaf_h))
+                s.get_mut(&SetSKey{ val1: leaf_g, val2: leaf_h})
                     .unwrap()
                     .insert(neighbor, Some(vec![(leaf_h, leaf_g)]));
             }
@@ -305,14 +311,14 @@ fn initialize_s_for_node(
     graph_g: &Graph<(String, IndexMap<String, String>), String>,
     graph_h: &Graph<(String, IndexMap<String, String>), String>,
     set_s: &mut IndexMap<
-        (NodeIndex, NodeIndex),
+        SetSKey,
         IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
     >,
     node: NodeIndex,
 ) {
     for u in graph_h.node_indices() {
         // initialize S entry as empty set
-        set_s.insert((node, u), IndexMap::new());
+        set_s.insert(SetSKey{ val1: node, val2: u}, IndexMap::new());
     }
     let root_h = find_root(&graph_h);
 
@@ -320,12 +326,12 @@ fn initialize_s_for_node(
     if graph_g.neighbors_directed(node, Outgoing).count() == 0 {
         for leaf_h in find_leaves(root_h, &graph_h) {
             set_s
-                .get_mut(&(node, leaf_h))
+                .get_mut(&SetSKey{ val1: node, val2: leaf_h})
                 .unwrap()
                 .insert(leaf_h, Some(vec![(leaf_h, node)]));
             for neighbor in graph_h.neighbors_directed(leaf_h, Incoming) {
                 set_s
-                    .get_mut(&(node, leaf_h))
+                    .get_mut(&SetSKey{ val1: node, val2: leaf_h} )
                     .unwrap()
                     .insert(neighbor, Some(vec![(leaf_h, node)]));
             }
@@ -337,7 +343,7 @@ pub fn find_mapping_shamir_decentralized(
     graph_g: &Graph<(String, IndexMap<String, String>), String>,
     graph_h: &Graph<(String, IndexMap<String, String>), String>,
     set_s: &mut IndexMap<
-        (NodeIndex, NodeIndex),
+        SetSKey,
         IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
     >,
     cur_node: NodeIndex, // what node we are in graph_g
@@ -385,7 +391,7 @@ pub fn find_mapping_shamir_decentralized(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::get_node_with_id;
+    use crate::graph::graph_utils::get_node_with_id;
 
     /// --------------- Graph Creation Helper functions -------------------
     fn three_node_graph() -> Graph<(String, IndexMap<String, String>), String> {
@@ -650,37 +656,37 @@ mod tests {
             print!(
                 "key: {:?} weight: {:?}, {:?}\n",
                 key,
-                graph_g.node_weight(key.0),
-                graph_h.node_weight(key.1)
+                graph_g.node_weight(key.val1),
+                graph_h.node_weight(key.val2)
             );
         }
 
-        let aa = (
-            get_node_with_id(&graph_g, "a".to_string()).unwrap(),
-            get_node_with_id(&graph_h, "a".to_string()).unwrap(),
-        );
-        let ab = (
-            get_node_with_id(&graph_g, "a".to_string()).unwrap(),
-            get_node_with_id(&graph_h, "b".to_string()).unwrap(),
-        );
+        let aa = SetSKey {
+            val1: get_node_with_id(&graph_g, "a".to_string()).unwrap(),
+            val2: get_node_with_id(&graph_h, "a".to_string()).unwrap(),
+        };
+        let ab = SetSKey {
+            val1: get_node_with_id(&graph_g, "a".to_string()).unwrap(),
+            val2: get_node_with_id(&graph_h, "b".to_string()).unwrap(),
+        };
 
-        let ba = (
-            get_node_with_id(&graph_g, "b".to_string()).unwrap(),
-            get_node_with_id(&graph_h, "a".to_string()).unwrap(),
-        );
-        let bb = (
-            get_node_with_id(&graph_g, "b".to_string()).unwrap(),
-            get_node_with_id(&graph_h, "b".to_string()).unwrap(),
-        );
+        let ba = SetSKey {
+            val1: get_node_with_id(&graph_g, "b".to_string()).unwrap(),
+            val2: get_node_with_id(&graph_h, "a".to_string()).unwrap(),
+        };
+        let bb = SetSKey {
+            val1: get_node_with_id(&graph_g, "b".to_string()).unwrap(),
+            val2: get_node_with_id(&graph_h, "b".to_string()).unwrap(),
+        };
 
-        let ca = (
-            get_node_with_id(&graph_g, "c".to_string()).unwrap(),
-            get_node_with_id(&graph_h, "a".to_string()).unwrap(),
-        );
-        let cb = (
-            get_node_with_id(&graph_g, "c".to_string()).unwrap(),
-            get_node_with_id(&graph_h, "b".to_string()).unwrap(),
-        );
+        let ca = SetSKey {
+            val1: get_node_with_id(&graph_g, "c".to_string()).unwrap(),
+            val2: get_node_with_id(&graph_h, "a".to_string()).unwrap(),
+        };
+        let cb = SetSKey {
+            val1: get_node_with_id(&graph_g, "c".to_string()).unwrap(),
+            val2: get_node_with_id(&graph_h, "b".to_string()).unwrap(),
+        };
 
         assert!(s.contains_key(&aa));
         assert!(s.contains_key(&ab));
@@ -824,7 +830,7 @@ mod tests {
     #[test]
     fn test_decentralized() {
         let mut set_s = IndexMap::<
-            (NodeIndex, NodeIndex),
+            SetSKey,
             IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
         >::new();
         let graph_h = three_node_chain_graph();
@@ -847,7 +853,7 @@ mod tests {
     #[test]
     fn test_decentralized_complex() {
         let mut set_s = IndexMap::<
-            (NodeIndex, NodeIndex),
+            SetSKey,
             IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
         >::new();
 
@@ -918,7 +924,7 @@ mod tests {
     #[test]
     fn test_decentralized_complex_wrong_properties() {
         let mut set_s = IndexMap::<
-            (NodeIndex, NodeIndex),
+            SetSKey,
             IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
         >::new();
 

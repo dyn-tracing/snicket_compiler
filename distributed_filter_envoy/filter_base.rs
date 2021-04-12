@@ -26,16 +26,21 @@ use super::filter::get_value_for_storage;
 
 // ---------------------- General Helper Functions ----------------------------
 // TODO:  make inheritance work so putting this in a library works              
+#[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
+pub struct SetSKey {
+    pub val1: NodeIndex,
+    pub val2: NodeIndex
+}
 #[derive(Debug, Serialize, Deserialize)]                                        
 pub struct FerriedData {                                                        
     pub set_s: IndexMap<                                                            
-        (NodeIndex, NodeIndex),                                                 
+        SetSKey,                                                 
         IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,               
     >,                                                                          
     pub found_match: bool,                                                          
     pub trace_graph: Graph<(String, IndexMap<String, String>), String>,             
     pub unassigned_properties: Vec<Property>, // entity property value              
-}                                                                               
+}
 impl FerriedData {                                                              
     fn default() -> FerriedData {                                               
         FerriedData {                                                           
@@ -105,7 +110,7 @@ impl FerriedData {
                 // TODO:  there's gotta be a better way to do this
 
                 // because all target graphs are constructed the same, we don't touch the second entry
-                let new_entry = (prev_nodes_to_new_nodes[&entry.0], entry.1);
+                let new_entry = SetSKey { val1: prev_nodes_to_new_nodes[&entry.val1], val2: entry.val2};
                 let mut new_indexmap : IndexMap<NodeIndex, _> = IndexMap::new();
                 for inner_indexmap_key in other_data.set_s[entry].keys() {
                     if other_data.set_s[entry][inner_indexmap_key].is_none() {
@@ -164,12 +169,12 @@ pub enum HttpType {
 
 pub fn data_to_str(stored_data: &FerriedData) -> Option<String> {
     let stored_data_str: String;
-    match serde_yaml::to_string(&stored_data) {
+    match serde_json::to_string(&stored_data) {
         Ok(stored_data_str_) => {
             stored_data_str = stored_data_str_;
         }
         Err(e) => {
-            log::error!("Could not translate stored data to json string: {:?}\n", e);
+            log::error!("Could not translate stored data to json string in data_to_str: {:?}\n", e);
             return None;
         }
     }
@@ -191,14 +196,14 @@ fn fetch_data_from_headers(ctx: &HttpHeaders, request_type: HttpType) -> Ferried
         return FerriedData::default();
     }
     if let Some(ferried_data_str) = data_str_opt {
-        match serde_yaml::from_str(&ferried_data_str) {
+        match serde_json::from_str(&ferried_data_str) {
             Ok(fd) => {
                 log::warn!("Successfully parsed ferried_data from header.");
                 log::warn!("this is the distributed version\n");
                 return fd;
             }
             Err(e) => {
-                log::error!("Could not translate stored data to json string: {:?}\n", e);
+                log::error!("Could not translate stored data to json string in fetch_data_from_headers: {:?}\n", e);
             }
         }
     }
@@ -235,7 +240,7 @@ fn get_shared_data(trace_id: &str, ctx: &HttpHeaders) -> Option<FerriedData> {
         // Add a header on the response.
         // FIXME: There must be  a nicer way to resolve this
         let cast_string = String::from_utf8_lossy(&data).to_string();
-        match serde_yaml::from_str(&cast_string) {
+        match serde_json::from_str(&cast_string) {
             Ok(d) => {
                 stored_data = d;
             }
