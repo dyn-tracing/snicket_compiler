@@ -28,13 +28,13 @@ use super::filter::get_value_for_storage;
 // TODO:  make inheritance work so putting this in a library works              
 #[derive(Debug, Serialize, Deserialize)]                                        
 pub struct FerriedData {                                                        
-    set_s: IndexMap<                                                            
+    pub set_s: IndexMap<                                                            
         (NodeIndex, NodeIndex),                                                 
         IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,               
     >,                                                                          
-    found_match: bool,                                                          
-    trace_graph: Graph<(String, IndexMap<String, String>), String>,             
-    unassigned_properties: Vec<Property>, // entity property value              
+    pub found_match: bool,                                                          
+    pub trace_graph: Graph<(String, IndexMap<String, String>), String>,             
+    pub unassigned_properties: Vec<Property>, // entity property value              
 }                                                                               
 impl FerriedData {                                                              
     fn default() -> FerriedData {                                               
@@ -194,6 +194,7 @@ fn fetch_data_from_headers(ctx: &HttpHeaders, request_type: HttpType) -> Ferried
         match serde_yaml::from_str(&ferried_data_str) {
             Ok(fd) => {
                 log::warn!("Successfully parsed ferried_data from header.");
+                log::warn!("this is the distributed version\n");
                 return fd;
             }
             Err(e) => {
@@ -494,7 +495,6 @@ impl HttpHeaders {
             log::error!("Response inbound: x-request-id not found in header!",);
             return;
         }
-        // TODO:  Do not really understand the purpose of this yet
         let mut my_indexmap = IndexMap::new();
         my_indexmap.insert(
             join_str(&vec!["node", "metadata", "WORKLOAD_NAME"]),
@@ -506,6 +506,7 @@ impl HttpHeaders {
         if stored_data_opt.is_none() {
             // We failed to deserialize the shared data.
             // This might lead to wrong results, abort.
+            log::warn!("returning early because could not deserialize stored data");
             return;
         }
         // Unpack the data we have
@@ -547,7 +548,14 @@ impl HttpHeaders {
                     &mut stored_data.set_s,
                     get_node_with_id(&stored_data.trace_graph, self.workload_name.clone()).unwrap(),
                     am_root);
-            if mapping_opt.is_some() && check_trace_lvl_prop(self, &stored_data) {
+            if stored_data.set_s.keys().count() > 0 {
+                log::warn!("put something in set s!");
+
+
+            }  else {
+                log::warn!("did not put anything in set s");
+            }
+            if mapping_opt.is_some() && check_trace_lvl_prop(self, &mut stored_data) {
                 let mapping = mapping_opt.unwrap();
                 stored_data.found_match = true;
                 let key = join_str(&vec!["node", "metadata", "WORKLOAD_NAME"]);
@@ -557,6 +565,7 @@ impl HttpHeaders {
                     return;
                 }
                 let value = value_wrapped.unwrap();
+                log::warn!("Sending to storage based on distributed isomorphism");
                 let call_result = self.dispatch_http_call(
                     "storage-upstream",
                     vec![
@@ -596,6 +605,7 @@ impl HttpHeaders {
         let stored_data_str = stored_data_str_opt.unwrap();
         // Set the header
         log::warn!("Attaching {:?}", stored_data_str);
+        log::warn!("Also this is done in a distributed way");
         self.set_http_response_header("ferried_data", Some(&stored_data_str));
     }
 

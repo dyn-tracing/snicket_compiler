@@ -10,7 +10,7 @@ use utils::graph::serde::FerriedData;
 use utils::graph::serde::Property;
 
 // insert UDFs here
-{{#each udf_table}}{{{this.func_impl}}}{{/each}}
+{{#each scalar_udf_table}}{{{this.func_impl}}}{{/each}}
 
 pub fn create_target_graph() -> Graph<
     (
