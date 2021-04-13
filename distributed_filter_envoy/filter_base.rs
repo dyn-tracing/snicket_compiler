@@ -13,6 +13,7 @@ use std::fmt;
 use std::time::Duration;
 use serde::{Serialize, Deserialize};
 
+use utils::graph::iso::SetSKey;
 use utils::graph::iso::find_mapping_shamir_decentralized;
 use utils::graph::graph_utils::get_node_with_id;
 use utils::graph::serde::Property;
@@ -25,12 +26,40 @@ use super::filter::check_trace_lvl_prop;
 use super::filter::get_value_for_storage;
 
 // ---------------------- General Helper Functions ----------------------------
+/*
 // TODO:  make inheritance work so putting this in a library works              
-#[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq)]
 pub struct SetSKey {
     pub val1: NodeIndex,
     pub val2: NodeIndex
 }
+
+impl Serialize for SetSKey
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&format!("({:?},{:?})", self.val1, self.val2))
+    }
+}
+
+impl<'de> Deserialize<'de> for SetSKey {
+    fn deserialize<D>(deserializer: D) -> Result<SetSKey, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let mut s: String = Deserialize::deserialize(deserializer)?;
+        s.remove(0);
+        s.remove(s.len()-1);
+        let mut iterator = s.split(",");
+        let first_val = iterator.next().unwrap().parse::<usize>().unwrap();
+        let second_val = iterator.next().unwrap().parse::<usize>().unwrap();
+        
+        Ok(SetSKey{ val1: NodeIndex::new(first_val), val2: NodeIndex::new(second_val)})
+    }
+}
+*/
 #[derive(Debug, Serialize, Deserialize)]                                        
 pub struct FerriedData {                                                        
     pub set_s: IndexMap<                                                            

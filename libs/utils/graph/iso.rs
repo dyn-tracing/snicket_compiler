@@ -9,13 +9,38 @@ use pathfinding::directed::edmonds_karp::*;
 use petgraph::graph::{Graph, NodeIndex};
 use petgraph::visit::DfsPostOrder;
 use petgraph::{Incoming, Outgoing};
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Serializer, Deserializer};
 
 // -------------- Shamir Isomorphism Algorithm Helper Functions---------------
-#[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq)] 
+#[derive(Debug, Hash, Eq, PartialEq)] 
 pub struct SetSKey {
     pub val1: NodeIndex,
     pub val2: NodeIndex
+}
+impl Serialize for SetSKey
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&format!("({:?},{:?})", self.val1.index(), self.val2.index()))
+    }
+}
+
+impl<'de> Deserialize<'de> for SetSKey {
+    fn deserialize<D>(deserializer: D) -> Result<SetSKey, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let mut s: String = Deserialize::deserialize(deserializer)?;
+        s.remove(0);
+        s.remove(s.len()-1);
+        let mut iterator = s.split(",");
+        let first_val = iterator.next().unwrap().parse::<usize>().unwrap();
+        let second_val = iterator.next().unwrap().parse::<usize>().unwrap();
+
+        Ok(SetSKey{ val1: NodeIndex::new(first_val), val2: NodeIndex::new(second_val)})
+    }
 }
 
 /// Given two sets of nodes, set x from graph g, and set y from graph h,
@@ -392,6 +417,7 @@ pub fn find_mapping_shamir_decentralized(
 mod tests {
     use super::*;
     use crate::graph::graph_utils::get_node_with_id;
+    use serde_json;
 
     /// --------------- Graph Creation Helper functions -------------------
     fn three_node_graph() -> Graph<(String, IndexMap<String, String>), String> {
@@ -990,5 +1016,16 @@ mod tests {
         graph_g.add_edge(prod, reviews, String::new());
         let ret = find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, prod, true);
         assert!(ret.is_none());
+    }
+
+    #[test]
+    fn test_set_s_key_serialization() {
+        let set_s_key = SetSKey{ val1: NodeIndex::new(5), val2: NodeIndex::new(10)};
+        let key_as_str = serde_json::to_string(&set_s_key).unwrap();
+        print!("key as str: {:?}", key_as_str);
+        let back_to_key : SetSKey = serde_json::from_str(&key_as_str).unwrap();
+        assert!(back_to_key.val1 == NodeIndex::new(5));
+        assert!(back_to_key.val2 == NodeIndex::new(10));
+
     }
 }
