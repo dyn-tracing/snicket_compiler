@@ -305,6 +305,16 @@ impl CodeGen for CodeGenEnvoy {
         let end_root_block = "       }".to_string();
         self.trace_lvl_prop_blocks.push(end_root_block);
     }
+    fn make_trace_rpc_value(&mut self) {
+        let ret_block = "                                                       
+        match serde_yaml::to_string(fd) {                                       
+            Ok(trace_str) => { value = trace_str; }                             
+            Err(e) => { log::error!(\"Error:  could not translate ferried data to string\"); return; }\
+        }                                                                       
+        "
+        .to_string();
+        self.response_blocks.push(ret_block);
+    }
 
     fn make_storage_rpc_value_from_trace(&mut self, entity: String, property: String) {
         let mut prop_wo_periods = property.clone();
