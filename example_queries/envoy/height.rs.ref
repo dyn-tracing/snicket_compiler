@@ -1,0 +1,145 @@
+// ---------------------- Generated Functions ----------------------------
+
+use super::filter_base::fetch_property;
+use super::filter_base::HttpHeaders;
+use indexmap::IndexMap;
+use petgraph::graph::{Graph, NodeIndex};
+use utils::graph::graph_utils::generate_target_graph;
+use utils::graph::graph_utils::get_node_with_id;
+use utils::graph::serde::FerriedData;
+use utils::graph::serde::Property;
+
+// insert UDFs here
+// udf_type: Scalar
+// leaf_func: leaf_height
+// mid_func: mid_height
+// id: height
+
+fn leaf_height(_graph: &Graph<(String, IndexMap<String, String>), String>) -> u32 {
+    return 0;
+}
+
+// TODO:  must children's responses always be in string form?  can we generalize?
+fn mid_height(_graph: &Graph<(String, IndexMap<String, String>), String>, children_responses: Vec<String>) -> u32 {
+    let mut max = 0;
+    for response in children_responses {
+        let response_as_u32 = response.parse::<u32>();
+            match response_as_u32 {
+                Ok(num) => { if num > max { max = num; } }
+                Err(e) => { print!("error: {0}\n", e); }
+            }
+    }
+    return max + 1;
+}
+
+
+pub fn create_target_graph() -> Graph<
+    (
+        std::string::String,
+        IndexMap<std::string::String, std::string::String>,
+    ),
+    std::string::String,
+> {
+     let vertices = vec!( "a".to_string(),"b".to_string(),"c".to_string(), );
+        let edges = vec!(  ("a".to_string(), "b".to_string() ),  ("b".to_string(), "c".to_string() ),  );
+        let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
+        ids_to_properties.insert("a".to_string(), IndexMap::new());
+        ids_to_properties.insert("b".to_string(), IndexMap::new());
+        ids_to_properties.insert("c".to_string(), IndexMap::new());
+        let mut b_hashmap = ids_to_properties.get_mut("b").unwrap();
+        return generate_target_graph(vertices, edges, ids_to_properties);
+
+}
+
+pub fn collect_envoy_properties(
+    http_headers: &HttpHeaders,
+    fd: &mut FerriedData,
+) -> Result<(), ()> {
+    let mut prop_tuple: Property;
+    let mut prop_tuple_wrapped: Option<Property>;
+    
+    return Ok(());
+}
+
+pub fn execute_udfs_and_check_trace_lvl_prop(http_headers: &HttpHeaders, fd: &mut FerriedData) -> bool {
+    // Empty for this query, but in general, will be useful
+    let my_height_value;
+            let child_iterator = fd.trace_graph.neighbors_directed(
+                get_node_with_id(&fd.trace_graph, http_headers.workload_name.clone()).unwrap(),
+                petgraph::Outgoing);
+            let mut child_values = Vec::new();
+            for child in child_iterator {
+                child_values.push(fd.trace_graph.node_weight(child).unwrap().1["height"].clone());
+            }
+            if child_values.len() == 0 {
+                my_height_value = leaf_height(&fd.trace_graph).to_string();
+            } else {
+                my_height_value = mid_height(&fd.trace_graph, child_values).to_string();
+            }
+
+        
+        let node = get_node_with_id(&fd.trace_graph, http_headers.workload_name.clone()).unwrap();
+        // if we already have the property, don't add it
+        if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key("height") &&
+               fd.trace_graph.node_weight(node).unwrap().1["height"] == my_height_value ) {
+           fd.trace_graph.node_weight_mut(node).unwrap().1.insert(
+               "height".to_string(), my_height_value);
+        }
+        
+    let root_id = "productpage-v1";
+    
+            if &http_headers.workload_name == root_id {        let mut trace_prop_str : String;
+       }
+    return true;
+}
+
+pub fn get_value_for_storage(
+    target_graph: &Graph<
+        (
+            std::string::String,
+            IndexMap<std::string::String, std::string::String>,
+        ),
+        std::string::String,
+    >,
+    mapping: &Vec<(NodeIndex, NodeIndex)>,
+    stored_data: &FerriedData,
+) -> Option<String> {
+    let value: String;
+    let node_ptr = get_node_with_id(target_graph, "a".to_string());
+        if node_ptr.is_none() {
+           log::error!("Node a not found");
+                return None;
+        }
+        let mut trace_node_idx_opt = None;
+        for map in mapping {
+            if target_graph.node_weight(map.0).unwrap().0 == "a" {
+                trace_node_idx_opt = Some(map.1);
+                break;
+            }
+        }
+        if trace_node_idx_opt.is_none() {
+            log::error!("Node index a not found.");
+            // we have not yet collected the return property or have a mapping error
+            return None;
+        }
+        let trace_node_idx = trace_node_idx_opt.unwrap();
+        if !&stored_data
+            .trace_graph
+            .node_weight(trace_node_idx)
+            .unwrap()
+            .1
+            .contains_key("height")
+        {
+            // we have not yet collected the return property
+            log::error!("Missing return property height");
+            return None;
+        }
+        let ret_height = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ "height" ];
+
+        value = ret_height.to_string();
+
+
+    return Some(value);
+}
+
+

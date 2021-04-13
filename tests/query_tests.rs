@@ -6,7 +6,7 @@ use std::process::Command; // Run programs
 use test_case::test_case; // Parametrized tests
 
 #[test_case("get_service_name.cql", vec![]; "get_service_name")]
-#[test_case("height.cql", vec!["height.rs"]; "inconclusive - height")]
+#[test_case("height.cql", vec!["height.rs"]; "height")]
 #[test_case("histogram.cql", vec!["histogram.rs"]; "inconclusive - histogram")]
 #[test_case("request_size.cql", vec![]; "request_size")]
 #[test_case("request_size_avg.cql", vec![]; "inconclusive - request_size_avg")]
