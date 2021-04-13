@@ -26,40 +26,7 @@ use super::filter::check_trace_lvl_prop;
 use super::filter::get_value_for_storage;
 
 // ---------------------- General Helper Functions ----------------------------
-/*
 // TODO:  make inheritance work so putting this in a library works              
-#[derive(Debug, Hash, Eq, PartialEq)]
-pub struct SetSKey {
-    pub val1: NodeIndex,
-    pub val2: NodeIndex
-}
-
-impl Serialize for SetSKey
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&format!("({:?},{:?})", self.val1, self.val2))
-    }
-}
-
-impl<'de> Deserialize<'de> for SetSKey {
-    fn deserialize<D>(deserializer: D) -> Result<SetSKey, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let mut s: String = Deserialize::deserialize(deserializer)?;
-        s.remove(0);
-        s.remove(s.len()-1);
-        let mut iterator = s.split(",");
-        let first_val = iterator.next().unwrap().parse::<usize>().unwrap();
-        let second_val = iterator.next().unwrap().parse::<usize>().unwrap();
-        
-        Ok(SetSKey{ val1: NodeIndex::new(first_val), val2: NodeIndex::new(second_val)})
-    }
-}
-*/
 #[derive(Debug, Serialize, Deserialize)]                                        
 pub struct FerriedData {                                                        
     pub set_s: IndexMap<                                                            
@@ -119,7 +86,7 @@ impl FerriedData {
                 }
             }
         }
-                // 2. merge unassigned properties
+        // 2. merge unassigned properties
         //    these are properties we have collected but are not yet in the graph
         self.unassigned_properties.append(&mut other_data.unassigned_properties);
         self.unassigned_properties.sort_unstable();
@@ -582,13 +549,6 @@ impl HttpHeaders {
                     &mut stored_data.set_s,
                     get_node_with_id(&stored_data.trace_graph, self.workload_name.clone()).unwrap(),
                     am_root);
-            if stored_data.set_s.keys().count() > 0 {
-                log::warn!("put something in set s!");
-
-
-            }  else {
-                log::warn!("did not put anything in set s");
-            }
             if mapping_opt.is_some() && check_trace_lvl_prop(self, &mut stored_data) {
                 let mapping = mapping_opt.unwrap();
                 stored_data.found_match = true;
@@ -618,7 +578,7 @@ impl HttpHeaders {
                     Err(e) => log::error!("Failed to make a call to storage {:?}", e),
                 }
             } else {
-                log::warn!("Mapping not found at root {:?}", self.workload_name);
+                log::warn!("Mapping not found at {:?}", self.workload_name);
             }
         } else {
             log::warn!(
@@ -639,7 +599,6 @@ impl HttpHeaders {
         let stored_data_str = stored_data_str_opt.unwrap();
         // Set the header
         log::warn!("Attaching {:?}", stored_data_str);
-        log::warn!("Also this is done in a distributed way");
         self.set_http_response_header("ferried_data", Some(&stored_data_str));
     }
 

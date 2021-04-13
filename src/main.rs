@@ -186,7 +186,6 @@ fn main() {
             if distributed.is_none() {
                 handle_bar_str = "envoy_filter.rs.handlebars";
             } else {
-                print!("AM DISTRIBUTED");
                 handle_bar_str = "distributed_envoy_filter.rs.handlebars";
             }
             write_to_handlebars(
