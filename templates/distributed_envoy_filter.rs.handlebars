@@ -12,6 +12,9 @@ use utils::graph::serde::Property;
 // insert UDFs here
 {{#each scalar_udf_table}}{{{this.func_impl}}}{{/each}}
 
+pub fn get_root_name() -> String {
+    return "{{{this.ir.root_id}}}".to_string();
+}
 pub fn create_target_graph() -> Graph<
     (
         std::string::String,

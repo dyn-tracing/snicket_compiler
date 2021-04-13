@@ -357,7 +357,6 @@ impl Filter {
         // 3. update isomorphism and possibly return
         if !ferried_data.found_match {
             let am_root = self.whoami.as_ref().unwrap() == "{{this.ir.root_id}}";
-            execute_udfs(self, &mut ferried_data);
             let mapping = find_mapping_shamir_decentralized(
                 &ferried_data.trace_graph,
                 self.target_graph.as_ref().unwrap(),

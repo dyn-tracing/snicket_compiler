@@ -15,6 +15,7 @@ use serde::{Serialize, Deserialize};
 
 use utils::graph::iso::SetSKey;
 use utils::graph::iso::find_mapping_shamir_decentralized;
+use utils::graph::iso::find_mapping_shamir_centralized;
 use utils::graph::graph_utils::get_node_with_id;
 use utils::graph::serde::Property;
 
@@ -24,6 +25,7 @@ use super::filter::create_target_graph;
 use super::filter::execute_udfs;
 use super::filter::check_trace_lvl_prop;
 use super::filter::get_value_for_storage;
+use super::filter::get_root_name;
 
 // ---------------------- General Helper Functions ----------------------------
 // TODO:  make inheritance work so putting this in a library works              
@@ -537,10 +539,15 @@ impl HttpHeaders {
                 .add_edge(me, previous_root, String::new());
         }
         stored_data.assign_properties();
+        execute_udfs(self, &mut stored_data);
 
         if !stored_data.found_match {
-            let am_root = self.workload_name == "{{this.ir.root_id}}";
-            execute_udfs(self, &mut stored_data);
+            let am_root = self.workload_name == get_root_name();
+            log::warn!("am root is {:?}", am_root);
+            log::warn!("I am {:?}", self.workload_name);
+            log::warn!("root id is {:?}", get_root_name());
+            let new_am_root = self.workload_name == get_root_name();
+            log::warn!("new am root is {:?}", new_am_root);
 
             let mapping_opt =
                 find_mapping_shamir_decentralized(
@@ -549,6 +556,13 @@ impl HttpHeaders {
                     &mut stored_data.set_s,
                     get_node_with_id(&stored_data.trace_graph, self.workload_name.clone()).unwrap(),
                     am_root);
+            let cent_mapping_opt = find_mapping_shamir_centralized(&stored_data.trace_graph, &self.target_graph);
+            if cent_mapping_opt.is_some() {
+                log::warn!("centralized found mapping");
+            } else {
+                log::warn!("centralized did not find mapping");
+
+            }
             if mapping_opt.is_some() && check_trace_lvl_prop(self, &mut stored_data) {
                 let mapping = mapping_opt.unwrap();
                 stored_data.found_match = true;
