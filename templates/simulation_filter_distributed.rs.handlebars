@@ -4,6 +4,7 @@ use petgraph::graph::{Graph, NodeIndex};
 use petgraph::Incoming;
 use utils::graph::graph_utils;
 use utils::graph::iso::find_mapping_shamir_decentralized;
+use utils::graph::iso::SetSKey;
 use serde::{Serialize, Deserialize};
 use utils::graph::serde::Property;
 
@@ -15,7 +16,7 @@ pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FerriedData {
     set_s: IndexMap<                                                           
-        (NodeIndex, NodeIndex),                                                 
+        SetSKey,                                                 
         IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,               
     >,
     found_match: bool,
@@ -94,7 +95,7 @@ impl FerriedData {
                 // TODO:  there's gotta be a better way to do this              
                                                                                 
                 // because all target graphs are constructed the same, we don't touch the second entry
-                let new_entry = (prev_nodes_to_new_nodes[&entry.0], entry.1);   
+                let new_entry = SetSKey { val1: prev_nodes_to_new_nodes[&entry.val1], val2: entry.val2};
                 let mut new_indexmap : IndexMap<NodeIndex, _> = IndexMap::new();
                 for inner_indexmap_key in other_data.set_s[entry].keys() {      
                     if other_data.set_s[entry][inner_indexmap_key].is_none() {  
@@ -109,7 +110,7 @@ impl FerriedData {
                         new_indexmap.insert(*inner_indexmap_key, Some(new_inner_indexmap_vec));
                     }                                                           
                 }                                                               
-                self.set_s.insert(new_entry, new_indexmap);                     
+                self.set_s.insert(new_entry, new_indexmap); 
             }                                                                   
         }                                                                       
     }
@@ -356,7 +357,6 @@ impl Filter {
         // 3. update isomorphism and possibly return
         if !ferried_data.found_match {
             let am_root = self.whoami.as_ref().unwrap() == "{{this.ir.root_id}}";
-            execute_udfs(self, &mut ferried_data);
             let mapping = find_mapping_shamir_decentralized(
                 &ferried_data.trace_graph,
                 self.target_graph.as_ref().unwrap(),

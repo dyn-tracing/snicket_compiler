@@ -1,0 +1,64 @@
+// ---------------------- Generated Functions ----------------------------
+
+use super::filter_base::fetch_property;
+use super::filter_base::HttpHeaders;
+use super::filter_base::FerriedData;
+use indexmap::IndexMap;
+use petgraph::graph::{Graph, NodeIndex};
+use utils::graph::graph_utils::generate_target_graph;
+use utils::graph::graph_utils::get_node_with_id;
+use utils::graph::serde::Property;
+
+// insert UDFs here
+{{#each scalar_udf_table}}{{{this.func_impl}}}{{/each}}
+
+pub fn get_root_name() -> String {
+    return "{{{this.ir.root_id}}}".to_string();
+}
+pub fn create_target_graph() -> Graph<
+    (
+        std::string::String,
+        IndexMap<std::string::String, std::string::String>,
+    ),
+    std::string::String,
+> {
+    {{#each target_blocks}}{{{this}}}{{/each}}
+}
+
+pub fn collect_envoy_properties(
+    http_headers: &HttpHeaders,
+    fd: &mut FerriedData,
+) -> Result<(), ()> {
+    let mut prop_tuple: Property;
+    let mut prop_tuple_wrapped: Option<Property>;
+    {{#each request_blocks}}{{{this}}}{{/each}}
+    return Ok(());
+}
+pub fn execute_udfs(http_headers: &HttpHeaders, fd: &mut FerriedData) {
+    {{#each udf_blocks}}{{{this}}}{{/each}}
+}
+pub fn check_trace_lvl_prop(http_headers: &HttpHeaders, fd: &mut FerriedData) -> bool {
+    // Empty for this query, but in general, will be useful
+    let root_id = "{{this.ir.root_id}}";
+    {{#each trace_lvl_prop_blocks}}{{{this}}}{{/each}}
+    return true;
+}
+
+pub fn get_value_for_storage(
+    target_graph: &Graph<
+        (
+            std::string::String,
+            IndexMap<std::string::String, std::string::String>,
+        ),
+        std::string::String,
+    >,
+    mapping: &Vec<(NodeIndex, NodeIndex)>,
+    stored_data: &FerriedData,
+) -> Option<String> {
+    let value: String;
+    {{#each response_blocks}}{{{this}}}{{/each}}
+
+    return Some(value);
+}
+
+
