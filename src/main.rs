@@ -107,7 +107,7 @@ fn main() {
                 .short("d")
                 .long("distributed")
                 .value_name("DISTRUBTED")
-                .takes_value(true)
+                .takes_value(false)
                 .help("If flagged, makes isomorphism distributed"),
         )
         .arg(
@@ -142,7 +142,6 @@ fn main() {
     // Read query from file specified by command line argument.
     let query_file = matches.value_of("query").unwrap();
     let root_id = matches.value_of("root_node").unwrap();
-    let distributed = matches.value_of("distributed");
     let query: String = fs::read_to_string(query_file).unwrap();
     let query_stream = InputStream::new_owned(query.into_boxed_str());
     let lexer = CypherLexer::new_with_token_factory(query_stream, &tf);
@@ -163,7 +162,7 @@ fn main() {
             let codegen_object =
                 codegen_simulator::CodeGenSimulator::generate_code_blocks(visitor_results, udfs);
             let handle_bar_str: &str;
-            if distributed.is_none() {
+            if !matches.is_present("distributed") {
                 handle_bar_str = "simulation_filter.rs.handlebars";
             } else {
                 handle_bar_str = "simulation_filter_distributed.rs.handlebars";
@@ -183,7 +182,7 @@ fn main() {
             let codegen_object =
                 codegen_envoy::CodeGenEnvoy::generate_code_blocks(visitor_results, udfs);
             let handle_bar_str: &str;
-            if distributed.is_none() {
+            if !matches.is_present("distributed") {
                 handle_bar_str = "envoy_filter.rs.handlebars";
             } else {
                 handle_bar_str = "distributed_envoy_filter.rs.handlebars";

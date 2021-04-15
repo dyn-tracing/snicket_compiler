@@ -18,3 +18,4 @@ petgraph = { path = "../petgraph" , features = ["serde-1"] }
 rpc_lib = { path = "../rpc_lib" }
 graph_utils = { path = "../graph_utils" }
 indexmap = { version = "1.6.1", features = ["serde-1"] }
+serde_json = "1.0"
