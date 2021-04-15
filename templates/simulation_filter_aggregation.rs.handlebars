@@ -11,7 +11,7 @@ use log4rs::{
 };
 
 use serde::{Serialize, Deserialize};
-extern crate serde_yaml;
+extern crate serde_json;
 
 pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
 

@@ -286,7 +286,7 @@ impl CodeGen for CodeGenEnvoy {
                 if ! ( fd.trace_graph.node_weight(root_node).unwrap().1.contains_key(\"{prop_name}\") &&
                     fd.trace_graph.node_weight(root_node).unwrap().1[\"{prop_name}\"] == \"{value}\" ){{
                     // TODO:  replace fd
-                    match serde_yaml::to_string(&fd) {{
+                    match serde_json::to_string(&fd) {{
                         Ok(fd_str) => {{
                             return false;
                         }}
@@ -307,7 +307,7 @@ impl CodeGen for CodeGenEnvoy {
     }
     fn make_trace_rpc_value(&mut self) {
         let ret_block = "                                                       
-        match serde_yaml::to_string(fd) {                                       
+        match serde_json::to_string(fd) {                                       
             Ok(trace_str) => { value = trace_str; }                             
             Err(e) => { log::error!(\"Error:  could not translate ferried data to string\"); return; }\
         }                                                                       

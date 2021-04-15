@@ -17,7 +17,7 @@ use log4rs::{
 };
 
 use serde::{Serialize, Deserialize};
-extern crate serde_yaml;
+extern crate serde_json;
 
 pub type CodeletType = fn(&Filter, &Rpc) -> Option<Rpc>;
 fn log_setup() {                                                                
@@ -58,7 +58,7 @@ fn log_setup() {
 
 
 fn put_ferried_data_in_hdrs(fd: &mut FerriedData, hdr: &mut IndexMap<String,String>) {
-    match serde_yaml::to_string(fd) {
+    match serde_json::to_string(fd) {
         Ok(stored_data_string) => {
             hdr.insert("ferried_data".to_string(), stored_data_string);
         }
@@ -181,11 +181,11 @@ impl Filter {
         let mut data: FerriedData;
         let mut stored_data: FerriedData;
 
-        match serde_yaml::from_str(&headers["ferried_data"]) {
+        match serde_json::from_str(&headers["ferried_data"]) {
             Ok(d) => { data = d; }
             Err(e) => { log::error!("could not parse envoy shared data: {0}\n", e); return; }
         }
-        match serde_yaml::from_str(&self.envoy_shared_data[&uid]) {
+        match serde_json::from_str(&self.envoy_shared_data[&uid]) {
             Ok(d) => { stored_data = d; }
             Err(e) => { log::error!("could not parse envoy shared data: {0}\n", e); return; }
         }
@@ -222,7 +222,7 @@ impl Filter {
         stored_data.unassigned_properties.dedup();
         stored_data.assign_properties();
 
-        match serde_yaml::to_string(&stored_data) {
+        match serde_json::to_string(&stored_data) {
             Ok(stored_data_string) => {
                 self.envoy_shared_data.insert(uid, stored_data_string);
             }
@@ -239,7 +239,7 @@ impl Filter {
         my_indexmap.insert("node.metadata.WORKLOAD_NAME".to_string(), self.whoami.as_ref().unwrap().clone());
 
         if self.envoy_shared_data.contains_key(&uid_str) {
-            match serde_yaml::from_str(&self.envoy_shared_data[&uid_str]) {
+            match serde_json::from_str(&self.envoy_shared_data[&uid_str]) {
                 Ok(d) => {
                     // 1. TODO:  if needed, do things to set S
                     // 2. If response, add yourself as root
@@ -282,7 +282,7 @@ impl Filter {
         if !x.headers.contains_key("ferried_data") {
             ferried_data = FerriedData::default();
         } else {
-            match serde_yaml::from_str(&x.headers["ferried_data"]) {
+            match serde_json::from_str(&x.headers["ferried_data"]) {
                 Ok(fd) => { ferried_data = fd; }
                 Err(e) => {
                     log::error!("could not translate stored data to json string: {0}\n", e);
@@ -314,7 +314,7 @@ impl Filter {
         if !original_rpc.headers.contains_key("ferried_data") {
             ferried_data = FerriedData::default();
         } else {
-            match serde_yaml::from_str(&mut original_rpc.headers["ferried_data"]) {
+            match serde_json::from_str(&mut original_rpc.headers["ferried_data"]) {
                 Ok(fd) => { ferried_data = fd; }
                 Err(e) => { log::error!("could not parse ferried data: {0}\n", e); return vec![original_rpc]; }
             }

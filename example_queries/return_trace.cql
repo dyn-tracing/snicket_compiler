@@ -1,1 +1,1 @@
-MATCH (a) -[]-> (b {} )-[]->(c) RETURN trace
+MATCH (a) -[]-> (b)-[]->(c) RETURN trace
