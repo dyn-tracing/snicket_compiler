@@ -100,7 +100,7 @@ fn main() {
                 .takes_value(true)
                 .possible_values(&compile_vals)
                 .default_value("envoy")
-                .help("Sets what to compile to:  the simulator (sim) or envoy wasm filter (rs)"),
+                .help("Sets what to compile to: the simulator (sim) or envoy wasm filter (rs)"),
         )
         .arg(
             Arg::with_name("distributed")

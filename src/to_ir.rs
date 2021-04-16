@@ -15,6 +15,58 @@ use std::rc::Rc;
 // FilterVisitor:  visits tree and fills out structural and property filters
 /***********************************/
 
+pub struct PropertyVisitor {
+    property: Option<Property>,
+}
+
+impl Default for PropertyVisitor {
+    fn default() -> PropertyVisitor {
+        PropertyVisitor { property: None }
+    }
+}
+
+impl<'i> ParseTreeVisitor<'i, CypherParserContextType> for PropertyVisitor {
+    fn visit_terminal(&mut self, _node: &TerminalNode<'i, CypherParserContextType>) {}
+}
+
+impl<'i> CypherVisitor<'i> for PropertyVisitor {
+    fn visit_oC_PropertyOrLabelsExpression(
+        &mut self,
+        prop: &OC_PropertyOrLabelsExpressionContext<'i>,
+    ) {
+        log::debug!("Generating Property");
+        let atom = prop.oC_Atom().unwrap();
+        let entity: String;
+        if let Some(var) = atom.oC_Variable() {
+            entity = var.get_text();
+            log::debug!("Storing var: {:?}", entity);
+        } else if let Some(var) = atom.oC_Literal() {
+            entity = var.get_text();
+            log::debug!("Storing literal: {:?}", entity);
+        } else {
+            log::error!(
+                "Unsupported expression {:?}. Has type {:?}",
+                atom.get_text(),
+                ruleNames[atom.get_child(0).unwrap().get_rule_index()]
+            );
+            process::exit(1);
+        }
+
+        let mut property_vec = vec![];
+        for property in prop.oC_PropertyLookup_all() {
+            property_vec.push(property.get_text());
+        }
+        self.property = Some(Property {
+            parent: entity,
+            members: property_vec,
+        })
+    }
+}
+
+/***********************************/
+// FilterVisitor:  visits tree and fills out structural and property filters
+/***********************************/
+
 pub struct FilterVisitor {
     struct_filters: Vec<StructuralFilter>,
     attr_filters: Vec<AttributeFilter>,
@@ -165,6 +217,7 @@ pub struct ReturnVisitor {
     aggregate: Option<Aggregate>,
     return_items: Vec<IrReturn>,
     return_udfs: Vec<UdfCall>,
+    collected: Vec<Property>,
 }
 
 impl Default for ReturnVisitor {
@@ -174,6 +227,7 @@ impl Default for ReturnVisitor {
             aggregate: None,
             return_items: Vec::new(),
             return_udfs: Vec::new(),
+            collected: Vec::new(),
         }
     }
 }
@@ -191,10 +245,17 @@ impl<'i> ReturnVisitor {
             panic!("Compiler Bug: Missing UDF name.")
         }
         let mut udf_args = vec![];
+        // TODO: We should not allocate a property visitor for each call
+        let mut prop_visitor = PropertyVisitor::default();
         for arg in func.oC_Expression_all() {
+            arg.accept(&mut prop_visitor);
             // TODO: These can be complicated expressions
             // For now we expect a simple entity reference
-            udf_args.push(arg.get_text());
+            if let Some(ref property) = prop_visitor.property {
+                udf_args.push(property.clone());
+            } else {
+                panic!("Unable to process property.")
+            }
         }
         log::debug!(
             "Storing UDF with name: {:?} and args {:?}",
@@ -222,9 +283,11 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
         let entity: String;
         if let Some(func) = atom.oC_FunctionInvocation() {
             entity = func.get_text();
-            // TODO: We can make this UDF more precise
             log::debug!("Storing UDF: {:?}", entity);
-            self.return_udfs.push(self.produce_udf_call(&func));
+            let ret_udf = self.produce_udf_call(&func);
+            // TODO: We should also track the properties that are UDF arguments
+            self.return_udfs.push(ret_udf);
+            // TODO: We should return here.
         } else if let Some(var) = atom.oC_Variable() {
             entity = var.get_text();
             log::debug!("Storing var: {:?}", entity);
@@ -241,15 +304,21 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
         }
 
         let mut property_str = String::new();
+        let mut property_vec = vec![];
         for property in ctx.oC_PropertyLookup_all() {
             // this includes the dots
-            property_str.push_str(&property.get_text())
+            property_vec.push(property.get_text());
+            property_str.push_str(&property.get_text());
         }
         log::debug!("Property String {:?}", property_str);
         self.return_items.push(IrReturn {
-            entity,
+            entity: entity.to_string(),
             property: property_str,
-        })
+        });
+        self.collected.push(Property {
+            parent: entity,
+            members: property_vec,
+        });
     }
 
     fn visit_oC_ProjectionItems(&mut self, ctx: &OC_ProjectionItemsContext<'i>) {

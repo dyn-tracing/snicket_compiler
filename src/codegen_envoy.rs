@@ -14,16 +14,25 @@ use std::str::FromStr;
 /********************************/
 #[derive(Serialize)]
 pub struct CodeGenEnvoy {
-    ir: VisitorResults,                            // the IR, as defined in to_ir.rs
-    request_blocks: Vec<String>,                   // code blocks used in incoming requests
-    response_blocks: Vec<String>, // code blocks in outgoing responses, after matching
-    target_blocks: Vec<String>,   // code blocks to create target graph
-    udf_blocks: Vec<String>, // code blocks to be used in outgoing responses, to compute UDF before matching
-    trace_lvl_prop_blocks: Vec<String>, // code blocks to be used in outgoing responses, to compute UDF before matching
-    scalar_udf_table: IndexMap<String, ScalarUdf>, // where we store udf implementations
-    aggregation_udf_table: IndexMap<String, AggregationUdf>, // where we store udf implementations
+    // the IR, as defined in to_ir.rs
+    ir: VisitorResults,
+    // code blocks used in incoming requests
+    request_blocks: Vec<String>,
+    // code blocks in outgoing responses, after matching
+    response_blocks: Vec<String>,
+    // code blocks to create target graph
+    target_blocks: Vec<String>,
+    // code blocks to be used in outgoing responses, to compute UDF before matching
+    udf_blocks: Vec<String>,
+    // code blocks to be used in outgoing responses, to compute UDF before matching
+    trace_lvl_prop_blocks: Vec<String>,
+    // where we store udf implementations
+    scalar_udf_table: IndexMap<String, ScalarUdf>,
+    // where we store udf implementations
+    aggregation_udf_table: IndexMap<String, AggregationUdf>,
     envoy_properties: Vec<String>,
-    collected_properties: Vec<String>, // all the properties we collect
+    // all the properties we collect
+    collected_properties: Vec<String>,
 }
 
 impl CodeGen for CodeGenEnvoy {
@@ -306,11 +315,11 @@ impl CodeGen for CodeGenEnvoy {
         self.trace_lvl_prop_blocks.push(end_root_block);
     }
     fn make_trace_rpc_value(&mut self) {
-        let ret_block = "                                                       
-        match serde_json::to_string(fd) {                                       
-            Ok(trace_str) => { value = trace_str; }                             
+        let ret_block = "
+        match serde_json::to_string(fd) {
+            Ok(trace_str) => { value = trace_str; }
             Err(e) => { log::error!(\"Error:  could not translate ferried data to string\"); return; }\
-        }                                                                       
+        }
         "
         .to_string();
         self.response_blocks.push(ret_block);
