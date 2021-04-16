@@ -164,6 +164,7 @@ pub struct ReturnVisitor {
     return_expr: Option<IrReturn>,
     aggregate: Option<Aggregate>,
     return_items: Vec<IrReturn>,
+    return_udfs: Vec<UdfCall>,
 }
 
 impl Default for ReturnVisitor {
@@ -172,12 +173,35 @@ impl Default for ReturnVisitor {
             return_expr: None,
             aggregate: None,
             return_items: Vec::new(),
+            return_udfs: Vec::new(),
         }
     }
 }
 
 impl<'i> ParseTreeVisitor<'i, CypherParserContextType> for ReturnVisitor {
     fn visit_terminal(&mut self, _node: &TerminalNode<'i, CypherParserContextType>) {}
+}
+
+impl<'i> ReturnVisitor {
+    fn produce_udf_call(
+        &self,
+        func: &OC_FunctionInvocationContext<'i>,
+    ) -> UdfCall{
+        let udf_name : String;
+        if let Some(udf_name_) = func.oC_FunctionName() {
+            udf_name = udf_name_.get_text();
+        } else {
+            panic!("Compiler Bug: Missing UDF name.")
+        }
+        let mut udf_args  = vec![];
+        for arg in func.oC_Expression_all() {
+            // TODO: These can be complicated expressions
+            // For now we expect a simple entity reference
+            udf_args.push(arg.get_text());
+        }
+        log::debug!("Storing UDF with name: {:?} and args {:?}", udf_name, udf_args);
+        return UdfCall{id: udf_name, args: udf_args };
+    }
 }
 
 impl<'i> CypherVisitor<'i> for ReturnVisitor {
@@ -196,6 +220,7 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
             entity = func.get_text();
             // TODO: We can make this UDF more precise
             log::debug!("Storing UDF: {:?}", entity);
+            self.return_udfs.push(self.produce_udf_call(&func));
         } else if let Some(var) = atom.oC_Variable() {
             entity = var.get_text();
             log::debug!("Storing var: {:?}", entity);

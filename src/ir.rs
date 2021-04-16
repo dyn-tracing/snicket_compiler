@@ -82,3 +82,12 @@ impl Aggregate {
         }
     }
 }
+
+
+#[derive(Clone, Debug, Serialize)]
+pub struct UdfCall {
+    pub id: String,
+    //TODO: Args may also be UDF calls
+    pub args: Vec<String>,
+}
+
