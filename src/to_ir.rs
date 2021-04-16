@@ -217,7 +217,7 @@ pub struct ReturnVisitor {
     aggregate: Option<Aggregate>,
     return_items: Vec<IrReturn>,
     return_udfs: Vec<UdfCall>,
-    collected: Vec<Property>,
+    collected_properties: Vec<Property>,
 }
 
 impl Default for ReturnVisitor {
@@ -227,7 +227,7 @@ impl Default for ReturnVisitor {
             aggregate: None,
             return_items: Vec::new(),
             return_udfs: Vec::new(),
-            collected: Vec::new(),
+            collected_properties: Vec::new(),
         }
     }
 }
@@ -237,7 +237,11 @@ impl<'i> ParseTreeVisitor<'i, CypherParserContextType> for ReturnVisitor {
 }
 
 impl<'i> ReturnVisitor {
-    fn produce_udf_call(&self, func: &OC_FunctionInvocationContext<'i>) -> UdfCall {
+    fn produce_udf_call(
+        &self,
+        prop_visitor: &mut PropertyVisitor,
+        func: &OC_FunctionInvocationContext<'i>,
+    ) -> UdfCall {
         let udf_name: String;
         if let Some(udf_name_) = func.oC_FunctionName() {
             udf_name = udf_name_.get_text();
@@ -246,9 +250,8 @@ impl<'i> ReturnVisitor {
         }
         let mut udf_args = vec![];
         // TODO: We should not allocate a property visitor for each call
-        let mut prop_visitor = PropertyVisitor::default();
         for arg in func.oC_Expression_all() {
-            arg.accept(&mut prop_visitor);
+            arg.accept(prop_visitor);
             // TODO: These can be complicated expressions
             // For now we expect a simple entity reference
             if let Some(ref property) = prop_visitor.property {
@@ -284,10 +287,6 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
         if let Some(func) = atom.oC_FunctionInvocation() {
             entity = func.get_text();
             log::debug!("Storing UDF: {:?}", entity);
-            let ret_udf = self.produce_udf_call(&func);
-            // TODO: We should also track the properties that are UDF arguments
-            self.return_udfs.push(ret_udf);
-            // TODO: We should return here.
         } else if let Some(var) = atom.oC_Variable() {
             entity = var.get_text();
             log::debug!("Storing var: {:?}", entity);
@@ -302,12 +301,9 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
             );
             process::exit(1);
         }
-
         let mut property_str = String::new();
-        let mut property_vec = vec![];
         for property in ctx.oC_PropertyLookup_all() {
             // this includes the dots
-            property_vec.push(property.get_text());
             property_str.push_str(&property.get_text());
         }
         log::debug!("Property String {:?}", property_str);
@@ -315,10 +311,26 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
             entity: entity.to_string(),
             property: property_str,
         });
-        self.collected.push(Property {
-            parent: entity,
-            members: property_vec,
-        });
+
+        // This is the new code, the section above can be cut
+
+        // TODO: We should not allocate a property visitor for each call
+        // Make this a global struct member
+        let mut prop_visitor = PropertyVisitor::default();
+        if let Some(func) = atom.oC_FunctionInvocation() {
+            let ret_udf = self.produce_udf_call(&mut prop_visitor, &func);
+            // TODO: We should also track the properties that are UDF arguments
+            self.return_udfs.push(ret_udf);
+            return;
+        }
+        ctx.accept(&mut prop_visitor);
+        // TODO: These can be complicated expressions
+        // For now we expect a simple entity reference
+        if let Some(ref property) = prop_visitor.property {
+            self.collected_properties.push(property.clone());
+        } else {
+            panic!("Unable to process property.")
+        }
     }
 
     fn visit_oC_ProjectionItems(&mut self, ctx: &OC_ProjectionItemsContext<'i>) {
@@ -441,7 +453,7 @@ mod tests {
         let tf = CommonTokenFactory::default();
         let result = run_parser(
             &tf,
-            "MATCH (a) -[]-> (b)-[]->(c) WHERE b.metadata.WORKLOAD_NAME = 'reviews-v1' RETURN a.request_size",
+            "MATCH (a) -[]-> (b)-[]->(c) WHERE b.metadata.WORKLOAD_NAME = 'reviews-v1' RETURN a.request.total_size",
         );
         let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
@@ -453,8 +465,8 @@ mod tests {
         let tf = CommonTokenFactory::default();
         let result = run_parser(
             &tf,
-            "MATCH (a {}) -[]->(b {}) -[]->(c {}) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' RETURN a.request_size"
-            // "MATCH (a) -[]-> (b) -[]-> (c) RETURN a.request_size",
+            "MATCH (a {}) -[]->(b {}) -[]->(c {}) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' RETURN a.request.total_size"
+            // "MATCH (a) -[]-> (b) -[]-> (c) RETURN a.request.total_size",
         );
         let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
@@ -482,7 +494,7 @@ mod tests {
         let tf = CommonTokenFactory::default();
         let result = run_parser(
             &tf,
-            "MATCH (a) -[]-> (b {})-[]->(c) WHERE trace.latency = 500 RETURN a.request_size",
+            "MATCH (a) -[]-> (b {})-[]->(c) WHERE trace.latency = 500 RETURN a.request.total_size",
         );
         let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
@@ -494,9 +506,31 @@ mod tests {
     }
 
     #[test]
+    fn test_return_udf() {
+        let tf = CommonTokenFactory::default();
+        let result = run_parser(&tf, "MATCH (a) -[]-> (b {})-[]->(c) RETURN height(a)");
+        let mut visitor = FilterVisitor::default();
+        let _res = result.accept(&mut visitor);
+        assert!(!visitor.struct_filters.is_empty());
+        let mut visitor = ReturnVisitor::default();
+        let _res = result.accept(&mut visitor);
+        // TODO: Kinda ugly. Fix up
+        assert!(
+            visitor.return_udfs
+                == vec![UdfCall {
+                    id: "height".to_string(),
+                    args: vec![Property {
+                        parent: "a".to_string(),
+                        members: vec![]
+                    }]
+                }]
+        );
+    }
+
+    #[test]
     fn test_match_multiple_where() {
         let tf = CommonTokenFactory::default();
-        let result = run_parser(&tf, "MATCH (a) -[]-> (b {})-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' AND b.latency = 500 AND trace.client = xyz RETURN a.request_size");
+        let result = run_parser(&tf, "MATCH (a) -[]-> (b {})-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' AND b.latency = 500 AND trace.client = xyz RETURN a.request.total_size");
         let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
         assert!(!visitor.struct_filters.is_empty());
@@ -515,14 +549,14 @@ mod tests {
         let tf = CommonTokenFactory::default();
         let result = run_parser(
             &tf,
-            "MATCH (a) -[]-> (b {})-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' RETURN a.request_size",
+            "MATCH (a) -[]-> (b {})-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' RETURN a.request.total_size",
         );
         let mut visitor = ReturnVisitor::default();
         let _res = result.accept(&mut visitor);
         let ret = visitor.return_expr.unwrap();
         assert!(ret.entity == "a");
         assert!(
-            ret.property == ".request_size",
+            ret.property == ".request.total_size",
             "property is {:?}",
             ret.property
         );
@@ -533,19 +567,20 @@ mod tests {
         let tf = CommonTokenFactory::default();
         let result = run_parser(
             &tf,
-            "MATCH (a) -[]-> (b {})-[]->(c) RETURN a.return_code, histogram(a.request_size) ",
+            "MATCH (a) -[]-> (b {})-[]->(c) RETURN a.return_code, histogram(a.request.total_size) ",
         );
         let mut visitor = ReturnVisitor::default();
         let _res = result.accept(&mut visitor);
-        assert!(visitor.aggregate.as_ref().unwrap().udf_id == "histogram(a.request_size)");
+        assert!(visitor.aggregate.as_ref().unwrap().udf_id == "histogram(a.request.total_size)");
         assert!(visitor.aggregate.as_ref().unwrap().entity == "a");
         assert!(visitor.aggregate.as_ref().unwrap().property == ".return_code");
+        assert!(visitor.return_udfs.get(0).unwrap().id == "histogram");
     }
 
     #[test]
     fn test_map() {
         let tf = CommonTokenFactory::default();
-        let result = run_parser(&tf, "MATCH (a) -[]-> (b)-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' RETURN a.return_code, histogram(a.request_size) ");
+        let result = run_parser(&tf, "MATCH (a) -[]-> (b)-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' RETURN a.return_code, histogram(a.request.total_size) ");
         let mut filter_visitor = FilterVisitor::default();
         let mut return_visitor = ReturnVisitor::default();
         let _res = result.accept(&mut filter_visitor);
