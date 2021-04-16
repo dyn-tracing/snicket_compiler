@@ -308,7 +308,7 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
         }
         log::debug!("Property String {:?}", property_str);
         self.return_items.push(IrReturn {
-            entity: entity.to_string(),
+            entity,
             property: property_str,
         });
 
