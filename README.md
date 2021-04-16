@@ -21,8 +21,10 @@ After, the binary can be found in the `bin` folder.
 
 # Examples
 - Compile a counting query with the user defined function "height" and result will be written to `rust_filter/filter.rs`.
+
 `target/release/snicket -q example_queries/height.cql -u example_udfs/height.rs -o rust_filter/filter.rs -c sim -r productpage-v1`
 
 - Compile `service_name` query and result wiil be written to default location to `filter_envoy/filter.rs`
+
 `target/debug/dtc -q example_queries/get_service_name.cql -o rust_filter/filter.rs -c sim -r productpage-v1`
 
