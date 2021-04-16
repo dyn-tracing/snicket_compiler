@@ -183,24 +183,28 @@ impl<'i> ParseTreeVisitor<'i, CypherParserContextType> for ReturnVisitor {
 }
 
 impl<'i> ReturnVisitor {
-    fn produce_udf_call(
-        &self,
-        func: &OC_FunctionInvocationContext<'i>,
-    ) -> UdfCall{
-        let udf_name : String;
+    fn produce_udf_call(&self, func: &OC_FunctionInvocationContext<'i>) -> UdfCall {
+        let udf_name: String;
         if let Some(udf_name_) = func.oC_FunctionName() {
             udf_name = udf_name_.get_text();
         } else {
             panic!("Compiler Bug: Missing UDF name.")
         }
-        let mut udf_args  = vec![];
+        let mut udf_args = vec![];
         for arg in func.oC_Expression_all() {
             // TODO: These can be complicated expressions
             // For now we expect a simple entity reference
             udf_args.push(arg.get_text());
         }
-        log::debug!("Storing UDF with name: {:?} and args {:?}", udf_name, udf_args);
-        return UdfCall{id: udf_name, args: udf_args };
+        log::debug!(
+            "Storing UDF with name: {:?} and args {:?}",
+            udf_name,
+            udf_args
+        );
+        UdfCall {
+            id: udf_name,
+            args: udf_args,
+        }
     }
 }
 
