@@ -97,4 +97,4 @@ pub struct Property {
     pub members: Vec<String>,
 }
 
-type EntityReference = String;
+pub type EntityReference = String;

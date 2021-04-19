@@ -105,6 +105,7 @@ pub struct FilterVisitor {
     struct_filters: Vec<StructuralFilter>,
     attr_filters: Vec<AttributeFilter>,
     return_items: Vec<IrReturn>,
+    property_references: Vec<EntityReference>,
 }
 
 impl Default for FilterVisitor {
@@ -113,6 +114,7 @@ impl Default for FilterVisitor {
             struct_filters: Vec::new(),
             attr_filters: Vec::new(),
             return_items: Vec::new(),
+            property_references: Vec::new(),
         }
     }
 }
@@ -161,7 +163,8 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
         self.return_items.push(IrReturn {
             entity,
             property: property_str,
-        })
+        });
+        self.property_references.push(ctx.get_text());
     }
 
     fn visit_oC_ComparisonExpression(&mut self, ctx: &OC_ComparisonExpressionContext<'i>) {
@@ -250,6 +253,7 @@ pub struct ReturnVisitor {
     return_expr: Option<IrReturn>,
     aggregate: Option<Aggregate>,
     return_items: Vec<IrReturn>,
+    property_references: Vec<EntityReference>,
 }
 
 impl Default for ReturnVisitor {
@@ -258,6 +262,7 @@ impl Default for ReturnVisitor {
             return_expr: None,
             aggregate: None,
             return_items: Vec::new(),
+            property_references: Vec::new(),
         }
     }
 }
@@ -307,8 +312,7 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
             entity,
             property: property_str,
         });
-
-        // This is the new code, the section above can be cut
+        self.property_references.push(ctx.get_text());
     }
 
     fn visit_oC_ProjectionItems(&mut self, ctx: &OC_ProjectionItemsContext<'i>) {
@@ -496,6 +500,12 @@ mod tests {
                     args: vec!["a".to_string()]
                 }]
         );
+        let mut visitor = FilterVisitor::default();
+        let _res = result.accept(&mut visitor);
+        assert!(visitor.property_references.is_empty());
+        let mut visitor = ReturnVisitor::default();
+        let _res = result.accept(&mut visitor);
+        assert!(visitor.property_references == vec!["height(a)".to_string()]);
     }
 
     #[test]
