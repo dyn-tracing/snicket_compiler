@@ -15,21 +15,51 @@ use std::rc::Rc;
 // FilterVisitor:  visits tree and fills out structural and property filters
 /***********************************/
 
-pub struct PropertyVisitor {
-    property: Option<Property>,
+pub struct PropertyAndUdfVisitor {
+    properties: Vec<Property>,
+    udf_calls: Vec<UdfCall>,
 }
 
-impl Default for PropertyVisitor {
-    fn default() -> PropertyVisitor {
-        PropertyVisitor { property: None }
+impl Default for PropertyAndUdfVisitor {
+    fn default() -> PropertyAndUdfVisitor {
+        PropertyAndUdfVisitor {
+            properties: Vec::new(),
+            udf_calls: Vec::new(),
+        }
     }
 }
 
-impl<'i> ParseTreeVisitor<'i, CypherParserContextType> for PropertyVisitor {
+impl<'i> ParseTreeVisitor<'i, CypherParserContextType> for PropertyAndUdfVisitor {
     fn visit_terminal(&mut self, _node: &TerminalNode<'i, CypherParserContextType>) {}
 }
 
-impl<'i> CypherVisitor<'i> for PropertyVisitor {
+impl<'i> CypherVisitor<'i> for PropertyAndUdfVisitor {
+    fn visit_oC_FunctionInvocation(&mut self, func: &OC_FunctionInvocationContext<'i>) {
+        let udf_name: String;
+        if let Some(udf_name_) = func.oC_FunctionName() {
+            udf_name = udf_name_.get_text();
+        } else {
+            panic!("Compiler Bug: Missing UDF name.")
+        }
+        let mut udf_args = vec![];
+        // TODO: We should not allocate a property visitor for each call
+        for arg in func.oC_Expression_all() {
+            arg.accept(self);
+            // TODO: These can be complicated expressions
+            // For now we expect a simple entity reference
+            udf_args.push(arg.get_text());
+        }
+        log::debug!(
+            "Storing UDF with name: {:?} and args {:?}",
+            udf_name,
+            udf_args
+        );
+        self.udf_calls.push(UdfCall {
+            id: udf_name,
+            args: udf_args,
+        })
+    }
+
     fn visit_oC_PropertyOrLabelsExpression(
         &mut self,
         prop: &OC_PropertyOrLabelsExpressionContext<'i>,
@@ -40,6 +70,10 @@ impl<'i> CypherVisitor<'i> for PropertyVisitor {
         if let Some(var) = atom.oC_Variable() {
             entity = var.get_text();
             log::debug!("Storing var: {:?}", entity);
+        } else if let Some(func) = atom.oC_FunctionInvocation() {
+            func.accept(self);
+            // TODO:  Technically, UDFs can return an object
+            return;
         } else if let Some(var) = atom.oC_Literal() {
             entity = var.get_text();
             log::debug!("Storing literal: {:?}", entity);
@@ -56,10 +90,10 @@ impl<'i> CypherVisitor<'i> for PropertyVisitor {
         for property in prop.oC_PropertyLookup_all() {
             property_vec.push(property.get_text());
         }
-        self.property = Some(Property {
+        self.properties.push(Property {
             parent: entity,
             members: property_vec,
-        })
+        });
     }
 }
 
@@ -216,8 +250,6 @@ pub struct ReturnVisitor {
     return_expr: Option<IrReturn>,
     aggregate: Option<Aggregate>,
     return_items: Vec<IrReturn>,
-    return_udfs: Vec<UdfCall>,
-    collected_properties: Vec<Property>,
 }
 
 impl Default for ReturnVisitor {
@@ -226,8 +258,6 @@ impl Default for ReturnVisitor {
             return_expr: None,
             aggregate: None,
             return_items: Vec::new(),
-            return_udfs: Vec::new(),
-            collected_properties: Vec::new(),
         }
     }
 }
@@ -236,41 +266,7 @@ impl<'i> ParseTreeVisitor<'i, CypherParserContextType> for ReturnVisitor {
     fn visit_terminal(&mut self, _node: &TerminalNode<'i, CypherParserContextType>) {}
 }
 
-impl<'i> ReturnVisitor {
-    fn produce_udf_call(
-        &self,
-        prop_visitor: &mut PropertyVisitor,
-        func: &OC_FunctionInvocationContext<'i>,
-    ) -> UdfCall {
-        let udf_name: String;
-        if let Some(udf_name_) = func.oC_FunctionName() {
-            udf_name = udf_name_.get_text();
-        } else {
-            panic!("Compiler Bug: Missing UDF name.")
-        }
-        let mut udf_args = vec![];
-        // TODO: We should not allocate a property visitor for each call
-        for arg in func.oC_Expression_all() {
-            arg.accept(prop_visitor);
-            // TODO: These can be complicated expressions
-            // For now we expect a simple entity reference
-            if let Some(ref property) = prop_visitor.property {
-                udf_args.push(property.clone());
-            } else {
-                panic!("Unable to process property.")
-            }
-        }
-        log::debug!(
-            "Storing UDF with name: {:?} and args {:?}",
-            udf_name,
-            udf_args
-        );
-        UdfCall {
-            id: udf_name,
-            args: udf_args,
-        }
-    }
-}
+impl<'i> ReturnVisitor {}
 
 impl<'i> CypherVisitor<'i> for ReturnVisitor {
     // we do not want to visit matches in this case, ignore that part of the tree
@@ -313,24 +309,6 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
         });
 
         // This is the new code, the section above can be cut
-
-        // TODO: We should not allocate a property visitor for each call
-        // Make this a global struct member
-        let mut prop_visitor = PropertyVisitor::default();
-        if let Some(func) = atom.oC_FunctionInvocation() {
-            let ret_udf = self.produce_udf_call(&mut prop_visitor, &func);
-            // TODO: We should also track the properties that are UDF arguments
-            self.return_udfs.push(ret_udf);
-            return;
-        }
-        ctx.accept(&mut prop_visitor);
-        // TODO: These can be complicated expressions
-        // For now we expect a simple entity reference
-        if let Some(ref property) = prop_visitor.property {
-            self.collected_properties.push(property.clone());
-        } else {
-            panic!("Unable to process property.")
-        }
     }
 
     fn visit_oC_ProjectionItems(&mut self, ctx: &OC_ProjectionItemsContext<'i>) {
@@ -466,7 +444,6 @@ mod tests {
         let result = run_parser(
             &tf,
             "MATCH (a {}) -[]->(b {}) -[]->(c {}) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' RETURN a.request.total_size"
-            // "MATCH (a) -[]-> (b) -[]-> (c) RETURN a.request.total_size",
         );
         let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
@@ -509,20 +486,14 @@ mod tests {
     fn test_return_udf() {
         let tf = CommonTokenFactory::default();
         let result = run_parser(&tf, "MATCH (a) -[]-> (b {})-[]->(c) RETURN height(a)");
-        let mut visitor = FilterVisitor::default();
-        let _res = result.accept(&mut visitor);
-        assert!(!visitor.struct_filters.is_empty());
-        let mut visitor = ReturnVisitor::default();
+        let mut visitor = PropertyAndUdfVisitor::default();
         let _res = result.accept(&mut visitor);
         // TODO: Kinda ugly. Fix up
         assert!(
-            visitor.return_udfs
+            visitor.udf_calls
                 == vec![UdfCall {
                     id: "height".to_string(),
-                    args: vec![Property {
-                        parent: "a".to_string(),
-                        members: vec![]
-                    }]
+                    args: vec!["a".to_string()]
                 }]
         );
     }
@@ -574,7 +545,6 @@ mod tests {
         assert!(visitor.aggregate.as_ref().unwrap().udf_id == "histogram(a.request.total_size)");
         assert!(visitor.aggregate.as_ref().unwrap().entity == "a");
         assert!(visitor.aggregate.as_ref().unwrap().property == ".return_code");
-        assert!(visitor.return_udfs.get(0).unwrap().id == "histogram");
     }
 
     #[test]

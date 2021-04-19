@@ -87,7 +87,7 @@ impl Aggregate {
 pub struct UdfCall {
     pub id: String,
     //TODO: Args may also be UDF calls
-    pub args: Vec<Property>,
+    pub args: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -96,3 +96,5 @@ pub struct Property {
     //TODO: Args may also be UDF calls
     pub members: Vec<String>,
 }
+
+type EntityReference = String;
