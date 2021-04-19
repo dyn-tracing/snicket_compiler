@@ -75,8 +75,9 @@ impl<'i> CypherVisitor<'i> for PropertyAndUdfVisitor {
             // TODO:  Technically, UDFs can return an object
             return;
         } else if let Some(var) = atom.oC_Literal() {
-            entity = var.get_text();
-            log::debug!("Storing literal: {:?}", entity);
+            // TODO:  Literals are values, not property. How do we treat them?
+            log::debug!("Storing literal: {:?}", var);
+            return;
         } else {
             log::error!(
                 "Unsupported expression {:?}. Has type {:?}",
@@ -88,7 +89,11 @@ impl<'i> CypherVisitor<'i> for PropertyAndUdfVisitor {
 
         let mut property_vec = vec![];
         for property in prop.oC_PropertyLookup_all() {
-            property_vec.push(property.get_text());
+            if let Some(prop_key) = property.oC_PropertyKeyName() {
+                property_vec.push(prop_key.get_text());
+            } else {
+                panic!("Expected identifer to follow property notation.")
+            }
         }
         self.properties.push(Property {
             parent: entity,
@@ -164,6 +169,10 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
             entity,
             property: property_str,
         });
+        if atom.oC_Literal().is_some() {
+            //TODO: This check can be removed once we are done with the transition
+            return;
+        }
         self.property_references.push(ctx.get_text());
     }
 
@@ -312,6 +321,10 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
             entity,
             property: property_str,
         });
+        if atom.oC_Literal().is_some() {
+            //TODO: This check can be removed once we are done with the transition
+            return;
+        }
         self.property_references.push(ctx.get_text());
     }
 
@@ -484,6 +497,34 @@ mod tests {
         assert!(visitor.attr_filters[0].node == "trace".to_string());
         assert!(visitor.attr_filters[0].property == ".latency".to_string());
         assert!(visitor.attr_filters[0].value == "500".to_string());
+        assert!(
+            visitor.property_references == vec!["trace.latency".to_string()],
+            "Received {:?} instead.",
+            visitor.property_references
+        );
+
+        let mut visitor = ReturnVisitor::default();
+        let _res = result.accept(&mut visitor);
+        assert!(visitor.property_references == vec!["a.request.total_size".to_string()]);
+        let mut visitor = PropertyAndUdfVisitor::default();
+        let _res = result.accept(&mut visitor);
+        // TODO: Kinda ugly. Fix up
+        assert!(
+            visitor.properties
+                == vec![
+                    Property {
+                        parent: "trace".to_string(),
+                        members: vec!["latency".to_string()]
+                    },
+                    Property {
+                        parent: "a".to_string(),
+                        members: vec!["request".to_string(), "total_size".to_string()]
+                    }
+                ],
+            "Received {:?} instead.",
+            visitor.properties
+        );
+        assert!(visitor.udf_calls.is_empty());
     }
 
     #[test]
