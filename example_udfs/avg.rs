@@ -4,7 +4,7 @@
 // struct_name: Avg
 // id: avg
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Avg {
     avg: u64,
     total: u64,

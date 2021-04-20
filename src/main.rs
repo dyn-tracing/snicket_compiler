@@ -65,7 +65,7 @@ fn main() {
     let bin_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let template_dir = bin_dir.join("templates");
     let def_filter_dir = bin_dir.join("filter_envoy/filter.rs");
-    let aggr_filter_dir = bin_dir.join("filter_envoy/aggr_filter.rs");
+    let aggr_filter_dir = bin_dir.join("aggr_filter_envoy/aggr_filter.rs");
     let compile_vals = ["sim", "envoy"];
     let matches = App::new("Dynamic Tracing")
         .arg(
@@ -191,6 +191,11 @@ fn main() {
                 &codegen_object,
                 template_dir.join(handle_bar_str),
                 PathBuf::from(matches.value_of("output").unwrap()),
+            );
+            write_to_handlebars(
+                &codegen_object,
+                template_dir.join("envoy_filter_aggregation.rs.handlebars"),
+                PathBuf::from(matches.value_of("aggr_output").unwrap()),
             );
         }
         _ => {

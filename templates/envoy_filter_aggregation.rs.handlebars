@@ -1,7 +1,4 @@
-use indexmap::IndexMap;
 use log::trace;
-use petgraph::graph::Graph;
-use petgraph::Incoming;
 use proxy_wasm::traits::Context;
 use proxy_wasm::traits::HttpContext;
 use proxy_wasm::traits::RootContext;
@@ -10,10 +7,8 @@ use proxy_wasm::types::ContextType;
 use proxy_wasm::types::LogLevel;
 use std::convert::TryFrom;
 use std::fmt;
-use std::time::Duration;
+use serde::{Serialize, Deserialize};
 
-use utils::graph::serde::FerriedData;
-use utils::graph::serde::Property;
 
 // ---------------------- General Helper Functions ----------------------------
 {{#each aggregation_udf_table}}                                                 
@@ -56,123 +51,6 @@ pub enum HttpType {
     Response = 2,
 }
 
-pub fn data_to_str(stored_data: &FerriedData) -> Option<String> {
-    let stored_data_str: String;
-    match serde_json::to_string(&stored_data) {
-        Ok(stored_data_str_) => {
-            stored_data_str = stored_data_str_;
-        }
-        Err(e) => {
-            log::error!("Could not translate stored data to json string: {:?}\n", e);
-            return None;
-        }
-    }
-    return Some(stored_data_str);
-}
-
-pub fn join_str(str_vec: &Vec<&str>) -> String {
-    return str_vec.join(".");
-}
-
-fn fetch_data_from_headers(ctx: &HttpHeaders, request_type: HttpType) -> FerriedData {
-    let data_str_opt: Option<String>;
-    if request_type == HttpType::Request {
-        data_str_opt = ctx.get_http_request_header("ferried_data");
-    } else if request_type == HttpType::Response {
-        data_str_opt = ctx.get_http_response_header("ferried_data");
-    } else {
-        log::error!("Unsupported http type {:?}", request_type);
-        return FerriedData::default();
-    }
-    if let Some(ferried_data_str) = data_str_opt {
-        match serde_json::from_str(&ferried_data_str) {
-            Ok(fd) => {
-                log::warn!("Successfully parsed ferried_data from header.");
-                return fd;
-            }
-            Err(e) => {
-                log::error!("Could not translate stored data to json string: {:?}\n", e);
-            }
-        }
-    }
-    return FerriedData::default();
-}
-
-pub fn fetch_property(
-    node_name: &str,
-    prop_query: &Vec<&str>,
-    ctx: &HttpHeaders,
-) -> Option<Property> {
-    // Insert properties to collect
-    let prop_tuple;
-    let property_str: String;
-    // Seems like we need a copy here, a little bit annoying
-    if let Some(property) = ctx.get_property(prop_query.to_vec()) {
-        property_str = String::from_utf8_lossy(&property).to_string();
-    } else {
-        log::error!("Failed to retrieve property: {:?}\n", prop_query);
-        return None;
-    }
-    //FIXME Adjust the format of this property
-    prop_tuple = Property::new(
-        node_name.to_string(),
-        join_str(prop_query),
-        property_str.clone(),
-    );
-    return Some(prop_tuple);
-}
-
-fn get_shared_data(trace_id: &str, ctx: &HttpHeaders) -> Option<FerriedData> {
-    let mut stored_data: FerriedData = FerriedData::default();
-    if let (Some(data), _) = ctx.get_shared_data(&trace_id) {
-        // Add a header on the response.
-        // FIXME: There must be  a nicer way to resolve this
-        let cast_string = String::from_utf8_lossy(&data).to_string();
-        match serde_json::from_str(&cast_string) {
-            Ok(d) => {
-                stored_data = d;
-            }
-            Err(e) => {
-                log::error!("Could not parse envoy shared data: {:?}\n", e);
-                return None;
-            }
-        }
-    } else {
-        log::warn!("Trace key {:?} not found in shared data.", trace_id);
-    }
-    return Some(stored_data);
-}
-
-fn store_data(data_to_store: &mut FerriedData, trace_id: &str, ctx: &HttpHeaders) {
-    // Merge with data that is already present.
-    let stored_data_opt = get_shared_data(&trace_id, ctx);
-    if stored_data_opt.is_some() {
-        let stored_data_old = stored_data_opt.unwrap();
-        data_to_store.merge(stored_data_old);
-    }
-
-    // Convert to string, then to bytes.
-    let stored_data_str_opt = data_to_str(&data_to_store);
-    if stored_data_str_opt.is_none() {
-        // We failed to serialize the shared data.
-        // This might lead to wrong results, abort.
-        return;
-    }
-    let stored_data_str = stored_data_str_opt.unwrap();
-    let stored_data_bytes = Some(stored_data_str.as_bytes());
-
-    // Update the stored result.
-    let store_result = ctx.set_shared_data(&trace_id, stored_data_bytes, None);
-    if let Err(ref e) = store_result {
-        log::error!(
-            "Failed to store key {:?} and value {:?}: {:?}",
-            trace_id,
-            store_result,
-            e
-        );
-    }
-}
-
 // ---------------------------- Filter ------------------------------------
 
 #[no_mangle]
@@ -209,10 +87,23 @@ impl RootContext for HttpHeadersRoot {
         } else {
             workload_name = String::new();
         }
-        Some(Box::new(HttpHeaders {
-            context_id,
-            workload_name,
-        }))
+        let mut ctx = HttpHeaders {
+            context_id, workload_name
+        };
+        {{#each aggregation_udf_table}}
+        let {{{this.id}}}_struct = {{{this.struct_name}}}::{{{this.init_func}}}();
+        match serde_json::to_string(&{{{this.id}}}_struct) {
+            Ok({{{this.id}}}_struct_as_str) => {
+                ctx.set_shared_data("{{{this.id}}}", Some({{{this.id}}}_struct_as_str.as_bytes()), None);
+            }
+            Err(e) => {
+                log::error!("Could not convert {{{this.id}}} struct to JSON string");
+            }
+
+        }
+        {{/each}}
+
+        Some(Box::new(ctx))
     }
 }
 
@@ -313,6 +204,7 @@ impl HttpHeaders {
     }
 
     fn on_http_request_headers_inbound(&mut self, _num_headers: usize) {
+        // Get the trace ID
         let trace_id: String;
         if let Some(trace_id_) = self.get_http_request_header("x-request-id") {
             trace_id = trace_id_;
@@ -322,14 +214,59 @@ impl HttpHeaders {
             return;
         }
 
+        // Perform the aggregation function FIXME?  Only works for one aggregation function, not yet sure if we want to support multiple
         {{#each aggregation_udf_table}} 
-        // 1. TODO: get from storage
-        let storage_val;
+        // 1. Get from storage
+        if let (Some(mut data), _) = self.get_shared_data("{{{this.id}}}") {
+            let mut {{{this.id}}}_struct: {{{this.struct_name}}};
+            let cast_string = String::from_utf8_lossy(&data).to_string();
+            match serde_json::from_str(&cast_string) {
+                Ok(d) => {
+                    {{{this.id}}}_struct = d;
+                }
+                Err(e) => {
+                    log::error!("Could not parse stored data for struct {{{this.id}}}: {:?}", e);
+                    return;
+                }
+            }
 
-        // 2. Input info
-        let {{{this.id}}}_val = ctx.get_http_request_header(trace_id);
-        let new_result = storage_val.{{{this.exec_func}}}({{{this.id}}}
+            // 2. Input new info
+            let {{{this.id}}}_val = self.get_http_request_header(&trace_id);
+            if {{{this.id}}}_val.is_none() {
+                log::error!("Could not find value sent to storage");
+                return;
+            }
+            let {{{this.id}}}_new_result = {{{this.id}}}_struct.{{{this.exec_func}}}(trace_id.parse::<u64>().unwrap(), {{{this.id}}}_val.unwrap());
 
+            // 3. Store struct back into storage as a string
+            match serde_json::to_string(&{{{this.id}}}_struct) {
+                Ok({{{this.id}}}_struct_as_str) => {
+                    let store_result = self.set_shared_data("{{{this.id}}}",
+                                                           Some({{{this.id}}}_struct_as_str.as_bytes()),
+                                                           None);
+                    if let Err(ref e) = store_result {                                          
+                        log::error!(                                                            
+                            "Failed to store key {:?} and value {:?}: {:?}",                    
+                            trace_id,                                                           
+                            store_result,                                                       
+                            e                                                                   
+                        );                                                                      
+                    }  
+                }
+                Err(e) => {
+                    log::error!("Could not transform struct into string: {:?}", e);
+                    return;
+                }
+
+            }
+
+            // 4. Send info as a part of message
+            self.set_http_request_header("key", Some("{{{this.id}}}"));
+            self.set_http_request_header("value", Some(&{{{this.id}}}_new_result));
+
+        } else {
+            log::error!("Could not find aggregation struct {{{this.id}}} in storage");
+        }
 
         {{/each}}
 
