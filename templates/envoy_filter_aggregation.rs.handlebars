@@ -231,12 +231,12 @@ impl HttpHeaders {
             }
 
             // 2. Input new info
-            let {{{this.id}}}_val = self.get_http_request_header(&trace_id);
+            let {{{this.id}}}_val = self.get_http_request_header("value");
             if {{{this.id}}}_val.is_none() {
                 log::error!("Could not find value sent to storage");
                 return;
             }
-            let {{{this.id}}}_new_result = {{{this.id}}}_struct.{{{this.exec_func}}}(trace_id.parse::<u64>().unwrap(), {{{this.id}}}_val.unwrap());
+            let {{{this.id}}}_new_result = {{{this.id}}}_struct.{{{this.exec_func}}}(&trace_id, {{{this.id}}}_val.unwrap());
 
             // 3. Store struct back into storage as a string
             match serde_json::to_string(&{{{this.id}}}_struct) {
@@ -263,6 +263,8 @@ impl HttpHeaders {
             // 4. Send info as a part of message
             self.set_http_request_header("key", Some("{{{this.id}}}"));
             self.set_http_request_header("value", Some(&{{{this.id}}}_new_result));
+            log::warn!("Set http requests properly for storage");
+            self.print_headers(HttpType::Request);
 
         } else {
             log::error!("Could not find aggregation struct {{{this.id}}} in storage");
