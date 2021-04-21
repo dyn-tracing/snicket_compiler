@@ -408,6 +408,11 @@ pub fn find_mapping_shamir_decentralized(
         if !am_root && mapping_found {
             mapping_root_for_children = mapping_root;
         }
+        // delete extraneous grandchild information if applicable
+        set_s.retain(|key, value| {
+            // if I am a grandchild of child and I do not contain a valid subgraph, trash it
+            !(graph_g.contains_edge(child, key.val1) && !value.contains_key(&key.val2))}
+        );
     }
 
     // 2a. If one of your children matched all of graph_h, return that matching
@@ -1076,5 +1081,7 @@ mod tests {
         let graph_g = biggest_graph();
         let graph_h = three_child_graph();
         assert!(find_mapping_shamir_centralized(&graph_g, &graph_h).is_some());
+        let graph_h_not_a_match = four_child_graph();
+        assert!(find_mapping_shamir_centralized(&graph_g, &graph_h_not_a_match).is_none());
     }
 }
