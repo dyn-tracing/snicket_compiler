@@ -170,6 +170,12 @@ fn print_set_s(
     }
 }
 
+// Note:  the mapping from graph H to graph G returned by this function may
+// map "None" in graph H to things in graph G;  it may also have duplicates
+// It is extra work to remove them, and they do not hurt, since we're never
+// going to look up what None in graph H maps to, and duplicate matchings
+// between the same nodes are clearly not "wrong".  But because of this,
+// the size of the matching returned might be a bit wonky.
 fn get_mapping_from_set_s(
     _graph_g: &Graph<(String, IndexMap<String, String>), String>,
     graph_h: &Graph<(String, IndexMap<String, String>), String>,
@@ -190,7 +196,7 @@ fn get_mapping_from_set_s(
             for map in set_s[&SetSKey{val1: key.1, val2: key.0}][&key.0].as_ref() {
                 for mapping in map {
                     if !to_return.contains(&(mapping.1, mapping.0)) {
-                        to_return.push((mapping.1, mapping.0));
+                            to_return.push((mapping.1, mapping.0));
                         set_to_find_mapping.push(*mapping);
                     }
                 }
@@ -273,10 +279,14 @@ fn find_mapping_shamir_inner_loop(
             }
         }
     }
-    // before returning false, we trim set S
+    // before returning false, we can trim set S
+    // TODO:  how to make this jive with finding the actual matching? right now
+    // we get rid of non-matching grandchild info in distributed;  this may or
+    // may not be impactful
     // we traverse all that is reachable from v;  any that are descendants and
     // not children, ie, grandchildren or later, are removed from set S so 
     // set S stays as brief as possible
+    /*
     let mut post_order = DfsPostOrder::new(graph_g, v);
     let mut to_remove = Vec::new();
     while let Some(node) = post_order.next(graph_g) {
@@ -285,6 +295,7 @@ fn find_mapping_shamir_inner_loop(
         }
     }
     set_s.retain(|key, _| !to_remove.contains(&key.val1));
+    */
     return (false, None);
 }
 
@@ -705,14 +716,13 @@ mod tests {
         let e = graph_g.add_node(("e".to_string(), IndexMap::new()));
         let f = graph_g.add_node(("f".to_string(), IndexMap::new()));
         let g = graph_g.add_node(("g".to_string(), IndexMap::new()));
-        let h = graph_g.add_node(("h".to_string(), IndexMap::new()));
 
         graph_g.add_edge(a,b, String::new());
         graph_g.add_edge(b,c, String::new());
         graph_g.add_edge(c,d, String::new());
         graph_g.add_edge(d,e, String::new());
         graph_g.add_edge(d,f, String::new());
-        graph_g.add_edge(d,h, String::new());
+        graph_g.add_edge(d,g, String::new());
         return graph_g;
     }
     // ---------------------- Shamir Tests -------------------------
@@ -813,7 +823,7 @@ mod tests {
     fn test_shamir_on_bookinfo() {
         let graph_g = bookinfo_trace_graph();
         let graph_h = three_node_graph();
-        let mut mapping_wrapped = find_mapping_shamir_centralized(&graph_g, &graph_h);
+        let mapping_wrapped = find_mapping_shamir_centralized(&graph_g, &graph_h);
         assert!(mapping_wrapped.is_some());
         let mapping = mapping_wrapped.unwrap();
         let a = get_node_with_id(&graph_h, "a".to_string()).unwrap();
@@ -828,12 +838,11 @@ mod tests {
 
         let graph_g_2 = bookinfo_trace_graph();
         let graph_h_2 = three_node_chain_graph();
-        let mut mapping_wrapped_2 = find_mapping_shamir_centralized(&graph_g_2, &graph_h_2);
+        let mapping_wrapped_2 = find_mapping_shamir_centralized(&graph_g_2, &graph_h_2);
         assert!(mapping_wrapped_2.is_some());
         let mapping_2 = mapping_wrapped_2.unwrap();
         let a_2 = get_node_with_id(&graph_h_2, "a".to_string()).unwrap();
         let b_2 = get_node_with_id(&graph_h_2, "b".to_string()).unwrap();
-        let c_2 = get_node_with_id(&graph_h_2, "c".to_string()).unwrap();
         let prod_2 = get_node_with_id(&graph_g_2, "productpage-v1".to_string()).unwrap();
         let rev_2 = get_node_with_id(&graph_g_2, "reviews-v1".to_string()).unwrap();
         assert!(mapping_2.contains(&(a_2, prod_2)));
@@ -875,7 +884,8 @@ mod tests {
         let b = graph_h.add_node(("b".to_string(), IndexMap::new()));
         graph_h.add_edge(a, b, String::new());
 
-        assert!(find_mapping_shamir_centralized(&graph_g, &graph_h).is_some());
+        let mapping_wrapped = find_mapping_shamir_centralized(&graph_g, &graph_h);
+        assert!(mapping_wrapped.is_some());
 
         let graph_g_2 = simulation_example();
         assert!(find_mapping_shamir_centralized(&graph_g_2, &graph_h).is_some());
@@ -920,7 +930,8 @@ mod tests {
 
         let c = graph_g.add_node((String::from("c"), IndexMap::new()));
         graph_g.add_edge(c, b, String::new());
-        let ret = find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, c, false);
+        let ret = find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, c, true);
+        assert!(ret.is_some());
     }
 
     #[test]
@@ -1080,7 +1091,9 @@ mod tests {
     fn test_big_graph() {
         let graph_g = biggest_graph();
         let graph_h = three_child_graph();
-        assert!(find_mapping_shamir_centralized(&graph_g, &graph_h).is_some());
+        let mapping_wrapped = find_mapping_shamir_centralized(&graph_g, &graph_h);
+        assert!(mapping_wrapped.is_some());
+
         let graph_h_not_a_match = four_child_graph();
         assert!(find_mapping_shamir_centralized(&graph_g, &graph_h_not_a_match).is_none());
     }
