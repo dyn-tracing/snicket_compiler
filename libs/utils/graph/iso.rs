@@ -78,6 +78,11 @@ fn max_matching<EK: EdmondsKarp<i32>>(
 
     for u in set_x {
         for v in set_y {
+            if !set_s.contains_key(&SetSKey{val1: *v, val2: *u}) {
+                print!("can't find {:?}, {:?}\n",
+                       graph_g.node_weight(*v),
+                       graph_h.node_weight(*u));
+            }
             if set_s[&SetSKey{val1: *v, val2: *u}].contains_key(&u_null)
                 && has_property_subset(
                     &graph_g.node_weight(*v).unwrap().1,
@@ -214,6 +219,7 @@ fn find_mapping_shamir_inner_loop(
         }
 
         // maximum matching where X0 = X
+        print!("v is {:?}\n", graph_g.node_weight(v));
         let (cost, path) = max_matching::<DenseCapacity<_>>(
             &u_neighbors,
             &v_neighbors,
@@ -242,6 +248,11 @@ fn find_mapping_shamir_inner_loop(
                 u,
             );
             if cost == new_x_set.len() {
+                if !set_s.contains_key(&SetSKey{val1: v, val2: u}) {
+                    print!("can't find {:?}, {:?}\n",
+                           graph_g.node_weight(v),
+                           graph_h.node_weight(u));
+                }
                 if set_s[&SetSKey{ val1: v, val2: u}].contains_key(&vertex_id) {
                 } else {
                     set_s
@@ -262,6 +273,18 @@ fn find_mapping_shamir_inner_loop(
             }
         }
     }
+    // before returning false, we trim set S
+    // we traverse all that is reachable from v;  any that are descendants and
+    // not children, ie, grandchildren or later, are removed from set S so 
+    // set S stays as brief as possible
+    let mut post_order = DfsPostOrder::new(graph_g, v);
+    let mut to_remove = Vec::new();
+    while let Some(node) = post_order.next(graph_g) {
+        if !graph_g.contains_edge(v, node) && v != node {
+            to_remove.push(node);
+        }
+    }
+    set_s.retain(|key, _| !to_remove.contains(&key.val1));
     return (false, None);
 }
 
@@ -668,6 +691,25 @@ mod tests {
         return graph_g;
     }
 
+    fn biggest_graph() -> Graph<(String, IndexMap<String, String>), String> {
+        let mut graph_g = Graph::<(String, IndexMap<String, String>), String>::new();
+        let a = graph_g.add_node(("a".to_string(), IndexMap::new()));
+        let b = graph_g.add_node(("b".to_string(), IndexMap::new()));
+        let c = graph_g.add_node(("c".to_string(), IndexMap::new()));
+        let d = graph_g.add_node(("d".to_string(), IndexMap::new()));
+        let e = graph_g.add_node(("e".to_string(), IndexMap::new()));
+        let f = graph_g.add_node(("f".to_string(), IndexMap::new()));
+        let g = graph_g.add_node(("g".to_string(), IndexMap::new()));
+        let h = graph_g.add_node(("h".to_string(), IndexMap::new()));
+
+        graph_g.add_edge(a,b, String::new());
+        graph_g.add_edge(b,c, String::new());
+        graph_g.add_edge(c,d, String::new());
+        graph_g.add_edge(d,e, String::new());
+        graph_g.add_edge(d,f, String::new());
+        graph_g.add_edge(d,h, String::new());
+        return graph_g;
+    }
     // ---------------------- Shamir Tests -------------------------
 
     #[test]
@@ -1027,5 +1069,12 @@ mod tests {
         assert!(back_to_key.val1 == NodeIndex::new(5));
         assert!(back_to_key.val2 == NodeIndex::new(10));
 
+    }
+
+    #[test]
+    fn test_big_graph() {
+        let graph_g = biggest_graph();
+        let graph_h = three_child_graph();
+        assert!(find_mapping_shamir_centralized(&graph_g, &graph_h).is_some());
     }
 }
