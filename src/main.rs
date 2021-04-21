@@ -65,7 +65,7 @@ fn main() {
     let bin_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let template_dir = bin_dir.join("templates");
     let def_filter_dir = bin_dir.join("filter_envoy/filter.rs");
-    let aggr_filter_dir = bin_dir.join("aggr_filter_envoy/aggr_filter.rs");
+    let aggr_filter_dir = bin_dir.join("aggregation_filter_envoy/aggregation_filter.rs");
     let compile_vals = ["sim", "envoy"];
     let matches = App::new("Dynamic Tracing")
         .arg(
