@@ -65,7 +65,6 @@ fn main() {
     let bin_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let template_dir = bin_dir.join("templates");
     let def_filter_dir = bin_dir.join("filter_envoy/filter.rs");
-    let aggr_filter_dir = bin_dir.join("filter_envoy/aggr_filter.rs");
     let compile_vals = ["sim", "envoy"];
     let matches = App::new("Dynamic Tracing")
         .arg(
@@ -118,14 +117,6 @@ fn main() {
                 .default_value(def_filter_dir.to_str().unwrap())
                 .help("Location and name of the output file."),
         )
-        .arg(
-            Arg::with_name("aggr_output")
-                .short("a")
-                .long("aggr-out-file")
-                .value_name("AGGR_OUT_FILE")
-                .default_value(aggr_filter_dir.to_str().unwrap())
-                .help("Location and name of the aggregation filter output file."),
-        )
         .get_matches();
 
     let mut udfs = Vec::new();
@@ -140,6 +131,7 @@ fn main() {
 
     let tf = CommonTokenFactory::default();
     // Read query from file specified by command line argument.
+    // TODO: Handle all those unwraps.
     let query_file = matches.value_of("query").unwrap();
     let root_id = matches.value_of("root_node").unwrap();
     let query: String = fs::read_to_string(query_file).unwrap();
@@ -148,6 +140,12 @@ fn main() {
     let token_source = CommonTokenStream::new(lexer);
     let mut parser = CypherParser::new(token_source);
     let result = parser.oC_Cypher();
+    // the aggregation filter is relative to the filter directory
+    let filter_out = PathBuf::from(matches.value_of("output").unwrap());
+    let agg_filter_out = match def_filter_dir.parent() {
+        Some(parent_dir) => parent_dir.join("agg/aggregation_filter.rs"),
+        None => PathBuf::new(),
+    };
 
     if let Err(e) = result {
         log::error!("Error parsing query: {:?}", e);
@@ -170,12 +168,12 @@ fn main() {
             write_to_handlebars(
                 &codegen_object,
                 template_dir.join(handle_bar_str),
-                PathBuf::from(matches.value_of("output").unwrap()),
+                filter_out,
             );
             write_to_handlebars(
                 &codegen_object,
                 template_dir.join("simulation_filter_aggregation.rs.handlebars"),
-                PathBuf::from(matches.value_of("aggr_output").unwrap()),
+                agg_filter_out,
             );
         }
         "envoy" => {
@@ -190,7 +188,12 @@ fn main() {
             write_to_handlebars(
                 &codegen_object,
                 template_dir.join(handle_bar_str),
-                PathBuf::from(matches.value_of("output").unwrap()),
+                filter_out,
+            );
+            write_to_handlebars(
+                &codegen_object,
+                template_dir.join("envoy_filter_aggregation.rs.handlebars"),
+                agg_filter_out,
             );
         }
         _ => {
