@@ -10,6 +10,7 @@ use petgraph::graph::{Graph, NodeIndex};
 use petgraph::visit::DfsPostOrder;
 use petgraph::{Incoming, Outgoing};
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
+extern crate test;
 
 type SetSType = IndexMap<
         SetSKey,
@@ -415,7 +416,11 @@ pub fn find_mapping_shamir_decentralized(
         if !am_root && mapping_found {
             mapping_root_for_children = mapping_root;
         }
+        /*
         // delete extraneous grandchild information if applicable
+        // Although this gets rid of extra, useless info, it absolutely blows
+        // up the runtime from roughly 30,000 ns to 480,000 ns for reasons
+        // I do not understand
         set_s.retain(|key, value| {
             let am_child = graph_g.contains_edge(cur_node, key.val1);
             let am_cur_node = key.val1 == cur_node;
@@ -423,6 +428,7 @@ pub fn find_mapping_shamir_decentralized(
             am_child || am_cur_node || valid_subgraph
             }
         );
+        */
     }
 
     // 2a. If one of your children matched all of graph_h, return that matching
@@ -456,6 +462,7 @@ mod tests {
     use super::*;
     use crate::graph::graph_utils::get_node_with_id;
     use serde_json;
+    use test::Bencher;
 
     /// --------------- Graph Creation Helper functions -------------------
     fn three_node_graph() -> Graph<(String, IndexMap<String, String>), ()> {
@@ -1092,5 +1099,39 @@ mod tests {
 
         let graph_h_not_a_match = four_child_graph();
         assert!(find_mapping_shamir_centralized(&graph_g, &graph_h_not_a_match).is_none());
+    }
+
+    #[bench]
+    fn bench_centralized(bencher: &mut Bencher) {
+        let graph_h = three_node_chain_graph();
+        let mut graph_g = Graph::<(String, IndexMap<String, String>), ()>::new();
+        let a = graph_g.add_node((String::from("a"), IndexMap::new()));
+        let b = graph_g.add_node((String::from("b"), IndexMap::new()));
+        graph_g.add_edge(b, a, ());
+        let c = graph_g.add_node((String::from("c"), IndexMap::new()));
+        graph_g.add_edge(c, b, ());
+        bencher.iter(||
+            find_mapping_shamir_centralized(&graph_g, &graph_h)
+        );
+    }
+
+    #[bench]
+    fn bench_decentralized(bencher: &mut Bencher) {
+        let mut set_s : SetSType = IndexMap::new();
+        let graph_h = three_node_chain_graph();
+        let mut graph_g = Graph::<(String, IndexMap<String, String>), ()>::new();
+
+        bencher.iter( || {
+            let a = graph_g.add_node((String::from("a"), IndexMap::new()));
+            find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, a, false);
+
+            let b = graph_g.add_node((String::from("b"), IndexMap::new()));
+            graph_g.add_edge(b, a, ());
+            find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, b, false);
+
+            let c = graph_g.add_node((String::from("c"), IndexMap::new()));
+            graph_g.add_edge(c, b, ());
+            find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, c, true);
+        });
     }
 }
