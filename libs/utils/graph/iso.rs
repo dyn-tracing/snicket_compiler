@@ -11,6 +11,9 @@ use petgraph::visit::DfsPostOrder;
 use petgraph::{Incoming, Outgoing};
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
 
+type SetSType = IndexMap<
+        SetSKey,
+        IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>>;
 // -------------- Shamir Isomorphism Algorithm Helper Functions---------------
 #[derive(Debug, Hash, Eq, PartialEq)] 
 pub struct SetSKey {
@@ -33,7 +36,7 @@ impl<'de> Deserialize<'de> for SetSKey {
         D: Deserializer<'de>,
     {
         let s: String = Deserialize::deserialize(deserializer)?;
-        let mut iterator = s.split(",");
+        let mut iterator = s.split(',');
         let first_val = iterator.next().unwrap().parse::<usize>().unwrap();
         let second_val = iterator.next().unwrap().parse::<usize>().unwrap();
 
@@ -59,14 +62,11 @@ impl<'de> Deserialize<'de> for SetSKey {
 /// that is not necessarily reflective of the true maximum flow, but rather a
 /// way of signaling that neither this nor subsequent matchings will be useful.
 fn max_matching<EK: EdmondsKarp<i32>>(
-    set_x: &Vec<NodeIndex>,
-    set_y: &Vec<NodeIndex>,
+    set_x: &[NodeIndex],
+    set_y: &[NodeIndex],
     graph_g: &Graph<(String, IndexMap<String, String>), ()>,
     graph_h: &Graph<(String, IndexMap<String, String>), ()>,
-    set_s: &IndexMap<
-        SetSKey,
-        IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
-    >,
+    set_s: &SetSType,
     u_null: NodeIndex,
     target_size: usize
 ) -> (usize, Option<Vec<(NodeIndex, NodeIndex)>>) {
@@ -143,7 +143,7 @@ fn max_matching<EK: EdmondsKarp<i32>>(
             matching.push((NodeIndex::new(edge.0 - graph_g.node_count()), NodeIndex::new(edge.1)));
         }
     }
-    return (costs as usize, Some(matching));
+    (costs as usize, Some(matching))
 }
 
 // For debugging only
@@ -151,10 +151,7 @@ fn max_matching<EK: EdmondsKarp<i32>>(
 fn print_set_s(
     graph_g: &Graph<(String, IndexMap<String, String>), ()>,
     graph_h: &Graph<(String, IndexMap<String, String>), ()>,
-    set_s: &IndexMap<
-        SetSKey,
-        IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
-    >,
+    set_s: &SetSType,
 ) {
     for key in set_s.keys() {
         print!(
@@ -187,10 +184,7 @@ fn print_set_s(
 fn get_mapping_from_set_s(
     _graph_g: &Graph<(String, IndexMap<String, String>), ()>,
     graph_h: &Graph<(String, IndexMap<String, String>), ()>,
-    set_s: &IndexMap<
-        SetSKey,
-        IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
-    >,
+    set_s: &SetSType,
     root_in_g: &NodeIndex,
 ) -> Vec<(NodeIndex, NodeIndex)> {
     let root_h = find_root(graph_h);
@@ -202,9 +196,10 @@ fn get_mapping_from_set_s(
             to_return.push(key);
         }
 
-        if set_s[&SetSKey {val1: key.1, val2: key.0}].contains_key(&key.0) {
-            for map in set_s[&SetSKey{val1: key.1, val2: key.0}][&key.0].as_ref() {
-                for mapping in map {
+        let set_s_key = SetSKey{val1: key.1, val2: key.0};
+        if set_s[&set_s_key].contains_key(&key.0) {
+            if let Some(mapping_vec) = &set_s[&set_s_key][&key.0] {
+                for mapping in mapping_vec {
                     if !to_return.contains(&(mapping.1, mapping.0)) {
                             to_return.push((mapping.1, mapping.0));
                         set_to_find_mapping.push(*mapping);
@@ -213,17 +208,14 @@ fn get_mapping_from_set_s(
             }
         }
     }
-    return to_return;
+    to_return
 }
 
 fn find_mapping_shamir_inner_loop(
     v: NodeIndex,
     graph_g: &Graph<(String, IndexMap<String, String>), ()>,
     graph_h: &Graph<(String, IndexMap<String, String>), ()>,
-    set_s: &mut IndexMap<
-        SetSKey,
-        IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
-    >,
+    set_s: &mut SetSType,
 ) -> (bool, Option<NodeIndex>) {
     let root_h = find_root(&graph_h);
     let v_neighbors: Vec<NodeIndex> = graph_g.neighbors_undirected(v).collect();
@@ -281,13 +273,12 @@ fn find_mapping_shamir_inner_loop(
         }
 
         // lines 12-14 in Shamir and Tsur pseudocode
-        if set_s[&SetSKey{ val1: v, val2: root_h}].contains_key(&root_h) {
-            if has_property_subset(
+        if set_s[&SetSKey{ val1: v, val2: root_h}].contains_key(&root_h) &&
+            has_property_subset(
                 &graph_g.node_weight(v).unwrap().1,
                 &graph_h.node_weight(root_h).unwrap().1,
             ) {
                 return (true, Some(v));
-            }
         }
     }
     // before returning false, we can trim set S
@@ -307,7 +298,7 @@ fn find_mapping_shamir_inner_loop(
     }
     set_s.retain(|key, _| !to_remove.contains(&key.val1));
     */
-    return (false, None);
+    (false, None)
 }
 
 // ----------------- Shamir Isomorphism Algorithm Centralized ----------------
@@ -316,7 +307,7 @@ fn find_mapping_shamir_inner_loop(
 fn initialize_s(
     graph_g: &Graph<(String, IndexMap<String, String>), ()>,
     graph_h: &Graph<(String, IndexMap<String, String>), ()>,
-) -> IndexMap<SetSKey, IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>> {
+) -> SetSType {
     let mut s = IndexMap::<
         SetSKey,
         IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
@@ -341,7 +332,7 @@ fn initialize_s(
             }
         }
     }
-    return s;
+    s
 }
 
 pub fn find_mapping_shamir_centralized(
@@ -373,17 +364,14 @@ pub fn find_mapping_shamir_centralized(
         }
     }
     // line 15
-    return None;
+    None
 }
 
 // ---------------- Shamir Isomorphism Algorithm Decentralized ---------------
 fn initialize_s_for_node(
     graph_g: &Graph<(String, IndexMap<String, String>), ()>,
     graph_h: &Graph<(String, IndexMap<String, String>), ()>,
-    set_s: &mut IndexMap<
-        SetSKey,
-        IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
-    >,
+    set_s: &mut SetSType,
     node: NodeIndex,
 ) {
     for u in graph_h.node_indices() {
@@ -412,10 +400,7 @@ fn initialize_s_for_node(
 pub fn find_mapping_shamir_decentralized(
     graph_g: &Graph<(String, IndexMap<String, String>), ()>,
     graph_h: &Graph<(String, IndexMap<String, String>), ()>,
-    set_s: &mut IndexMap<
-        SetSKey,
-        IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
-    >,
+    set_s: &mut SetSType,
     cur_node: NodeIndex, // what node we are in graph_g
     am_root: bool,
 ) -> Option<Vec<(NodeIndex, NodeIndex)>> {
@@ -432,18 +417,21 @@ pub fn find_mapping_shamir_decentralized(
         }
         // delete extraneous grandchild information if applicable
         set_s.retain(|key, value| {
-            // if I am a grandchild of child and I do not contain a valid subgraph, trash it
-            !(graph_g.contains_edge(child, key.val1) && !value.contains_key(&key.val2))}
+            let am_child = graph_g.contains_edge(cur_node, key.val1);
+            let am_cur_node = key.val1 == cur_node;
+            let valid_subgraph = value.contains_key(&key.val2);
+            am_child || am_cur_node || valid_subgraph
+            }
         );
     }
 
     // 2a. If one of your children matched all of graph_h, return that matching
-    if mapping_root_for_children.is_some() {
+    if let Some(mrc) = mapping_root_for_children {
         return Some(get_mapping_from_set_s(
             graph_g,
             graph_h,
             &set_s,
-            &mapping_root_for_children.unwrap(),
+            &mrc,
         ));
     }
 
@@ -460,7 +448,7 @@ pub fn find_mapping_shamir_decentralized(
             ));
         }
     }
-    return None;
+    None
 }
 
 #[cfg(test)]
@@ -747,8 +735,8 @@ mod tests {
 
         // useful debugging if this fails
         for key in s.keys() {
-            print!(
-                "key: {:?} weight: {:?}, {:?}\n",
+            println!(
+                "key: {:?} weight: {:?}, {:?}",
                 key,
                 graph_g.node_weight(key.val1),
                 graph_h.node_weight(key.val2)
@@ -923,10 +911,7 @@ mod tests {
 
     #[test]
     fn test_decentralized() {
-        let mut set_s = IndexMap::<
-            SetSKey,
-            IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
-        >::new();
+        let mut set_s : SetSType = IndexMap::new();
         let graph_h = three_node_chain_graph();
 
         let mut graph_g = Graph::<(String, IndexMap<String, String>), ()>::new();

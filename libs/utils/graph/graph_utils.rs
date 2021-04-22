@@ -1,7 +1,6 @@
 /* This file contains functions relating to creating and comparing trace and target (user-given) graphs */
 
 use indexmap::map::IndexMap;
-use petgraph::algo::toposort;
 use petgraph::graph::{Graph, NodeIndex};
 use petgraph::visit::DfsPostOrder;
 use petgraph::Incoming;
@@ -61,7 +60,7 @@ pub fn get_node_with_id(
     node_name: String,
 ) -> Option<NodeIndex> {
     for index in graph.node_indices() {
-        if &graph.node_weight(index).unwrap().0 == &node_name {
+        if graph.node_weight(index).unwrap().0 == node_name {
             return Some(index);
         }
     }
@@ -75,18 +74,16 @@ pub fn find_leaves(
     let mut post_order = DfsPostOrder::new(&graph, node);
     let mut to_return = Vec::new();
     while let Some(visited) = post_order.next(&graph) {
-        let neighbors: Vec<NodeIndex> = graph.neighbors(visited).collect();
-        if neighbors.len() == 0 {
+        if graph.neighbors(visited).count() == 0 {
             to_return.push(visited);
         }
     }
-    return to_return;
+    to_return
 }
 
 pub fn find_root(graph: &Graph<(String, IndexMap<String, String>), ()>) -> NodeIndex {
     for node in graph.node_indices() {
-        let neighbors: Vec<NodeIndex> = graph.neighbors_directed(node, Incoming).collect();
-        if neighbors.len() == 0 {
+        if graph.neighbors_directed(node, Incoming).count() == 0 {
             return node;
         }
     }
@@ -105,7 +102,7 @@ pub fn has_property_subset(
             return false;
         }
     }
-    return true;
+    true
 }
 
 #[cfg(test)]
@@ -182,5 +179,12 @@ mod tests {
         for leaf in &leaves {
             assert!(correct_leaves.contains(&leaf.index()));
         }
+    }
+
+    #[test]
+    fn test_find_root() {
+        let graph = little_graph();
+        let root = find_root(&graph);
+        assert!(graph.node_weight(root).unwrap().0 == "a", "root label is {:?}", graph.node_weight(root).unwrap());
     }
 }
