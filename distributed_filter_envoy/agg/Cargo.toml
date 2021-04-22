@@ -6,8 +6,8 @@ authors = ["Anirudh Sivaraman <sk.anirudh@gmail.com>", "Jessica Berg <jb7399@nyu
 edition = "2018"
 
 [lib]
-name = "filter"
-path = "main.rs"
+name = "agg_filter"
+path = "lib.rs"
 crate-type = ["cdylib"]
 
 [profile.release]
@@ -20,6 +20,6 @@ indexmap = { version = ">=1.6.1", features = ["serde-1"] }
 petgraph = {version =  "0.*", features = ["serde-1"] }
 serde = { version = ">=1.0", features = ["derive"] }
 serde_json = ">=1.0"
-utils = { path = "../libs/utils" }
+utils = { path = "../../libs/utils" }
 
 

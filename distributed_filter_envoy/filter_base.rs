@@ -28,25 +28,25 @@ use super::filter::get_value_for_storage;
 use super::filter::get_root_name;
 
 // ---------------------- General Helper Functions ----------------------------
-// TODO:  make inheritance work so putting this in a library works              
-#[derive(Debug, Serialize, Deserialize)]                                        
-pub struct FerriedData {                                                        
-    pub set_s: IndexMap<                                                            
-        SetSKey,                                                 
-        IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,               
-    >,                                                                          
-    pub found_match: bool,                                                          
-    pub trace_graph: Graph<(String, IndexMap<String, String>), String>,             
-    pub unassigned_properties: Vec<Property>, // entity property value              
+// TODO:  make inheritance work so putting this in a library works
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FerriedData {
+    pub set_s: IndexMap<
+        SetSKey,
+        IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
+    >,
+    pub found_match: bool,
+    pub trace_graph: Graph<(String, IndexMap<String, String>), String>,
+    pub unassigned_properties: Vec<Property>, // entity property value
 }
-impl FerriedData {                                                              
-    fn default() -> FerriedData {                                               
-        FerriedData {                                                           
-            set_s: IndexMap::new(),                                             
-            found_match: false,                                                 
-            trace_graph: Graph::new(),                                          
-            unassigned_properties: Vec::new(),                                  
-        }                                                                       
+impl FerriedData {
+    fn default() -> FerriedData {
+        FerriedData {
+            set_s: IndexMap::new(),
+            found_match: false,
+            trace_graph: Graph::new(),
+            unassigned_properties: Vec::new(),
+        }
     }
         // take any unassigned properties that apply to nodes in the graph,
     // and associate them with those nodes
