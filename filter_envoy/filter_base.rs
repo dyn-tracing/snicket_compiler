@@ -444,7 +444,6 @@ impl HttpHeaders {
             let mapping_opt =
                 find_mapping_shamir_centralized(&stored_data.trace_graph, &self.target_graph);
             if let Some(mapping) = mapping_opt {
-                let key = join_str(&vec!["node", "metadata", "WORKLOAD_NAME"]);
                 let value_wrapped =
                     get_value_for_storage(&self.target_graph, &mapping, &stored_data);
                 if value_wrapped.is_none() {
@@ -457,8 +456,9 @@ impl HttpHeaders {
                         (":method", "GET"),
                         (":path", "/store"),
                         (":authority", "storage-upstream"),
-                        ("key", &key),
+                        ("key", &trace_id),
                         ("value", &value),
+                        ("x-request-id", &trace_id)
                     ],
                     None,
                     vec![],

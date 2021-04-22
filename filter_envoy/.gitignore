@@ -2,3 +2,4 @@ filter.rs
 aggr_filter.rs
 target
 Cargo.lock
+wasm_bins
