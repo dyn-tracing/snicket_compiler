@@ -1,7 +1,7 @@
 /* This file contains functions relating to creating and comparing trace and target (user-given) graphs */
 
 use indexmap::map::IndexMap;
-use petgraph::algo::{dijkstra, toposort};
+use petgraph::algo::toposort;
 use petgraph::graph::{Graph, NodeIndex};
 use petgraph::visit::DfsPostOrder;
 use petgraph::Incoming;
@@ -66,43 +66,6 @@ pub fn get_node_with_id(
         }
     }
     None
-}
-
-pub fn get_tree_height(
-    graph: &Graph<(String, IndexMap<String, String>), ()>,
-    root: Option<NodeIndex>,
-) -> u32 {
-    let starting_point;
-    if !root.is_none() {
-        starting_point = root.unwrap()
-    } else {
-        // The root of the tree by definition has no incoming edges
-        let sorted = toposort(graph, None).unwrap();
-        starting_point = sorted[0];
-    }
-    let node_map = dijkstra(graph, starting_point, None, |_| 1);
-    let mut max = 0;
-    for key in node_map.keys() {
-        if node_map[key] > max {
-            max = node_map[key];
-        }
-    }
-    return max;
-}
-
-pub fn get_out_degree(
-    graph: &Graph<(String, IndexMap<String, String>), ()>,
-    root: Option<NodeIndex>,
-) -> u32 {
-    let starting_point;
-    if !root.is_none() {
-        starting_point = root.unwrap()
-    } else {
-        // The root of the tree by definition has no incoming edges
-        let sorted = toposort(graph, None).unwrap();
-        starting_point = sorted[0];
-    }
-    return graph.neighbors(starting_point).count() as u32;
 }
 
 pub fn find_leaves(
@@ -202,16 +165,6 @@ mod tests {
         let graph = make_small_target_graph();
         assert_eq!(graph.node_count(), 3);
         assert_eq!(graph.edge_count(), 2);
-    }
-
-    #[test]
-    fn test_get_tree_height() {
-        assert!(get_tree_height(&little_graph(), None) == 2);
-    }
-
-    #[test]
-    fn test_get_out_degree() {
-        assert!(get_out_degree(&little_graph(), None) == 1);
     }
 
     #[test]
