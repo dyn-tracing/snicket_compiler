@@ -60,7 +60,7 @@ fn max_matching<EK: EdmondsKarp<i32>>(
     >,
     u_null: NodeIndex,
     target_size: usize
-) -> Option<Vec<(NodeIndex, NodeIndex)>> {
+) -> (usize, Option<Vec<(NodeIndex, NodeIndex)>>) {
     let mut vertices = Vec::new();
     let mut edges = Vec::new();
     // The NodeIndex objects probably share values between set X and set Y
@@ -119,7 +119,7 @@ fn max_matching<EK: EdmondsKarp<i32>>(
     // If we're looking for a different size matching, and we didn't get the 
     // right size, just return none.
     if costs as usize != target_size {
-        return None;
+        return (costs as usize, None);
     }
     let mut matching = Vec::new();
     for edge_tuple in edges {
@@ -128,7 +128,7 @@ fn max_matching<EK: EdmondsKarp<i32>>(
             matching.push((NodeIndex::new(edge.0 - graph_g.node_count()), NodeIndex::new(edge.1)));
         }
     }
-    return Some(matching);
+    return (costs as usize, Some(matching));
 }
 
 // For debugging only
@@ -220,7 +220,7 @@ fn find_mapping_shamir_inner_loop(
         }
 
         // maximum matching where X0 = X
-        let p = max_matching::<DenseCapacity<_>>(
+        let (cost, p) = max_matching::<DenseCapacity<_>>(
             &u_neighbors,
             &v_neighbors,
             graph_g,
@@ -236,25 +236,31 @@ fn find_mapping_shamir_inner_loop(
             }
         }
 
-        // maximum matching where X0 is X minus an element
-        for vertex in 0..u_neighbors.len() {
-            let mut new_x_set = u_neighbors.clone();
-            let vertex_id = new_x_set.remove(vertex);
-            let p = max_matching::<DenseCapacity<_>>(
-                &new_x_set,
-                &v_neighbors,
-                graph_g,
-                graph_h,
-                set_s,
-                u,
-                new_x_set.len()
-            );
-            if let Some(path) = p {
-                if !set_s[&SetSKey{ val1: v, val2: u}].contains_key(&vertex_id) {
-                    set_s
-                        .get_mut(&SetSKey { val1: v, val2: u})
-                        .unwrap()
-                        .insert(vertex_id, Some(path));
+        // if your maximum matching was of less than u_neighbors.len()-1, don't
+        // even bother with the other matchings - you won't get a higher
+        // matching by removing elements
+
+        if cost >= u_neighbors.len()-1 {
+            // maximum matching where X0 is X minus an element
+            for vertex in 0..u_neighbors.len() {
+                let mut new_x_set = u_neighbors.clone();
+                let vertex_id = new_x_set.remove(vertex);
+                let (_cost, p) = max_matching::<DenseCapacity<_>>(
+                    &new_x_set,
+                    &v_neighbors,
+                    graph_g,
+                    graph_h,
+                    set_s,
+                    u,
+                    new_x_set.len()
+                );
+                if let Some(path) = p {
+                    if !set_s[&SetSKey{ val1: v, val2: u}].contains_key(&vertex_id) {
+                        set_s
+                            .get_mut(&SetSKey { val1: v, val2: u})
+                            .unwrap()
+                            .insert(vertex_id, Some(path));
+                    }
                 }
             }
         }
