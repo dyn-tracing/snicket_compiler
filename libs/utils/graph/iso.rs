@@ -3,7 +3,7 @@
 /// Another thing to consider, but is not implemented here, is
 /// http://chasewoerner.org/popl87.pdf
 ///
-use super::graph_utils::{find_leaves, find_root, get_node_with_id, has_property_subset};
+use super::graph_utils::{find_leaves, find_root, has_property_subset};
 use indexmap::map::IndexMap;
 use pathfinding::directed::edmonds_karp::*;
 use petgraph::graph::{Graph, NodeIndex};
@@ -23,7 +23,7 @@ impl Serialize for SetSKey
     where
         S: Serializer,
     {
-        serializer.serialize_str(&format!("({:?},{:?})", self.val1.index(), self.val2.index()))
+        serializer.serialize_str(&format!("{:?},{:?}", self.val1.index(), self.val2.index()))
     }
 }
 
@@ -32,9 +32,7 @@ impl<'de> Deserialize<'de> for SetSKey {
     where
         D: Deserializer<'de>,
     {
-        let mut s: String = Deserialize::deserialize(deserializer)?;
-        s.remove(0);
-        s.remove(s.len()-1);
+        let s: String = Deserialize::deserialize(deserializer)?;
         let mut iterator = s.split(",");
         let first_val = iterator.next().unwrap().parse::<usize>().unwrap();
         let second_val = iterator.next().unwrap().parse::<usize>().unwrap();
@@ -48,6 +46,9 @@ impl<'de> Deserialize<'de> for SetSKey {
 /// the sink connected to all nodes in y.  Edges between x and y are computed
 /// based on if their set (in set_s) contains u_null.  Then we compute
 /// the flow of that graph, which is equivalent to the maximum matching.
+/// We also have the target size of the maximum matching - the size we are
+/// looking for.  Knowing we have not met that target allows us to exit
+/// early.
 fn max_matching<EK: EdmondsKarp<i32>>(
     set_x: &Vec<NodeIndex>,
     set_y: &Vec<NodeIndex>,
@@ -58,22 +59,40 @@ fn max_matching<EK: EdmondsKarp<i32>>(
         IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
     >,
     u_null: NodeIndex,
-) -> (usize, Vec<(NodeIndex, NodeIndex)>) {
+    target_size: usize
+) -> Option<Vec<(NodeIndex, NodeIndex)>> {
     let mut vertices = Vec::new();
     let mut edges = Vec::new();
-    vertices.push("SINK".to_string());
-    vertices.push("SOURCE".to_string());
+    // The NodeIndex objects probably share values between set X and set Y
+    // since they refer from distinct graphs.  So we need some way of
+    // distinguishing them from one another when they are put into the same
+    // graph.
+    //
+    // Strings seem like the easiest solutions - we could prepend an X or Y
+    // identifier.  But the resulting cloning and concatenating is relatively
+    // expensive.
+    // 
+    // Another option is tuples, but tuples don't work with the Edmonds
+    // Karp library.
+    //
+    // So in the end, the code uses usizes.  The numbers for set X are their
+    // original indices + size(graph_h).  This distinguishes them from set Y.
+    // The numbers for set Y are just their NodeIndex index values.  And
+    // finally, source is size(graph_g) + size(graph_h) + 2, and sink is source + 1
+
+    let source: usize = graph_g.node_count() + graph_h.node_count() + 1;
+    let sink: usize = source + 1;
+    vertices.push(source);
+    vertices.push(sink);
+
     for u in set_x {
-        let mut u_str = graph_h.node_weight(*u).unwrap().0.clone();
-        u_str.push_str("U");
-        vertices.push(u_str.clone());
-        edges.push((("SOURCE".to_string(), u_str), 1));
+        let u_index = u.index() + graph_g.node_count();
+        vertices.push(u_index);
+        edges.push(((source, u_index), 1));
     }
     for v in set_y {
-        let mut v_str = graph_g.node_weight(*v).unwrap().0.clone();
-        v_str.push_str("V");
-        vertices.push(v_str.clone());
-        edges.push(((v_str, "SINK".to_string()), 1));
+        vertices.push(v.index());
+        edges.push(((v.index(), sink), 1));
     }
 
     for u in set_x {
@@ -84,53 +103,32 @@ fn max_matching<EK: EdmondsKarp<i32>>(
                     &graph_h.node_weight(*u).unwrap().1,
                 )
             {
-                let mut u_str = graph_h.node_weight(*u).unwrap().0.clone();
-                u_str.push_str("U");
-                let mut v_str = graph_g.node_weight(*v).unwrap().0.clone();
-                v_str.push_str("V");
                 // 2. add edge between v and u
-                edges.push(((u_str, v_str), 1));
+                edges.push(((u.index()+graph_g.node_count(), v.index()), 1));
             }
         }
     }
 
-    let vertices_as_str: Vec<&str> = vertices.iter().map(|s| s.as_ref()).collect();
-    let edges_as_str: Vec<((&str, &str), i32)> = edges
-        .iter()
-        .map(|((a, b), cost)| ((a.as_ref(), b.as_ref()), *cost))
-        .collect();
-    for (edge, _cost) in &edges_as_str {
-        assert!(
-            vertices_as_str.contains(&edge.0),
-            "vertices doesn't have {0}",
-            &edge.0
-        );
-        assert!(
-            vertices_as_str.contains(&edge.1),
-            "vertices doesn't have {0}",
-            &edge.1
-        );
-    }
-    let (edges, _costs) = edmonds_karp::<_, _, _, EK>(
-        &vertices_as_str,
-        &"SOURCE",
-        &"SINK",
-        edges_as_str.into_iter(),
+    let (edges, costs) = edmonds_karp::<_, _, _, EK>(
+        &vertices,
+        &source,
+        &sink,
+        edges.into_iter(),
     );
+   
+    // If we're looking for a different size matching, and we didn't get the 
+    // right size, just return none.
+    if costs as usize != target_size {
+        return None;
+    }
     let mut matching = Vec::new();
     for edge_tuple in edges {
         let edge = edge_tuple.0;
-        if edge.0 != "SOURCE" && edge.1 != "SINK" {
-            let mut node_in_x_set = edge.0.to_string();
-            node_in_x_set.pop();
-            let mut node_in_y_set = edge.1.to_string();
-            node_in_y_set.pop();
-            let node_in_x_set_id = get_node_with_id(graph_h, node_in_x_set).unwrap();
-            let node_in_y_set_id = get_node_with_id(graph_g, node_in_y_set).unwrap();
-            matching.push((node_in_x_set_id, node_in_y_set_id));
+        if edge.0 != source && edge.1 != sink {
+            matching.push((NodeIndex::new(edge.0 - graph_g.node_count()), NodeIndex::new(edge.1)));
         }
     }
-    return (matching.len(), matching);
+    return Some(matching);
 }
 
 // For debugging only
@@ -222,15 +220,16 @@ fn find_mapping_shamir_inner_loop(
         }
 
         // maximum matching where X0 = X
-        let (cost, path) = max_matching::<DenseCapacity<_>>(
+        let p = max_matching::<DenseCapacity<_>>(
             &u_neighbors,
             &v_neighbors,
             graph_g,
             graph_h,
             set_s,
             u,
+            u_neighbors.len()
         );
-        if cost == u_neighbors.len() {
+        if let Some(path) = p {
             if set_s[&SetSKey{val1: v, val2: u}].contains_key(&u) {
             } else {
                 set_s.get_mut(&SetSKey{ val1: v, val2: u}).unwrap().insert(u, Some(path));
@@ -241,17 +240,17 @@ fn find_mapping_shamir_inner_loop(
         for vertex in 0..u_neighbors.len() {
             let mut new_x_set = u_neighbors.clone();
             let vertex_id = new_x_set.remove(vertex);
-            let (cost, path) = max_matching::<DenseCapacity<_>>(
+            let p = max_matching::<DenseCapacity<_>>(
                 &new_x_set,
                 &v_neighbors,
                 graph_g,
                 graph_h,
                 set_s,
                 u,
+                new_x_set.len()
             );
-            if cost == new_x_set.len() {
-                if set_s[&SetSKey{ val1: v, val2: u}].contains_key(&vertex_id) {
-                } else {
+            if let Some(path) = p {
+                if !set_s[&SetSKey{ val1: v, val2: u}].contains_key(&vertex_id) {
                     set_s
                         .get_mut(&SetSKey { val1: v, val2: u})
                         .unwrap()
