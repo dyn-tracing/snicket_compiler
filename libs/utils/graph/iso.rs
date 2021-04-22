@@ -49,6 +49,15 @@ impl<'de> Deserialize<'de> for SetSKey {
 /// We also have the target size of the maximum matching - the size we are
 /// looking for.  Knowing we have not met that target allows us to exit
 /// early.
+///
+/// The cost returned is not always the true cost of the matching.
+/// If it is equal to target_size or target_size-1, then it is the true cost
+/// of the matching;  the idea is that with that knowledge, we can decide
+/// whether or not to continue with other matchings.  However, if the size is
+/// less than target_size-1, there is no point in continuing to do further
+/// matchings later in the algorithm.  So if cost is below that threshold,
+/// that is not necessarily reflective of the true maximum flow, but rather a
+/// way of signaling that neither this nor subsequent matchings will be useful.
 fn max_matching<EK: EdmondsKarp<i32>>(
     set_x: &Vec<NodeIndex>,
     set_y: &Vec<NodeIndex>,
@@ -107,6 +116,12 @@ fn max_matching<EK: EdmondsKarp<i32>>(
                 edges.push(((u.index()+graph_g.node_count(), v.index()), 1));
             }
         }
+    }
+
+    // If even adding one more edge does not get you near the target size,
+    // then there is no hope of having a useful matching.  Just return
+    if edges.len() + 1 < target_size {
+        return (0, None);
     }
 
     let (edges, costs) = edmonds_karp::<_, _, _, EK>(
@@ -265,7 +280,7 @@ fn find_mapping_shamir_inner_loop(
             }
         }
 
-        // lines 12-14
+        // lines 12-14 in Shamir and Tsur pseudocode
         if set_s[&SetSKey{ val1: v, val2: root_h}].contains_key(&root_h) {
             if has_property_subset(
                 &graph_g.node_weight(v).unwrap().1,
