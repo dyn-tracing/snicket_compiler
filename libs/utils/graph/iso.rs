@@ -78,11 +78,6 @@ fn max_matching<EK: EdmondsKarp<i32>>(
 
     for u in set_x {
         for v in set_y {
-            if !set_s.contains_key(&SetSKey{val1: *v, val2: *u}) {
-                print!("can't find {:?}, {:?}\n",
-                       graph_g.node_weight(*v),
-                       graph_h.node_weight(*u));
-            }
             if set_s[&SetSKey{val1: *v, val2: *u}].contains_key(&u_null)
                 && has_property_subset(
                     &graph_g.node_weight(*v).unwrap().1,
@@ -190,7 +185,9 @@ fn get_mapping_from_set_s(
     let mut set_to_find_mapping = vec![(root_h, *root_in_g)];
     while !set_to_find_mapping.is_empty() {
         let key = set_to_find_mapping.pop().unwrap();
-        to_return.push(key);
+        if !to_return.contains(&key) {
+            to_return.push(key);
+        }
 
         if set_s[&SetSKey {val1: key.1, val2: key.0}].contains_key(&key.0) {
             for map in set_s[&SetSKey{val1: key.1, val2: key.0}][&key.0].as_ref() {
@@ -225,7 +222,6 @@ fn find_mapping_shamir_inner_loop(
         }
 
         // maximum matching where X0 = X
-        print!("v is {:?}\n", graph_g.node_weight(v));
         let (cost, path) = max_matching::<DenseCapacity<_>>(
             &u_neighbors,
             &v_neighbors,
@@ -254,11 +250,6 @@ fn find_mapping_shamir_inner_loop(
                 u,
             );
             if cost == new_x_set.len() {
-                if !set_s.contains_key(&SetSKey{val1: v, val2: u}) {
-                    print!("can't find {:?}, {:?}\n",
-                           graph_g.node_weight(v),
-                           graph_h.node_weight(u));
-                }
                 if set_s[&SetSKey{ val1: v, val2: u}].contains_key(&vertex_id) {
                 } else {
                     set_s
