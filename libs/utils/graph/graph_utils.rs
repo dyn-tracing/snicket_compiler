@@ -23,7 +23,7 @@ pub fn generate_target_graph(
     vertices: Vec<String>,
     edges: Vec<(String, String)>,
     ids_to_properties: IndexMap<String, IndexMap<String, String>>,
-) -> Graph<(String, IndexMap<String, String>), String> {
+) -> Graph<(String, IndexMap<String, String>), ()> {
     let mut graph = Graph::new();
 
     // In order to make edges, we have to know the handles of the nodes, and you
@@ -76,8 +76,8 @@ pub fn generate_target_graph(
 pub fn generate_trace_graph_from_headers(
     paths_header: String,
     properties_header: String,
-) -> Graph<(String, IndexMap<String, String>), String> {
-    let mut graph: Graph<(String, IndexMap<String, String>), String> = Graph::new();
+) -> Graph<(String, IndexMap<String, String>), ()> {
+    let mut graph: Graph<(String, IndexMap<String, String>), ()> = Graph::new();
     if paths_header.is_empty() {
         return graph;
     }
@@ -114,7 +114,7 @@ pub fn generate_trace_graph_from_headers(
             graph.add_edge(
                 node_handles[new_node_str],
                 node_handles[node_str],
-                String::new(),
+                (),
             );
             node_str = new_node_str;
         }
@@ -153,7 +153,7 @@ pub fn generate_trace_graph_from_headers(
 }
 
 pub fn get_node_with_id(
-    graph: &Graph<(String, IndexMap<String, String>), String>,
+    graph: &Graph<(String, IndexMap<String, String>), ()>,
     node_name: String,
 ) -> Option<NodeIndex> {
     for index in graph.node_indices() {
@@ -165,7 +165,7 @@ pub fn get_node_with_id(
 }
 
 pub fn get_tree_height(
-    graph: &Graph<(String, IndexMap<String, String>), String>,
+    graph: &Graph<(String, IndexMap<String, String>), ()>,
     root: Option<NodeIndex>,
 ) -> u32 {
     let starting_point;
@@ -187,7 +187,7 @@ pub fn get_tree_height(
 }
 
 pub fn get_out_degree(
-    graph: &Graph<(String, IndexMap<String, String>), String>,
+    graph: &Graph<(String, IndexMap<String, String>), ()>,
     root: Option<NodeIndex>,
 ) -> u32 {
     let starting_point;
@@ -203,7 +203,7 @@ pub fn get_out_degree(
 
 pub fn find_leaves(
     node: NodeIndex,
-    graph: &Graph<(String, IndexMap<String, String>), String>,
+    graph: &Graph<(String, IndexMap<String, String>), ()>,
 ) -> Vec<NodeIndex> {
     let mut post_order = DfsPostOrder::new(&graph, node);
     let mut to_return = Vec::new();
@@ -216,7 +216,7 @@ pub fn find_leaves(
     return to_return;
 }
 
-pub fn find_root(graph: &Graph<(String, IndexMap<String, String>), String>) -> NodeIndex {
+pub fn find_root(graph: &Graph<(String, IndexMap<String, String>), ()>) -> NodeIndex {
     for node in graph.node_indices() {
         let neighbors: Vec<NodeIndex> = graph.neighbors_directed(node, Incoming).collect();
         if neighbors.len() == 0 {
@@ -245,13 +245,13 @@ pub fn has_property_subset(
 mod tests {
     use super::*;
 
-    fn make_small_trace_graph() -> Graph<(String, IndexMap<String, String>), String> {
+    fn make_small_trace_graph() -> Graph<(String, IndexMap<String, String>), ()> {
         let graph_string = String::from("0;1;2");
         let graph = generate_trace_graph_from_headers(graph_string, String::new());
         graph
     }
 
-    fn make_small_target_graph() -> Graph<(String, IndexMap<String, String>), String> {
+    fn make_small_target_graph() -> Graph<(String, IndexMap<String, String>), ()> {
         let a = String::from("a");
         let b = String::from("b");
         let c = String::from("c");
@@ -281,8 +281,8 @@ mod tests {
         let graph = generate_target_graph(vertices, edges, ids_to_properties);
         graph
     }
-    fn little_branching_graph() -> Graph<(String, IndexMap<String, String>), String> {
-        let mut graph = Graph::<(String, IndexMap<String, String>), String>::new();
+    fn little_branching_graph() -> Graph<(String, IndexMap<String, String>), ()> {
+        let mut graph = Graph::<(String, IndexMap<String, String>), ()>::new();
         graph.extend_with_edges(&[(0, 1), (0, 2), (0, 3), (1, 4), (3, 5)]);
         return graph;
     }

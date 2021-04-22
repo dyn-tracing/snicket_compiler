@@ -31,7 +31,7 @@ impl Property {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FerriedData {
-    pub trace_graph: Graph<(String, IndexMap<String, String>), String>,
+    pub trace_graph: Graph<(String, IndexMap<String, String>), ()>,
     pub unassigned_properties: Vec<Property>, // entity property value
 }
 
@@ -87,7 +87,7 @@ impl FerriedData {
                     self.trace_graph.add_edge(
                         edge0_in_stored_graph,
                         edge1_in_stored_graph,
-                        String::new(),
+                        (),
                     );
                 }
                 None => {
