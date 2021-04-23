@@ -76,7 +76,7 @@ pub fn create_target_graph() -> Graph<
         std::string::String,
         IndexMap<std::string::String, std::string::String>,
     ),
-    std::string::String,
+    (),
 > {
      let vertices = vec!(  "a".to_string(), "b".to_string(), "c".to_string(),  );
          let edges = vec!(   ("a".to_string(), "b".to_string() ),   ("b".to_string(), "c".to_string() ),   );
@@ -137,7 +137,7 @@ pub fn get_value_for_storage(
             std::string::String,                                                
             IndexMap<std::string::String, std::string::String>,                 
         ),                                                                      
-        std::string::String,                                                    
+        (),                                                    
     >,                                                                          
     mapping: &Vec<(NodeIndex, NodeIndex)>,                                      
     fd: &FerriedData,                                                  
@@ -170,7 +170,7 @@ pub fn get_value_for_storage(
 #[derive(Clone, Debug)]
 pub struct Filter {
     pub whoami: Option<String>,
-    pub target_graph: Option<Graph<(String, IndexMap<String, String>), String>>,
+    pub target_graph: Option<Graph<(String, IndexMap<String, String>), ()>>,
     pub filter_state: IndexMap<String, String>,
     pub envoy_shared_data: IndexMap<String, String>, // trace ID to stored ferried data as string 
     pub collected_properties: Vec<String>, //properties to collect
@@ -259,7 +259,7 @@ impl Filter {
                     let edge1_weight = &data.trace_graph.node_weight(edge1).unwrap().0;
                     let edge0_in_stored_graph = graph_utils::get_node_with_id(&stored_data.trace_graph, edge0_weight.to_string()).unwrap();
                     let edge1_in_stored_graph = graph_utils::get_node_with_id(&stored_data.trace_graph, edge1_weight.to_string()).unwrap();
-                    stored_data.trace_graph.add_edge(edge0_in_stored_graph, edge1_in_stored_graph, String::new());
+                    stored_data.trace_graph.add_edge(edge0_in_stored_graph, edge1_in_stored_graph, ());
                 }
                 None => {
                     log::error!("no edge endpoints found \n");
@@ -308,7 +308,7 @@ impl Filter {
                             (self.whoami.as_ref().unwrap().to_string(), my_indexmap));
     
                         for previous_root in previous_roots {
-                            data.trace_graph.add_edge(me, previous_root, String::new());
+                            data.trace_graph.add_edge(me, previous_root, ());
                         }
                         data.assign_properties();
 

@@ -17,7 +17,7 @@ pub fn create_target_graph() -> Graph<
         std::string::String,
         IndexMap<std::string::String, std::string::String>,
     ),
-    std::string::String,
+    (),
 > {
      let vertices = vec!( "a".to_string(),"b".to_string(),"c".to_string(), );
         let edges = vec!(  ("a".to_string(), "b".to_string() ),  ("b".to_string(), "c".to_string() ),  );
@@ -62,7 +62,7 @@ pub fn get_value_for_storage(
             std::string::String,
             IndexMap<std::string::String, std::string::String>,
         ),
-        std::string::String,
+        (),
     >,
     mapping: &Vec<(NodeIndex, NodeIndex)>,
     stored_data: &FerriedData,
