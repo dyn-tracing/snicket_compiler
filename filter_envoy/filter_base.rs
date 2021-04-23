@@ -190,7 +190,7 @@ pub fn _start() {
 }
 
 struct HttpHeadersRoot {
-    target_graph: Graph<(String, IndexMap<String, String>), String>,
+    target_graph: Graph<(String, IndexMap<String, String>), ()>,
 }
 
 impl Context for HttpHeadersRoot {}
@@ -227,7 +227,7 @@ impl RootContext for HttpHeadersRoot {
 pub struct HttpHeaders {
     pub context_id: u32,
     pub workload_name: String,
-    pub target_graph: Graph<(String, IndexMap<String, String>), String>,
+    pub target_graph: Graph<(String, IndexMap<String, String>), ()>,
 }
 
 impl Context for HttpHeaders {
@@ -430,7 +430,7 @@ impl HttpHeaders {
         for previous_root in previous_roots {
             stored_data
                 .trace_graph
-                .add_edge(me, previous_root, String::new());
+                .add_edge(me, previous_root, ());
         }
         stored_data.assign_properties();
 

@@ -25,6 +25,8 @@ pub fn create_target_graph() -> Graph<
         ids_to_properties.insert("a".to_string(), IndexMap::new());
         ids_to_properties.insert("b".to_string(), IndexMap::new());
         ids_to_properties.insert("c".to_string(), IndexMap::new());
+        let mut b_hashmap = ids_to_properties.get_mut("b").unwrap();
+        b_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "reviews-v1".to_string());
         return generate_target_graph(vertices, edges, ids_to_properties);
 
 }
@@ -59,7 +61,24 @@ pub fn execute_udfs_and_check_trace_lvl_prop(http_headers: &HttpHeaders, fd: &mu
     let root_id = "productpage-v1";
     
             if &http_headers.workload_name == root_id {        let mut trace_prop_str : String;
-       }
+
+                let root_node = get_node_with_id(&fd.trace_graph, "productpage-v1".to_string()).unwrap();
+                if ! ( fd.trace_graph.node_weight(root_node).unwrap().1.contains_key("request.total_size") &&
+                    fd.trace_graph.node_weight(root_node).unwrap().1["request.total_size"] == "1" ){
+                    // TODO:  replace fd
+                    match serde_json::to_string(&fd) {
+                        Ok(fd_str) => {
+                            return false;
+                        }
+                        Err(e) => {
+                            log::error!("could not serialize baggage {0}
+", e);
+                            return false;
+                        }
+                     }
+                     return false;
+                }
+                       }
     return true;
 }
 

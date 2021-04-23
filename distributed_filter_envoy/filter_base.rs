@@ -36,7 +36,7 @@ pub struct FerriedData {
         IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>,
     >,
     pub found_match: bool,
-    pub trace_graph: Graph<(String, IndexMap<String, String>), String>,
+    pub trace_graph: Graph<(String, IndexMap<String, String>), ()>,
     pub unassigned_properties: Vec<Property>, // entity property value
 }
 impl FerriedData {
@@ -80,7 +80,7 @@ impl FerriedData {
                     let edge1_weight = &other_data.trace_graph.node_weight(edge1).unwrap().0;
                     let edge0_in_stored_graph = get_node_with_id(&self.trace_graph, edge0_weight.to_string()).unwrap();
                     let edge1_in_stored_graph = get_node_with_id(&self.trace_graph, edge1_weight.to_string()).unwrap();
-                    self.trace_graph.add_edge(edge0_in_stored_graph, edge1_in_stored_graph, String::new());
+                    self.trace_graph.add_edge(edge0_in_stored_graph, edge1_in_stored_graph, ());
                 }
                 None => {
                     panic!("no edge endpoints found \n");
@@ -296,7 +296,7 @@ pub fn _start() {
 }
 
 struct HttpHeadersRoot {
-    target_graph: Graph<(String, IndexMap<String, String>), String>,
+    target_graph: Graph<(String, IndexMap<String, String>), ()>,
 }
 
 impl Context for HttpHeadersRoot {}
@@ -333,7 +333,7 @@ impl RootContext for HttpHeadersRoot {
 pub struct HttpHeaders {
     pub context_id: u32,
     pub workload_name: String,
-    pub target_graph: Graph<(String, IndexMap<String, String>), String>,
+    pub target_graph: Graph<(String, IndexMap<String, String>), ()>,
 }
 
 impl Context for HttpHeaders {
@@ -536,7 +536,7 @@ impl HttpHeaders {
         for previous_root in previous_roots {
             stored_data
                 .trace_graph
-                .add_edge(me, previous_root, String::new());
+                .add_edge(me, previous_root, ());
         }
         stored_data.assign_properties();
         execute_udfs(self, &mut stored_data);

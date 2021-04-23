@@ -65,6 +65,7 @@ fn main() {
     let bin_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let template_dir = bin_dir.join("templates");
     let def_filter_dir = bin_dir.join("filter_envoy/filter.rs");
+    let distributed_filter_dir = bin_dir.join("distributed_filter_envoy/filter.rs");
     let compile_vals = ["sim", "envoy"];
     let matches = App::new("Dynamic Tracing")
         .arg(
@@ -142,7 +143,13 @@ fn main() {
     let result = parser.oC_Cypher();
     // the aggregation filter is relative to the filter directory
     let filter_out = PathBuf::from(matches.value_of("output").unwrap());
-    let agg_filter_out = match def_filter_dir.parent() {
+    let filter_parent;
+    if matches.is_present("distributed") {
+        filter_parent = distributed_filter_dir.parent();
+    } else {
+        filter_parent = def_filter_dir.parent();
+    }
+    let agg_filter_out = match filter_parent {
         Some(parent_dir) => parent_dir.join("agg/aggregation_filter.rs"),
         None => PathBuf::new(),
     };

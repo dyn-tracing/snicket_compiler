@@ -31,7 +31,7 @@ impl Property {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FerriedData {
-    pub trace_graph: Graph<(String, IndexMap<String, String>), String>,
+    pub trace_graph: Graph<(String, IndexMap<String, String>), ()>,
     pub unassigned_properties: Vec<Property>, // entity property value
 }
 
@@ -48,10 +48,9 @@ impl FerriedData {
     pub fn assign_properties(&mut self) {
         let mut to_delete = Vec::new();
         for property in &mut self.unassigned_properties {
-            let node = graph_utils::get_node_with_id(&self.trace_graph, property.entity.clone());
-            if node.is_some() {
+            if let Some(node) = graph_utils::get_node_with_id(&self.trace_graph, property.entity.clone()) {
                 self.trace_graph
-                    .node_weight_mut(node.unwrap())
+                    .node_weight_mut(node)
                     .unwrap()
                     .1
                     .insert(property.property_name.clone(), property.value.clone());
@@ -87,7 +86,7 @@ impl FerriedData {
                     self.trace_graph.add_edge(
                         edge0_in_stored_graph,
                         edge1_in_stored_graph,
-                        String::new(),
+                        (),
                     );
                 }
                 None => {
@@ -99,7 +98,7 @@ impl FerriedData {
 
         // 2. merge unassigned properties
         //    these are properties we have collected but are not yet in the graph
-        let mut other_properties = other_data.unassigned_properties.clone();
+        let mut other_properties = other_data.unassigned_properties;
         //FIXME this is odd, why is this necessary?
         self.unassigned_properties.append(&mut other_properties);
         self.unassigned_properties.sort_unstable();
