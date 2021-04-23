@@ -107,6 +107,7 @@ fn max_matching<EK: EdmondsKarp<i32>>(
 
     for u in set_x {
         for v in set_y {
+            print!("looking for {:?}, {:?}\n", graph_g.node_weight(*v), graph_h.node_weight(*u));
             if set_s[&SetSKey{val1: *v, val2: *u}].contains_key(&u_null)
                 && has_property_subset(
                     &graph_g.node_weight(*v).unwrap().1,
@@ -375,6 +376,7 @@ fn initialize_s_for_node(
     set_s: &mut SetSType,
     node: NodeIndex,
 ) {
+    print!("initializing {:?}\n\n\n", graph_g.node_weight(node));
     for u in graph_h.node_indices() {
         // initialize S entry as empty set
         set_s.insert(SetSKey{ val1: node, val2: u}, IndexMap::new());
@@ -416,19 +418,21 @@ pub fn find_mapping_shamir_decentralized(
         if !am_root && mapping_found {
             mapping_root_for_children = mapping_root;
         }
-        /*
         // delete extraneous grandchild information if applicable
         // Although this gets rid of extra, useless info, it absolutely blows
         // up the runtime from roughly 30,000 ns to 480,000 ns for reasons
         // I do not understand
+            /*
+
         set_s.retain(|key, value| {
             let am_child = graph_g.contains_edge(cur_node, key.val1);
             let am_cur_node = key.val1 == cur_node;
             let valid_subgraph = value.contains_key(&key.val2);
             am_child || am_cur_node || valid_subgraph
+            value.contains_key(&key.val2) || graph_g.contains_edge(cur_node, key.val1) || key.val1 == cur_node
             }
         );
-        */
+            */
     }
 
     // 2a. If one of your children matched all of graph_h, return that matching
@@ -1132,6 +1136,166 @@ mod tests {
             let c = graph_g.add_node((String::from("c"), IndexMap::new()));
             graph_g.add_edge(c, b, ());
             find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, c, true);
+        });
+    }
+
+    #[bench]
+    fn bench_small_centralized(bencher: &mut Bencher) {
+        let graph_h = three_child_graph();
+        let mut graph_g = Graph::<(String, IndexMap<String, String>), ()>::new();
+        let root = graph_g.add_node((String::from("root"), IndexMap::new()));
+        let a = graph_g.add_node((String::from("a"), IndexMap::new()));
+        let b = graph_g.add_node((String::from("b"), IndexMap::new()));
+        let c = graph_g.add_node((String::from("c"), IndexMap::new()));
+        graph_g.add_edge(root, a, ());
+        graph_g.add_edge(root, b, ());
+        graph_g.add_edge(root, c, ());
+        bencher.iter(||
+            find_mapping_shamir_centralized(&graph_g, &graph_h)
+        );
+    }
+    #[bench]
+    fn bench_small_decentralized(bencher: &mut Bencher) {
+        let graph_h = three_child_graph();
+        let mut graph_g = Graph::<(String, IndexMap<String, String>), ()>::new();
+        let mut set_s : SetSType = IndexMap::new();
+
+        bencher.iter( || {
+            let c = graph_g.add_node((String::from("c"), IndexMap::new()));
+            find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, c, false);
+
+            let b = graph_g.add_node((String::from("b"), IndexMap::new()));
+            find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, b, false);
+
+            let a = graph_g.add_node((String::from("a"), IndexMap::new()));
+            find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, a, false);
+
+            let root = graph_g.add_node((String::from("root"), IndexMap::new()));
+            graph_g.add_edge(root, a, ());
+            graph_g.add_edge(root, b, ());
+            graph_g.add_edge(root, c, ());
+            find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, root, true);
+        });
+    }
+
+    #[bench]
+    fn bench_medium_centralized(bencher: &mut Bencher) {
+        let graph_h = three_child_graph();
+        let mut graph_g = Graph::<(String, IndexMap<String, String>), ()>::new();
+        bencher.iter(||{
+        let root = graph_g.add_node((String::from("root"), IndexMap::new()));
+        let a = graph_g.add_node((String::from("a"), IndexMap::new()));
+        let b = graph_g.add_node((String::from("b"), IndexMap::new()));
+        let c = graph_g.add_node((String::from("c"), IndexMap::new()));
+        graph_g.add_edge(root, a, ());
+        graph_g.add_edge(root, b, ());
+        graph_g.add_edge(root, c, ());
+        let mut i = 0;
+        let mut prev = graph_g.add_node((String::from("0"), IndexMap::new()));
+        while i < 20 {
+            i += 1;
+            let new = graph_g.add_node((i.to_string(), IndexMap::new()));
+            graph_g.add_edge(prev, new, ());
+            prev = new;
+        }
+            find_mapping_shamir_centralized(&graph_g, &graph_h)
+        });
+    }
+    #[bench]
+    fn bench_medium_decentralized(bencher: &mut Bencher) {
+        let graph_h = three_child_graph();
+        let mut graph_g = Graph::<(String, IndexMap<String, String>), ()>::new();
+        let mut set_s : SetSType = IndexMap::new();
+
+        bencher.iter( || {
+            let mut i = 0;
+            let mut prev = graph_g.add_node((String::from("0"), IndexMap::new()));
+            find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, prev, false);
+            while i < 20 {
+                i += 1;
+                let new = graph_g.add_node((i.to_string(), IndexMap::new()));
+                graph_g.add_edge(new, prev, ());
+                find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, new, false);
+                prev = new
+            }
+
+            let c = graph_g.add_node((String::from("c"), IndexMap::new()));
+            graph_g.add_edge(prev, c, ());
+            find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, c, false);
+
+            let b = graph_g.add_node((String::from("b"), IndexMap::new()));
+            find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, b, false);
+
+            let a = graph_g.add_node((String::from("a"), IndexMap::new()));
+            find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, a, false);
+
+            let root = graph_g.add_node((String::from("root"), IndexMap::new()));
+            graph_g.add_edge(root, a, ());
+            graph_g.add_edge(root, b, ());
+            graph_g.add_edge(root, c, ());
+            find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, root, true);
+        });
+
+    }
+
+
+
+    #[bench]
+    fn bench_large_centralized(bencher: &mut Bencher) {
+        let graph_h = three_child_graph();
+        let mut graph_g = Graph::<(String, IndexMap<String, String>), ()>::new();
+        bencher.iter(||{
+        let root = graph_g.add_node((String::from("root"), IndexMap::new()));
+        let a = graph_g.add_node((String::from("a"), IndexMap::new()));
+        let b = graph_g.add_node((String::from("b"), IndexMap::new()));
+        let c = graph_g.add_node((String::from("c"), IndexMap::new()));
+        graph_g.add_edge(root, a, ());
+        graph_g.add_edge(root, b, ());
+        graph_g.add_edge(root, c, ());
+        let mut i = 0;
+        let mut prev = graph_g.add_node((String::from("0"), IndexMap::new()));
+        while i < 500 {
+            i += 1;
+            let new = graph_g.add_node((i.to_string(), IndexMap::new()));
+            graph_g.add_edge(prev, new, ());
+            prev = new;
+        }
+            find_mapping_shamir_centralized(&graph_g, &graph_h)
+        });
+    }
+    #[bench]
+    fn bench_large_decentralized(bencher: &mut Bencher) {
+        let graph_h = three_child_graph();
+        let mut graph_g = Graph::<(String, IndexMap<String, String>), ()>::new();
+        let mut set_s : SetSType = IndexMap::new();
+
+        bencher.iter( || {
+            let mut i = 0;
+            let mut prev = graph_g.add_node((String::from("0"), IndexMap::new()));
+            find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, prev, false);
+            while i < 500 {
+                i += 1;
+                let new = graph_g.add_node((i.to_string(), IndexMap::new()));
+                graph_g.add_edge(new, prev, ());
+                find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, new, false);
+                prev = new
+            }
+
+            let c = graph_g.add_node((String::from("c"), IndexMap::new()));
+            graph_g.add_edge(prev, c, ());
+            find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, c, false);
+
+            let b = graph_g.add_node((String::from("b"), IndexMap::new()));
+            find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, b, false);
+
+            let a = graph_g.add_node((String::from("a"), IndexMap::new()));
+            find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, a, false);
+
+            let root = graph_g.add_node((String::from("root"), IndexMap::new()));
+            graph_g.add_edge(root, a, ());
+            graph_g.add_edge(root, b, ());
+            graph_g.add_edge(root, c, ());
+            find_mapping_shamir_decentralized(&graph_g, &graph_h, &mut set_s, root, true);
         });
     }
 }
