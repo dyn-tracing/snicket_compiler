@@ -17,7 +17,7 @@ pub fn create_target_graph() -> Graph<
         std::string::String,
         IndexMap<std::string::String, std::string::String>,
     ),
-    std::string::String,
+    (),
 > {
     {{#each target_blocks}}{{{this}}}{{/each}}
 }
@@ -46,7 +46,7 @@ pub fn get_value_for_storage(
             std::string::String,
             IndexMap<std::string::String, std::string::String>,
         ),
-        std::string::String,
+        (),
     >,
     mapping: &Vec<(NodeIndex, NodeIndex)>,
     stored_data: &FerriedData,
