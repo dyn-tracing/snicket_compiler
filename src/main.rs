@@ -143,7 +143,7 @@ fn main() {
     let result = parser.oC_Cypher();
     // the aggregation filter is relative to the filter directory
     let filter_out = PathBuf::from(matches.value_of("output").unwrap());
-    let mut filter_parent;
+    let filter_parent;
     if matches.is_present("distributed") {
         filter_parent = distributed_filter_dir.parent();
     } else {
