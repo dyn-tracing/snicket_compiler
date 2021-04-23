@@ -48,7 +48,7 @@ impl FerriedData {
     pub fn assign_properties(&mut self) {
         let mut to_delete = Vec::new();
         for property in &mut self.unassigned_properties {
-            if let Some(node) = graph_utils::get_node_with_id(&self.trace_graph, property.entity.clone()) {
+            if let Some(node) = graph_utils::get_node_with_id(&self.trace_graph, &property.entity) {
                 self.trace_graph
                     .node_weight_mut(node)
                     .unwrap()
@@ -78,10 +78,10 @@ impl FerriedData {
                     let edge0_weight = &other_data.trace_graph.node_weight(edge0).unwrap().0;
                     let edge1_weight = &other_data.trace_graph.node_weight(edge1).unwrap().0;
                     let edge0_in_stored_graph =
-                        graph_utils::get_node_with_id(&self.trace_graph, edge0_weight.to_string())
+                        graph_utils::get_node_with_id(&self.trace_graph, edge0_weight)
                             .unwrap();
                     let edge1_in_stored_graph =
-                        graph_utils::get_node_with_id(&self.trace_graph, edge1_weight.to_string())
+                        graph_utils::get_node_with_id(&self.trace_graph, edge1_weight)
                             .unwrap();
                     self.trace_graph.add_edge(
                         edge0_in_stored_graph,

@@ -53,7 +53,7 @@ impl FerriedData {
     fn assign_properties(&mut self) {
         let mut to_delete = Vec::new();
         for property in &mut self.unassigned_properties {
-            let node = get_node_with_id(&self.trace_graph, property.entity.clone());
+            let node = get_node_with_id(&self.trace_graph, &property.entity);
             if node.is_some() {
                 self.trace_graph.node_weight_mut(node.unwrap()).unwrap().1.insert(property.property_name.clone(), property.value.clone());
                 to_delete.push(property.clone());
@@ -78,8 +78,8 @@ impl FerriedData {
                 Some((edge0, edge1)) => {
                     let edge0_weight = &other_data.trace_graph.node_weight(edge0).unwrap().0;
                     let edge1_weight = &other_data.trace_graph.node_weight(edge1).unwrap().0;
-                    let edge0_in_stored_graph = get_node_with_id(&self.trace_graph, edge0_weight.to_string()).unwrap();
-                    let edge1_in_stored_graph = get_node_with_id(&self.trace_graph, edge1_weight.to_string()).unwrap();
+                    let edge0_in_stored_graph = get_node_with_id(&self.trace_graph, edge0_weight).unwrap();
+                    let edge1_in_stored_graph = get_node_with_id(&self.trace_graph, edge1_weight).unwrap();
                     self.trace_graph.add_edge(edge0_in_stored_graph, edge1_in_stored_graph, ());
                 }
                 None => {
@@ -554,7 +554,7 @@ impl HttpHeaders {
                     &stored_data.trace_graph,
                     &self.target_graph,
                     &mut stored_data.set_s,
-                    get_node_with_id(&stored_data.trace_graph, self.workload_name.clone()).unwrap(),
+                    get_node_with_id(&stored_data.trace_graph, &self.workload_name).unwrap(),
                     am_root);
             let cent_mapping_opt = find_mapping_shamir_centralized(&stored_data.trace_graph, &self.target_graph);
             if cent_mapping_opt.is_some() {

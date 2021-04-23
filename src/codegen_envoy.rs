@@ -142,7 +142,7 @@ impl CodeGen for CodeGenEnvoy {
         let get_udf_vals = format!(
             "let my_{id}_value;
             let child_iterator = fd.trace_graph.neighbors_directed(
-                get_node_with_id(&fd.trace_graph, http_headers.workload_name.clone()).unwrap(),
+                get_node_with_id(&fd.trace_graph, &http_headers.workload_name).unwrap(),
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
             for child in child_iterator {{
@@ -163,7 +163,7 @@ impl CodeGen for CodeGenEnvoy {
 
         let save_udf_vals = format!(
             "
-        let node = get_node_with_id(&fd.trace_graph, http_headers.workload_name.clone()).unwrap();
+        let node = get_node_with_id(&fd.trace_graph, &http_headers.workload_name).unwrap();
         // if we already have the property, don't add it
         if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key(\"{id}\") &&
                fd.trace_graph.node_weight(node).unwrap().1[\"{id}\"] == my_{id}_value ) {{
@@ -291,7 +291,7 @@ impl CodeGen for CodeGenEnvoy {
                 }
                 let trace_filter_block = format!(
                 "
-                let root_node = get_node_with_id(&fd.trace_graph, \"{root_id}\".to_string()).unwrap();
+                let root_node = get_node_with_id(&fd.trace_graph, \"{root_id}\").unwrap();
                 if ! ( fd.trace_graph.node_weight(root_node).unwrap().1.contains_key(\"{prop_name}\") &&
                     fd.trace_graph.node_weight(root_node).unwrap().1[\"{prop_name}\"] == \"{value}\" ){{
                     // TODO:  replace fd
@@ -329,7 +329,7 @@ impl CodeGen for CodeGenEnvoy {
         let mut prop_wo_periods = property.clone();
         prop_wo_periods.retain(|c| c != '.');
         let ret_block = format!(
-        "let trace_node_idx = get_node_with_id(&fd.trace_graph, \"{node_id}\".to_string());
+        "let trace_node_idx = get_node_with_id(&fd.trace_graph, \"{node_id}\");
         if trace_node_idx.is_none() {{
            log::error!(\"Node {node_id} not found\");
                 return None;
@@ -347,7 +347,7 @@ impl CodeGen for CodeGenEnvoy {
         let mut prop_wo_periods = property.clone();
         prop_wo_periods.retain(|c| c != '.');
         let ret_block = format!(
-        "let node_ptr = get_node_with_id(target_graph, \"{node_id}\".to_string());
+        "let node_ptr = get_node_with_id(target_graph, \"{node_id}\");
         if node_ptr.is_none() {{
            log::error!(\"Node {node_id} not found\");
                 return None;

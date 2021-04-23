@@ -107,7 +107,6 @@ fn max_matching<EK: EdmondsKarp<i32>>(
 
     for u in set_x {
         for v in set_y {
-            print!("looking for {:?}, {:?}\n", graph_g.node_weight(*v), graph_h.node_weight(*u));
             if set_s[&SetSKey{val1: *v, val2: *u}].contains_key(&u_null)
                 && has_property_subset(
                     &graph_g.node_weight(*v).unwrap().1,
@@ -755,30 +754,30 @@ mod tests {
         }
 
         let aa = SetSKey {
-            val1: get_node_with_id(&graph_g, "a".to_string()).unwrap(),
-            val2: get_node_with_id(&graph_h, "a".to_string()).unwrap(),
+            val1: get_node_with_id(&graph_g, "a").unwrap(),
+            val2: get_node_with_id(&graph_h, "a").unwrap(),
         };
         let ab = SetSKey {
-            val1: get_node_with_id(&graph_g, "a".to_string()).unwrap(),
-            val2: get_node_with_id(&graph_h, "b".to_string()).unwrap(),
+            val1: get_node_with_id(&graph_g, "a").unwrap(),
+            val2: get_node_with_id(&graph_h, "b").unwrap(),
         };
 
         let ba = SetSKey {
-            val1: get_node_with_id(&graph_g, "b".to_string()).unwrap(),
-            val2: get_node_with_id(&graph_h, "a".to_string()).unwrap(),
+            val1: get_node_with_id(&graph_g, "b").unwrap(),
+            val2: get_node_with_id(&graph_h, "a").unwrap(),
         };
         let bb = SetSKey {
-            val1: get_node_with_id(&graph_g, "b".to_string()).unwrap(),
-            val2: get_node_with_id(&graph_h, "b".to_string()).unwrap(),
+            val1: get_node_with_id(&graph_g, "b").unwrap(),
+            val2: get_node_with_id(&graph_h, "b").unwrap(),
         };
 
         let ca = SetSKey {
-            val1: get_node_with_id(&graph_g, "c".to_string()).unwrap(),
-            val2: get_node_with_id(&graph_h, "a".to_string()).unwrap(),
+            val1: get_node_with_id(&graph_g, "c").unwrap(),
+            val2: get_node_with_id(&graph_h, "a").unwrap(),
         };
         let cb = SetSKey {
-            val1: get_node_with_id(&graph_g, "c".to_string()).unwrap(),
-            val2: get_node_with_id(&graph_h, "b".to_string()).unwrap(),
+            val1: get_node_with_id(&graph_g, "c").unwrap(),
+            val2: get_node_with_id(&graph_h, "b").unwrap(),
         };
 
         assert!(s.contains_key(&aa));
@@ -836,12 +835,12 @@ mod tests {
         let mapping_wrapped = find_mapping_shamir_centralized(&graph_g, &graph_h);
         assert!(mapping_wrapped.is_some());
         let mapping = mapping_wrapped.unwrap();
-        let a = get_node_with_id(&graph_h, "a".to_string()).unwrap();
-        let b = get_node_with_id(&graph_h, "b".to_string()).unwrap();
-        let c = get_node_with_id(&graph_h, "c".to_string()).unwrap();
-        let prod = get_node_with_id(&graph_g, "productpage-v1".to_string()).unwrap();
-        let det = get_node_with_id(&graph_g, "details-v1".to_string()).unwrap();
-        let rev = get_node_with_id(&graph_g, "reviews-v1".to_string()).unwrap();
+        let a = get_node_with_id(&graph_h, "a").unwrap();
+        let b = get_node_with_id(&graph_h, "b").unwrap();
+        let c = get_node_with_id(&graph_h, "c").unwrap();
+        let prod = get_node_with_id(&graph_g, "productpage-v1").unwrap();
+        let det = get_node_with_id(&graph_g, "details-v1").unwrap();
+        let rev = get_node_with_id(&graph_g, "reviews-v1").unwrap();
         assert!(mapping.contains(&(a, prod)));
         assert!(mapping.contains(&(b, det)) || mapping.contains(&(c, det)));
         assert!(mapping.contains(&(b, rev)) || mapping.contains(&(c, rev)));
@@ -851,10 +850,10 @@ mod tests {
         let mapping_wrapped_2 = find_mapping_shamir_centralized(&graph_g_2, &graph_h_2);
         assert!(mapping_wrapped_2.is_some());
         let mapping_2 = mapping_wrapped_2.unwrap();
-        let a_2 = get_node_with_id(&graph_h_2, "a".to_string()).unwrap();
-        let b_2 = get_node_with_id(&graph_h_2, "b".to_string()).unwrap();
-        let prod_2 = get_node_with_id(&graph_g_2, "productpage-v1".to_string()).unwrap();
-        let rev_2 = get_node_with_id(&graph_g_2, "reviews-v1".to_string()).unwrap();
+        let a_2 = get_node_with_id(&graph_h_2, "a").unwrap();
+        let b_2 = get_node_with_id(&graph_h_2, "b").unwrap();
+        let prod_2 = get_node_with_id(&graph_g_2, "productpage-v1").unwrap();
+        let rev_2 = get_node_with_id(&graph_g_2, "reviews-v1").unwrap();
         assert!(mapping_2.contains(&(a_2, prod_2)));
         assert!(mapping_2.contains(&(b_2, rev_2)));
     }

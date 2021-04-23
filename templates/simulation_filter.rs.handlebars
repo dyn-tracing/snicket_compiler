@@ -204,8 +204,8 @@ impl Filter {
                 Some((edge0, edge1)) => {
                     let edge0_weight = &data.trace_graph.node_weight(edge0).unwrap().0;
                     let edge1_weight = &data.trace_graph.node_weight(edge1).unwrap().0;
-                    let edge0_in_stored_graph = graph_utils::get_node_with_id(&stored_data.trace_graph, edge0_weight.to_string()).unwrap();
-                    let edge1_in_stored_graph = graph_utils::get_node_with_id(&stored_data.trace_graph, edge1_weight.to_string()).unwrap();
+                    let edge0_in_stored_graph = graph_utils::get_node_with_id(&stored_data.trace_graph, edge0_weight).unwrap();
+                    let edge1_in_stored_graph = graph_utils::get_node_with_id(&stored_data.trace_graph, edge1_weight).unwrap();
                     stored_data.trace_graph.add_edge(edge0_in_stored_graph, edge1_in_stored_graph, ());
                 }
                 None => {

@@ -57,7 +57,7 @@ pub fn generate_target_graph(
 
 pub fn get_node_with_id(
     graph: &Graph<(String, IndexMap<String, String>), ()>,
-    node_name: String,
+    node_name: &str,
 ) -> Option<NodeIndex> {
     for index in graph.node_indices() {
         if graph.node_weight(index).unwrap().0 == node_name {
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn test_get_node_with_id() {
         let graph = little_graph();
-        let ret = get_node_with_id(&graph, "a".to_string());
+        let ret = get_node_with_id(&graph, "a");
         assert!(ret.is_some());
     }
 
