@@ -15,6 +15,7 @@ extern crate test;
 type SetSType = IndexMap<
         SetSKey,
         IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>>;
+type GraphType = Graph<(String, IndexMap<String, String>), ()>;
 // -------------- Shamir Isomorphism Algorithm Helper Functions---------------
 #[derive(Debug, Hash, Eq, PartialEq)] 
 pub struct SetSKey {
@@ -65,8 +66,8 @@ impl<'de> Deserialize<'de> for SetSKey {
 fn max_matching<EK: EdmondsKarp<i32>>(
     set_x: &[NodeIndex],
     set_y: &[NodeIndex],
-    graph_g: &Graph<(String, IndexMap<String, String>), ()>,
-    graph_h: &Graph<(String, IndexMap<String, String>), ()>,
+    graph_g: &GraphType,
+    graph_h: &GraphType,
     set_s: &SetSType,
     u_null: NodeIndex,
     target_size: usize
@@ -150,8 +151,8 @@ fn max_matching<EK: EdmondsKarp<i32>>(
 // For debugging only
 #[allow(dead_code)]
 fn print_set_s(
-    graph_g: &Graph<(String, IndexMap<String, String>), ()>,
-    graph_h: &Graph<(String, IndexMap<String, String>), ()>,
+    graph_g: &GraphType,
+    graph_h: &GraphType,
     set_s: &SetSType,
 ) {
     for key in set_s.keys() {
@@ -183,8 +184,8 @@ fn print_set_s(
 // between the same nodes are clearly not "wrong".  But because of this,
 // the size of the matching returned might be a bit wonky.
 fn get_mapping_from_set_s(
-    _graph_g: &Graph<(String, IndexMap<String, String>), ()>,
-    graph_h: &Graph<(String, IndexMap<String, String>), ()>,
+    _graph_g: &GraphType,
+    graph_h: &GraphType,
     set_s: &SetSType,
     root_in_g: &NodeIndex,
 ) -> Vec<(NodeIndex, NodeIndex)> {
@@ -214,8 +215,8 @@ fn get_mapping_from_set_s(
 
 fn find_mapping_shamir_inner_loop(
     v: NodeIndex,
-    graph_g: &Graph<(String, IndexMap<String, String>), ()>,
-    graph_h: &Graph<(String, IndexMap<String, String>), ()>,
+    graph_g: &GraphType,
+    graph_h: &GraphType,
     set_s: &mut SetSType,
 ) -> (bool, Option<NodeIndex>) {
     let root_h = find_root(&graph_h);
@@ -306,8 +307,8 @@ fn find_mapping_shamir_inner_loop(
 
 // this performs lines 0-4 in the Shamir paper figure 3
 fn initialize_s(
-    graph_g: &Graph<(String, IndexMap<String, String>), ()>,
-    graph_h: &Graph<(String, IndexMap<String, String>), ()>,
+    graph_g: &GraphType,
+    graph_h: &GraphType,
 ) -> SetSType {
     let mut s = IndexMap::<
         SetSKey,
@@ -321,8 +322,8 @@ fn initialize_s(
     }
     let root_g = find_root(&graph_g);
     let root_h = find_root(&graph_h);
-    for leaf_g in find_leaves(root_g, &graph_g) {
-        for leaf_h in find_leaves(root_h, &graph_h) {
+    for leaf_g in find_leaves(root_g, graph_g) {
+        for leaf_h in find_leaves(root_h, graph_h) {
             s.get_mut(&SetSKey{ val1: leaf_g, val2: leaf_h})
                 .unwrap()
                 .insert(leaf_h, Some(vec![(leaf_h, leaf_g)]));
@@ -337,8 +338,8 @@ fn initialize_s(
 }
 
 pub fn find_mapping_shamir_centralized(
-    graph_g: &Graph<(String, IndexMap<String, String>), ()>,
-    graph_h: &Graph<(String, IndexMap<String, String>), ()>,
+    graph_g: &GraphType,
+    graph_h: &GraphType,
 ) -> Option<Vec<(NodeIndex, NodeIndex)>> {
     // TODO:  before even dealing with isomorphism, ask if breadth,
     // height, num nodes match up
@@ -370,8 +371,8 @@ pub fn find_mapping_shamir_centralized(
 
 // ---------------- Shamir Isomorphism Algorithm Decentralized ---------------
 fn initialize_s_for_node(
-    graph_g: &Graph<(String, IndexMap<String, String>), ()>,
-    graph_h: &Graph<(String, IndexMap<String, String>), ()>,
+    graph_g: &GraphType,
+    graph_h: &GraphType,
     set_s: &mut SetSType,
     node: NodeIndex,
 ) {
@@ -380,11 +381,11 @@ fn initialize_s_for_node(
         // initialize S entry as empty set
         set_s.insert(SetSKey{ val1: node, val2: u}, IndexMap::new());
     }
-    let root_h = find_root(&graph_h);
+    let root_h = find_root(graph_h);
 
     // if I am a leaf
     if graph_g.neighbors_directed(node, Outgoing).count() == 0 {
-        for leaf_h in find_leaves(root_h, &graph_h) {
+        for leaf_h in find_leaves(root_h, graph_h) {
             set_s
                 .get_mut(&SetSKey{ val1: node, val2: leaf_h})
                 .unwrap()
@@ -400,8 +401,8 @@ fn initialize_s_for_node(
 }
 
 pub fn find_mapping_shamir_decentralized(
-    graph_g: &Graph<(String, IndexMap<String, String>), ()>,
-    graph_h: &Graph<(String, IndexMap<String, String>), ()>,
+    graph_g: &GraphType,
+    graph_h: &GraphType,
     set_s: &mut SetSType,
     cur_node: NodeIndex, // what node we are in graph_g
     am_root: bool,
@@ -468,8 +469,8 @@ mod tests {
     use test::Bencher;
 
     /// --------------- Graph Creation Helper functions -------------------
-    fn three_node_graph() -> Graph<(String, IndexMap<String, String>), ()> {
-        let mut graph = Graph::<(String, IndexMap<String, String>), ()>::new();
+    fn three_node_graph() -> GraphType {
+        let mut graph: GraphType = Graph::new();
         let a = graph.add_node(("a".to_string(), IndexMap::new()));
         let b = graph.add_node(("b".to_string(), IndexMap::new()));
         let c = graph.add_node(("c".to_string(), IndexMap::new()));
@@ -478,8 +479,8 @@ mod tests {
         return graph;
     }
 
-    fn three_node_chain_graph() -> Graph<(String, IndexMap<String, String>), ()> {
-        let mut graph = Graph::<(String, IndexMap<String, String>), ()>::new();
+    fn three_node_chain_graph() -> GraphType {
+        let mut graph: GraphType = Graph::new();
         let a = graph.add_node(("a".to_string(), IndexMap::new()));
         let b = graph.add_node(("b".to_string(), IndexMap::new()));
         let c = graph.add_node(("c".to_string(), IndexMap::new()));
@@ -488,8 +489,8 @@ mod tests {
         return graph;
     }
 
-    fn two_node_graph() -> Graph<(String, IndexMap<String, String>), ()> {
-        let mut graph = Graph::<(String, IndexMap<String, String>), ()>::new();
+    fn two_node_graph() -> GraphType {
+        let mut graph: GraphType = Graph::new();
         let a = graph.add_node(("a".to_string(), IndexMap::new()));
         let b = graph.add_node(("b".to_string(), IndexMap::new()));
 
@@ -497,8 +498,8 @@ mod tests {
         return graph;
     }
 
-    fn three_node_graph_with_properties() -> Graph<(String, IndexMap<String, String>), ()> {
-        let mut graph = Graph::<(String, IndexMap<String, String>), ()>::new();
+    fn three_node_graph_with_properties() -> GraphType {
+        let mut graph: GraphType = Graph::new();
         let a_hashmap: IndexMap<String, String> = [
             ("height".to_string(), "100".to_string()),
             ("breadth".to_string(), "5".to_string()),
@@ -514,7 +515,7 @@ mod tests {
         return graph;
     }
 
-    fn two_node_graph_with_properties() -> Graph<(String, IndexMap<String, String>), ()> {
+    fn two_node_graph_with_properties() -> GraphType {
         let mut graph = Graph::<(String, IndexMap<String, String>), ()>::new();
         let a_hashmap: IndexMap<String, String> = [("height".to_string(), "100".to_string())]
             .iter()
@@ -527,7 +528,7 @@ mod tests {
         return graph;
     }
 
-    fn two_node_graph_with_wrong_properties() -> Graph<(String, IndexMap<String, String>), ()> {
+    fn two_node_graph_with_wrong_properties() -> GraphType {
         let mut graph = Graph::<(String, IndexMap<String, String>), ()>::new();
         let a_hashmap: IndexMap<String, String> = [("height".to_string(), "1".to_string())]
             .iter()
@@ -540,7 +541,7 @@ mod tests {
         return graph;
     }
 
-    fn chain_graph() -> Graph<(String, IndexMap<String, String>), ()> {
+    fn chain_graph() -> GraphType {
         let mut graph = Graph::<(String, IndexMap<String, String>), ()>::new();
         let a = graph.add_node(("a".to_string(), IndexMap::new()));
         let b = graph.add_node(("b".to_string(), IndexMap::new()));
@@ -554,7 +555,7 @@ mod tests {
     }
 
     // from figure 2 in shamir paper
-    fn g_figure_2() -> Graph<(String, IndexMap<String, String>), ()> {
+    fn g_figure_2() -> GraphType {
         let mut graph = Graph::<(String, IndexMap<String, String>), ()>::new();
         let r = graph.add_node((String::from("r"), IndexMap::new()));
         let v = graph.add_node((String::from("v"), IndexMap::new()));
@@ -576,7 +577,7 @@ mod tests {
     }
 
     // from figure 2 in shamir paper
-    fn h_figure_2() -> Graph<(String, IndexMap<String, String>), ()> {
+    fn h_figure_2() -> GraphType {
         let mut graph = Graph::<(String, IndexMap<String, String>), ()>::new();
         let u = graph.add_node((String::from("u"), IndexMap::new()));
         let u1 = graph.add_node((String::from("u1"), IndexMap::new()));
@@ -596,7 +597,7 @@ mod tests {
         return graph;
     }
 
-    fn three_child_graph() -> Graph<(String, IndexMap<String, String>), ()> {
+    fn three_child_graph() -> GraphType {
         let mut graph = Graph::<(String, IndexMap<String, String>), ()>::new();
         let root = graph.add_node((String::from("root"), IndexMap::new()));
         let child1 = graph.add_node((String::from("child1"), IndexMap::new()));
@@ -610,7 +611,7 @@ mod tests {
         return graph;
     }
 
-    fn four_child_graph() -> Graph<(String, IndexMap<String, String>), ()> {
+    fn four_child_graph() -> GraphType {
         let mut graph = Graph::<(String, IndexMap<String, String>), ()>::new();
         let root = graph.add_node((String::from("root"), IndexMap::new()));
         let child1 = graph.add_node((String::from("child1"), IndexMap::new()));
@@ -626,7 +627,7 @@ mod tests {
         return graph;
     }
 
-    fn bookinfo_trace_graph() -> Graph<(String, IndexMap<String, String>), ()> {
+    fn bookinfo_trace_graph() -> GraphType {
         let mut graph = Graph::<(String, IndexMap<String, String>), ()>::new();
         let productpage = graph.add_node((String::from("productpage-v1"), IndexMap::new()));
         let reviews = graph.add_node((String::from("reviews-v1"), IndexMap::new()));
@@ -640,7 +641,7 @@ mod tests {
         return graph;
     }
 
-    fn simulation_example() -> Graph<(String, IndexMap<String, String>), ()> {
+    fn simulation_example() -> GraphType {
         let mut graph_g = Graph::<(String, IndexMap<String, String>), ()>::new();
         let prod_hashmap: IndexMap<String, String> = [
             ("height".to_string(), "2".to_string()),
@@ -700,7 +701,7 @@ mod tests {
         return graph_g;
     }
 
-    fn simulation_example_no_properties() -> Graph<(String, IndexMap<String, String>), ()> {
+    fn simulation_example_no_properties() -> GraphType {
         let mut graph_g = Graph::<(String, IndexMap<String, String>), ()>::new();
         let prod = graph_g.add_node(("productpage-v1".to_string(), IndexMap::new()));
 
@@ -716,7 +717,7 @@ mod tests {
         return graph_g;
     }
 
-    fn biggest_graph() -> Graph<(String, IndexMap<String, String>), ()> {
+    fn biggest_graph() -> GraphType {
         let mut graph_g = Graph::<(String, IndexMap<String, String>), ()>::new();
         let a = graph_g.add_node(("a".to_string(), IndexMap::new()));
         let b = graph_g.add_node(("b".to_string(), IndexMap::new()));
