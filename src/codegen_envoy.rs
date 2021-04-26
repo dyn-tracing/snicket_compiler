@@ -307,57 +307,51 @@ fn generate_udf_blocks(
     udf_blocks
 }
 
-fn parse_udf(
-    scalar_udf_table: &mut IndexMap<String, ScalarUdf>,
-    aggregation_udf_table: &mut IndexMap<String, AggregationUdf>,
-    udf: String,
-) {
+enum ScalarOrAggregationUdf {
+    ScalarUdf(ScalarUdf),
+    AggregationUdf(AggregationUdf),
+}
+
+fn parse_udf(udf: String) -> ScalarOrAggregationUdf {
     let scalar_re = Regex::new(
             r".*udf_type:\s+(?P<udf_type>\w+)\n.*leaf_func:\s+(?P<leaf_func>\w+)\n.*mid_func:\s+(?P<mid_func>\w+)\n.*id:\s+(?P<id>\w+)",
         ).unwrap();
 
-    let aggr_re = Regex::new(
-            r".*udf_type:\s+(?P<udf_type>\w+)\n.*init_func:\s+(?P<init_func>\w+)\n.*exec_func:\s+(?P<exec_func>\w+)\n.*struct_name:\s+(?P<struct_name>\w+)\n.*id:\s+(?P<id>\w+)",
-        ).unwrap();
-
-    let scalar_rust_caps = scalar_re.captures(&udf);
-    let aggr_rust_caps = aggr_re.captures(&udf);
-
-    if let Some(rc) = scalar_rust_caps {
+    if let Some(rc) = scalar_re.captures(&udf) {
         let udf_type = UdfType::from_str(rc.name("udf_type").unwrap().as_str()).unwrap();
         let leaf_func = String::from(rc.name("leaf_func").unwrap().as_str());
         let mid_func = String::from(rc.name("mid_func").unwrap().as_str());
         let id = String::from(rc.name("id").unwrap().as_str());
 
-        scalar_udf_table.insert(
-            id.clone(),
-            ScalarUdf {
-                udf_type,
-                leaf_func,
-                mid_func,
-                func_impl: udf,
-                id,
-            },
-        );
-    } else if let Some(rc) = aggr_rust_caps {
+        return ScalarOrAggregationUdf::ScalarUdf(ScalarUdf {
+            udf_type,
+            leaf_func,
+            mid_func,
+            func_impl: udf,
+            id,
+        });
+    }
+    let aggr_re = Regex::new(
+            r".*udf_type:\s+(?P<udf_type>\w+)\n.*init_func:\s+(?P<init_func>\w+)\n.*exec_func:\s+(?P<exec_func>\w+)\n.*struct_name:\s+(?P<struct_name>\w+)\n.*id:\s+(?P<id>\w+)",
+        ).unwrap();
+    if let Some(rc) = aggr_re.captures(&udf) {
         let udf_type = UdfType::from_str(rc.name("udf_type").unwrap().as_str()).unwrap();
         let init_func = String::from(rc.name("init_func").unwrap().as_str());
         let exec_func = String::from(rc.name("exec_func").unwrap().as_str());
         let struct_name = String::from(rc.name("struct_name").unwrap().as_str());
         let id = String::from(rc.name("id").unwrap().as_str());
 
-        aggregation_udf_table.insert(
-            id.clone(),
-            AggregationUdf {
-                udf_type,
-                init_func,
-                exec_func,
-                struct_name,
-                func_impl: udf,
-                id,
-            },
-        );
+        return ScalarOrAggregationUdf::AggregationUdf(AggregationUdf {
+            udf_type,
+            init_func,
+            exec_func,
+            struct_name,
+            func_impl: udf,
+            id,
+        });
     }
+    log::error!("Unable to parse input udf {:?}", udf);
+    std::process::exit(1);
 }
 
 pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) -> CodeStruct {
@@ -367,7 +361,14 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
     let mut aggregation_udf_table: IndexMap<String, AggregationUdf> = IndexMap::new();
     for udf_path in udf_paths {
         log::debug!("UDF: {:?}", udf_path);
-        parse_udf(&mut scalar_udf_table, &mut aggregation_udf_table, udf_path);
+        match parse_udf(udf_path) {
+            ScalarOrAggregationUdf::ScalarUdf(udf) => {
+                scalar_udf_table.insert(udf.id.clone(), udf);
+            }
+            ScalarOrAggregationUdf::AggregationUdf(udf) => {
+                aggregation_udf_table.insert(udf.id.clone(), udf);
+            }
+        }
     }
     // all the properties we collect
     code_struct.request_blocks = generate_property_blocks(&query_data.properties);
