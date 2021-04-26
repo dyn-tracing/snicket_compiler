@@ -38,11 +38,11 @@ pub struct AggregationUdf {
     pub func_impl: String,
 }
 
-// TODO: Use getters
+
 #[derive(Serialize)]
-pub struct CodeGenStruct {
+pub struct CodeStruct {
     // the IR, as defined in to_ir.rs
-    pub ir: VisitorResults,
+    pub root_id: String,
     // code blocks used in incoming requests
     pub request_blocks: Vec<String>,
     // code blocks in outgoing responses, after matching
@@ -57,22 +57,24 @@ pub struct CodeGenStruct {
     pub scalar_udf_table: IndexMap<String, ScalarUdf>,
     // where we store udf implementations
     pub aggregation_udf_table: IndexMap<String, AggregationUdf>,
-    pub envoy_properties: Vec<String>,
-    // all the properties we collect
-    pub collected_properties: Vec<String>,
+}
+
+impl CodeStruct {
+    pub fn new(root_id: &str) -> CodeStruct {
+        CodeStruct {
+            root_id: root_id.to_string(),
+            request_blocks: Vec::new(),
+            response_blocks: Vec::new(),
+            target_blocks: Vec::new(),
+            udf_blocks: Vec::new(),
+            trace_lvl_prop_blocks: Vec::new(),
+            scalar_udf_table: IndexMap::default(),
+            aggregation_udf_table: IndexMap::default(),
+        }
+    }
 }
 
 pub trait CodeGen: Serialize {
-    fn generate_code_blocks(ir: VisitorResults, udfs: Vec<String>) -> Self;
-    fn parse_udf(&mut self, udf: String);
-    fn collect_envoy_property(&mut self, property: String);
-    fn collect_udf_property(&mut self, udf_id: String);
-    fn get_maps(&mut self);
-    fn make_struct_filter_blocks(&mut self);
-    fn make_attr_filter_blocks(&mut self);
-    fn make_trace_rpc_value(&mut self);
-    fn make_storage_rpc_value_from_trace(&mut self, entity: String, property: String);
-    fn make_storage_rpc_value_from_target(&mut self, entity: String, property: String);
-    fn make_return_block(&mut self);
-    fn make_aggr_block(&mut self);
+    fn generate_code_blocks(ir: VisitorResults, udfs: Vec<String>) -> CodeStruct;
+
 }

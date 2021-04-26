@@ -2,10 +2,10 @@
 mod antlr_gen;
 mod codegen_common;
 mod codegen_envoy;
-mod codegen_simulator;
 mod ir;
 mod to_ir;
 
+use crate::codegen_common::CodeStruct;
 use crate::codegen_common::CodeGen;
 use antlr_gen::lexer::CypherLexer;
 use antlr_gen::parser::CypherParser;
@@ -29,7 +29,7 @@ use std::path::{Path, PathBuf};
  * @output_filename: where the output is written
  */
 // TODO: make this trait more concrete
-fn write_to_handlebars<T: CodeGen>(code_gen: &T, template_path: PathBuf, output_filename: PathBuf) {
+fn write_to_handlebars(code_gen: &CodeStruct, template_path: PathBuf, output_filename: PathBuf) {
     let display = template_path.display();
     let mut template_file = match File::open(&template_path) {
         Err(msg) => panic!("Failed to open {}: {}", display, msg),
@@ -53,7 +53,7 @@ fn write_to_handlebars<T: CodeGen>(code_gen: &T, template_path: PathBuf, output_
     file.write_all(output.as_bytes()).expect("write failed");
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up logging
     let mut builder = env_logger::Builder::from_default_env();
     // do not want timestamp for now
@@ -67,7 +67,9 @@ fn main() {
     let def_filter_dir = bin_dir.join("filter_envoy/filter.rs");
     let distributed_filter_dir = bin_dir.join("distributed_filter_envoy/filter.rs");
     let compile_vals = ["sim", "envoy"];
-    let matches = App::new("Dynamic Tracing")
+    let app = App::new("Dynamic Tracing");
+    let matches = app
+        .clone()
         .arg(
             Arg::with_name("query")
                 .short("q")
@@ -120,86 +122,83 @@ fn main() {
         )
         .get_matches();
 
+    let tf = CommonTokenFactory::default();
+    // Read query from file specified by command line argument.
+    // Clap ensures that all of these are valid so we can safely unwrap
+    let query_file = matches.value_of("query").unwrap();
+    let root_id = matches.value_of("root_node").unwrap();
+    let filter_out = PathBuf::from(matches.value_of("output").unwrap());
+    let comp_mode = matches.value_of("compilation_mode").unwrap();
+    // Collect UDFs
     let mut udfs = Vec::new();
     if let Some(udf_files) = matches.values_of("udf") {
         for udf_file in udf_files {
-            udfs.push(
-                std::fs::read_to_string(udf_file)
-                    .unwrap_or_else(|_| panic!("failed to read file {}", udf_file)),
-            );
+            let udf = match std::fs::read_to_string(udf_file) {
+                Ok(udf_str) => udf_str,
+                Err(err) => {
+                    log::error!("Failed to parse UDF file as string: {:?}", err);
+                    std::process::exit(-1);
+                }
+            };
+            udfs.push(udf);
         }
     }
-
-    let tf = CommonTokenFactory::default();
-    // Read query from file specified by command line argument.
-    // TODO: Handle all those unwraps.
-    let query_file = matches.value_of("query").unwrap();
-    let root_id = matches.value_of("root_node").unwrap();
-    let query: String = fs::read_to_string(query_file).unwrap();
+    // Start the parsing phase
+    let query = match fs::read_to_string(query_file) {
+        Ok(query_str) => query_str,
+        Err(err) => {
+            log::error!("Failed to parse query file as string: {:?}", err);
+            std::process::exit(-1);
+        }
+    };
     let query_stream = InputStream::new_owned(query.into_boxed_str());
     let lexer = CypherLexer::new_with_token_factory(query_stream, &tf);
     let token_source = CommonTokenStream::new(lexer);
     let mut parser = CypherParser::new(token_source);
-    let result = parser.oC_Cypher();
-    // the aggregation filter is relative to the filter directory
-    let filter_out = PathBuf::from(matches.value_of("output").unwrap());
-    let filter_parent;
-    if matches.is_present("distributed") {
-        filter_parent = distributed_filter_dir.parent();
-    } else {
-        filter_parent = def_filter_dir.parent();
-    }
+    let result = parser.oC_Cypher()?;
+
+    // The aggregation filter is relative to the filter directory
+    let filter_parent = match matches.is_present("distributed") {
+        true => distributed_filter_dir.parent(),
+        false => def_filter_dir.parent(),
+    };
     let agg_filter_out = match filter_parent {
         Some(parent_dir) => parent_dir.join("agg/aggregation_filter.rs"),
         None => PathBuf::new(),
     };
 
-    if let Err(e) = result {
-        log::error!("Error parsing query: {:?}", e);
-        std::process::exit(-1);
-    }
-    let visitor_results = to_ir::visit_result(result.unwrap(), root_id.to_string());
-    // TODO: Error handling
-    let comp_mode = matches.value_of("compilation_mode").unwrap();
+    let visitor_results = to_ir::visit_result(result, root_id.to_string());
+    let filter_str: &str;
+    let filter_agg_str: &str;
     match comp_mode {
         "sim" => {
-            // TODO: support multiple UDF files
-            let codegen_object =
-                codegen_simulator::CodeGenSimulator::generate_code_blocks(visitor_results, udfs);
-            let handle_bar_str: &str;
-            if !matches.is_present("distributed") {
-                handle_bar_str = "simulation_filter.rs.handlebars";
-            } else {
-                handle_bar_str = "simulation_filter_distributed.rs.handlebars";
-            }
-            write_to_handlebars(
-                &codegen_object,
-                template_dir.join(handle_bar_str),
-                filter_out,
-            );
-            write_to_handlebars(
-                &codegen_object,
-                template_dir.join("simulation_filter_aggregation.rs.handlebars"),
-                agg_filter_out,
-            );
+            // // TODO: support multiple UDF files
+            // let codegen_object =
+            //     codegen_simulator::CodeGenSimulator::generate_code_blocks(visitor_results, udfs);
+            // filter_str = match matches.is_present("distributed") {
+            //     true => "simulation_filter_distributed.rs.handlebars",
+            //     false => "simulation_filter.rs.handlebars",
+            // };
+            // filter_agg_str = "simulation_filter_aggregation.rs.handlebars";
+            // write_to_handlebars(&codegen_object, template_dir.join(filter_str), filter_out);
+            // write_to_handlebars(
+            //     &codegen_object,
+            //     template_dir.join(filter_agg_str),
+            //     agg_filter_out,
+            // );
         }
         "envoy" => {
             let codegen_object =
                 codegen_envoy::CodeGenEnvoy::generate_code_blocks(visitor_results, udfs);
-            let handle_bar_str: &str;
-            if !matches.is_present("distributed") {
-                handle_bar_str = "envoy_filter.rs.handlebars";
-            } else {
-                handle_bar_str = "distributed_envoy_filter.rs.handlebars";
-            }
+            filter_str = match matches.is_present("distributed") {
+                true => "distributed_envoy_filter.rs.handlebars",
+                false => "envoy_filter.rs.handlebars",
+            };
+            filter_agg_str = "envoy_filter_aggregation.rs.handlebars";
+            write_to_handlebars(&codegen_object, template_dir.join(filter_str), filter_out);
             write_to_handlebars(
                 &codegen_object,
-                template_dir.join(handle_bar_str),
-                filter_out,
-            );
-            write_to_handlebars(
-                &codegen_object,
-                template_dir.join("envoy_filter_aggregation.rs.handlebars"),
+                template_dir.join(filter_agg_str),
                 agg_filter_out,
             );
         }
@@ -211,4 +210,5 @@ fn main() {
             std::process::exit(-1);
         }
     }
+    return Ok(());
 }

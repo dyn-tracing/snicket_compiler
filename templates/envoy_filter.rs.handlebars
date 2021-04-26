@@ -35,12 +35,13 @@ pub fn collect_envoy_properties(
 pub fn execute_udfs_and_check_trace_lvl_prop(http_headers: &HttpHeaders, fd: &mut FerriedData) -> bool {
     // Empty for this query, but in general, will be useful
     {{#each udf_blocks}}{{{this}}}{{/each}}
-    let root_id = "{{this.ir.root_id}}";
+    let root_id = "{{this.root_id}}";
     {{#each trace_lvl_prop_blocks}}{{{this}}}{{/each}}
     return true;
 }
 
 pub fn get_value_for_storage(
+    node_id : &str,
     target_graph: &Graph<
         (
             std::string::String,

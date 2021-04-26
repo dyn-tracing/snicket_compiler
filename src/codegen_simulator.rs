@@ -52,7 +52,7 @@ impl CodeGen for CodeGenSimulator {
         to_return
             .envoy_properties
             .push("node.metadata.WORKLOAD_NAME".to_string());
-        to_return.get_maps();
+        to_return.get_maps(&ir);
         to_return.make_struct_filter_blocks();
         to_return.make_attr_filter_blocks();
         to_return.make_return_block();
@@ -159,7 +159,7 @@ impl CodeGen for CodeGenSimulator {
         self.udf_blocks.push(save_udf_vals);
     }
 
-    fn get_maps(&mut self) {
+    fn get_maps(&mut self, ir: &VisitorResults) {
         let mut maps = Vec::new();
         mem::swap(&mut maps, &mut self.ir.maps);
         for map in &maps {

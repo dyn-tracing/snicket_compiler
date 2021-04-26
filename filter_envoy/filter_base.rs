@@ -428,9 +428,7 @@ impl HttpHeaders {
             .add_node((self.workload_name.clone(), my_indexmap));
 
         for previous_root in previous_roots {
-            stored_data
-                .trace_graph
-                .add_edge(me, previous_root, ());
+            stored_data.trace_graph.add_edge(me, previous_root, ());
         }
         stored_data.assign_properties();
 
@@ -444,12 +442,15 @@ impl HttpHeaders {
             let mapping_opt =
                 find_mapping_shamir_centralized(&stored_data.trace_graph, &self.target_graph);
             if let Some(mapping) = mapping_opt {
-                let value_wrapped =
-                    get_value_for_storage(&self.target_graph, &mapping, &stored_data);
-                if value_wrapped.is_none() {
-                    return;
-                }
-                let value = value_wrapped.unwrap();
+                let value = match get_value_for_storage(
+                    &self.workload_name,
+                    &self.target_graph,
+                    &mapping,
+                    &stored_data,
+                ) {
+                    Some(value_wrapped) => value_wrapped,
+                    None => return,
+                };
                 let call_result = self.dispatch_http_call(
                     "storage-upstream",
                     vec![
@@ -458,7 +459,7 @@ impl HttpHeaders {
                         (":authority", "storage-upstream"),
                         ("key", &trace_id),
                         ("value", &value),
-                        ("x-request-id", &trace_id)
+                        ("x-request-id", &trace_id),
                     ],
                     None,
                     vec![],
