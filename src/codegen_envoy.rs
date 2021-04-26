@@ -1,4 +1,3 @@
-use indexmap::IndexSet;
 use super::codegen_common::AggregationUdf;
 use super::codegen_common::ScalarUdf;
 use super::codegen_common::UdfType;
@@ -8,6 +7,7 @@ use super::CodeGen;
 use crate::codegen_common::CodeStruct;
 use crate::ir::Aggregate;
 use crate::ir::PropertyOrUDF;
+use indexmap::IndexSet;
 
 use crate::ir::Property;
 use crate::ir::UdfCall;
@@ -156,6 +156,8 @@ fn make_attr_filter_blocks(code_struct: &mut CodeStruct, query_data: &VisitorRes
     let end_root_block = "       }".to_string();
     code_struct.trace_lvl_prop_blocks.push(end_root_block);
 }
+
+#[allow(dead_code)]
 fn make_trace_rpc_value(code_struct: &mut CodeStruct) {
     let ret_block = "
         match serde_json::to_string(fd) {
@@ -217,7 +219,7 @@ fn make_storage_rpc_value_from_target(entity: &str, property: &str) -> String {
                 property = property
         );
 
-    return ret_block;
+    ret_block
 }
 
 fn make_return_block(
@@ -228,7 +230,7 @@ fn make_return_block(
     if let PropertyOrUDF::Property(prop) = entity_ref {
         let ret_block = match prop.parent.as_str() {
             "trace" => make_storage_rpc_value_from_trace(query_data.root_id.clone(), &prop.parent),
-            _ => make_storage_rpc_value_from_target(&prop.parent, &prop.to_string()),
+            _ => make_storage_rpc_value_from_target(&prop.parent, &prop.to_dot_string()),
         };
         code_struct.response_blocks.push(ret_block);
     } else if let PropertyOrUDF::UdfCall(call) = entity_ref {
@@ -274,7 +276,7 @@ fn generate_property_blocks(properties: &IndexSet<Property>) -> Vec<String> {
         .to_string();
         property_blocks.push(push_block);
     }
-    return property_blocks;
+    property_blocks
 }
 
 fn generate_udf_blocks(code_struct: &CodeStruct, udf_calls: &IndexSet<UdfCall>) -> Vec<String> {
@@ -319,8 +321,7 @@ fn generate_udf_blocks(code_struct: &CodeStruct, udf_calls: &IndexSet<UdfCall>) 
         );
         udf_blocks.push(save_udf_vals);
     }
-
-    return udf_blocks;
+    udf_blocks
 }
 
 fn parse_udf(code_struct: &mut CodeStruct, udf: String) {
@@ -393,8 +394,7 @@ impl CodeGen for CodeGenEnvoy {
                 make_aggr_block(&mut code_struct, &agg, &query_data)
             }
         }
-
-        return code_struct;
+        code_struct
     }
 }
 

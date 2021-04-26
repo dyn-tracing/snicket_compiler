@@ -297,10 +297,10 @@ impl<'i> ReturnVisitor {
             udf_name,
             udf_args
         );
-        return UdfCall {
+        UdfCall {
             id: udf_name,
             args: udf_args,
-        };
+        }
     }
 }
 

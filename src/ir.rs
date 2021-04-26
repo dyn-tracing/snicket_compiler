@@ -1,8 +1,8 @@
 /***********************************/
 // IR Structs
 /***********************************/
-use indexmap::IndexSet;
 use indexmap::map::IndexMap;
+use indexmap::IndexSet;
 use serde::Serialize;
 
 #[derive(Clone, Debug, Serialize)]
@@ -75,7 +75,7 @@ impl UdfCall {
     pub fn to_ref_str(&self) -> String {
         // TODO: Make this a little bit less stringbuildery
         let mut udf_str = self.id.clone();
-        udf_str.push_str("(");
+        udf_str.push('(');
         if let Some((last, front)) = self.args.split_last() {
             for arg in front {
                 udf_str.push_str(&arg);
@@ -83,8 +83,8 @@ impl UdfCall {
             }
             udf_str.push_str(last);
         }
-        udf_str.push_str(")");
-        return udf_str;
+        udf_str.push(')');
+        udf_str
     }
 }
 
@@ -104,24 +104,24 @@ impl Property {
         // lst_str.push_str(&self.parent);
         // lst_str.push_str("\"");
         for member in &self.members {
-            lst_str.push_str("\"");
+            lst_str.push('\"');
             lst_str.push_str(&member);
             lst_str.push_str("\", ");
         }
-        lst_str.push_str("]");
-        return lst_str;
+        lst_str.push(']');
+        lst_str
     }
-    pub fn to_string(&self) -> String {
+    pub fn to_dot_string(&self) -> String {
         // TODO: Make this a little bit less stringbuildery
         let mut udf_str = String::new();
         if let Some((last, front)) = self.members.split_last() {
             for member in front {
                 udf_str.push_str(&member);
-                udf_str.push_str(".");
+                udf_str.push('.');
             }
             udf_str.push_str(last);
         }
-        return udf_str;
+        udf_str
     }
 }
 impl Expression for Property {}
