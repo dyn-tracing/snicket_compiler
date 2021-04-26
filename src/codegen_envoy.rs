@@ -3,45 +3,18 @@ use super::codegen_common::ScalarUdf;
 use super::codegen_common::UdfType;
 use super::ir::IrReturnEnum;
 use super::ir::VisitorResults;
-use super::CodeGen;
 use crate::codegen_common::CodeStruct;
 use crate::ir::Aggregate;
-use crate::ir::PropertyOrUDF;
-use indexmap::IndexSet;
-
 use crate::ir::Property;
+use crate::ir::PropertyOrUDF;
 use crate::ir::UdfCall;
-use indexmap::map::IndexMap;
+use indexmap::IndexSet;
 use regex::Regex;
-use serde::Serialize;
-
 use std::str::FromStr;
 
 /********************************/
 // Code Generation
 /********************************/
-#[derive(Serialize)]
-pub struct CodeGenEnvoy {
-    // the IR, as defined in to_ir.rs
-    root_id: String,
-    // code blocks used in incoming requests
-    request_blocks: Vec<String>,
-    // code blocks in outgoing responses, after matching
-    response_blocks: Vec<String>,
-    // code blocks to create target graph
-    target_blocks: Vec<String>,
-    // code blocks to be used in outgoing responses, to compute UDF before matching
-    udf_blocks: Vec<String>,
-    // code blocks to be used in outgoing responses, to compute UDF before matching
-    trace_lvl_prop_blocks: Vec<String>,
-    // where we store udf implementations
-    scalar_udf_table: IndexMap<String, ScalarUdf>,
-    // where we store udf implementations
-    aggregation_udf_table: IndexMap<String, AggregationUdf>,
-    envoy_properties: Vec<String>,
-    // all the properties we collect
-    collected_properties: Vec<String>,
-}
 
 fn make_struct_filter_blocks(code_struct: &mut CodeStruct, query_data: &VisitorResults) {
     for struct_filter in &query_data.struct_filters {
@@ -182,6 +155,7 @@ fn make_storage_rpc_value_from_trace(entity: String, property: &str) -> String {
         prop = property
     );
 }
+
 fn make_storage_rpc_value_from_target(entity: &str, property: &str) -> String {
     let ret_block = format!(
         "let node_ptr = get_node_with_id(target_graph, \"{node_id}\".to_string());
@@ -283,6 +257,14 @@ fn generate_udf_blocks(code_struct: &CodeStruct, udf_calls: &IndexSet<UdfCall>) 
     let mut udf_blocks = Vec::new();
     for call in udf_calls {
         let udf_ref = call.to_ref_str();
+        if code_struct.aggregation_udf_table.contains_key(&call.id) {
+            // TODO: Aggregations are handled separately, where do they go?
+            continue;
+        }
+        if !code_struct.scalar_udf_table.contains_key(&call.id) {
+            log::error!("ID {:?} not found in the scalar UDF map!", call.id);
+            std::process::exit(1);
+        }
         let get_udf_vals = format!(
             "let my_{id}_value;
             let child_iterator = fd.trace_graph.neighbors_directed(
@@ -373,144 +355,139 @@ fn parse_udf(code_struct: &mut CodeStruct, udf: String) {
     }
 }
 
-impl CodeGen for CodeGenEnvoy {
-    fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) -> CodeStruct {
-        let mut code_struct = CodeStruct::new(&query_data.root_id);
-        for udf_path in udf_paths {
-            log::info!("UDF: {:?}", udf_path);
-            parse_udf(&mut code_struct, udf_path);
-        }
-        // all the properties we collect
-        code_struct.request_blocks = generate_property_blocks(&query_data.properties);
-        code_struct.udf_blocks = generate_udf_blocks(&code_struct, &query_data.udf_calls);
-        make_struct_filter_blocks(&mut code_struct, &query_data);
-        make_attr_filter_blocks(&mut code_struct, &query_data);
-
-        match query_data.return_expr {
-            IrReturnEnum::PropertyOrUDF(ref entity_ref) => {
-                make_return_block(&mut code_struct, entity_ref, &query_data)
-            }
-            IrReturnEnum::Aggregate(ref agg) => {
-                make_aggr_block(&mut code_struct, &agg, &query_data)
-            }
-        }
-        code_struct
+pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) -> CodeStruct {
+    let mut code_struct = CodeStruct::new(&query_data.root_id);
+    for udf_path in udf_paths {
+        log::debug!("UDF: {:?}", udf_path);
+        parse_udf(&mut code_struct, udf_path);
     }
+    // all the properties we collect
+    code_struct.request_blocks = generate_property_blocks(&query_data.properties);
+    code_struct.udf_blocks = generate_udf_blocks(&code_struct, &query_data.udf_calls);
+    make_struct_filter_blocks(&mut code_struct, &query_data);
+    make_attr_filter_blocks(&mut code_struct, &query_data);
+
+    match query_data.return_expr {
+        IrReturnEnum::PropertyOrUDF(ref entity_ref) => {
+            make_return_block(&mut code_struct, entity_ref, &query_data)
+        }
+        IrReturnEnum::Aggregate(ref agg) => make_aggr_block(&mut code_struct, &agg, &query_data),
+    }
+    code_struct
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::antlr_gen::lexer::CypherLexer;
-//     use crate::antlr_gen::parser::CypherParser;
-//     use crate::to_ir::visit_result;
-//     use antlr_rust::common_token_stream::CommonTokenStream;
-//     use antlr_rust::token_factory::CommonTokenFactory;
-//     use antlr_rust::InputStream;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::antlr_gen::lexer::CypherLexer;
+    use crate::antlr_gen::parser::CypherParser;
+    use crate::to_ir::visit_result;
+    use antlr_rust::common_token_stream::CommonTokenStream;
+    use antlr_rust::token_factory::CommonTokenFactory;
+    use antlr_rust::InputStream;
 
-//     static COUNT: &str = "
-//     // udf_type: Scalar
-//     // leaf_func: leaf
-//     // mid_func: mid
-//     // id: count
+    static COUNT: &str = "
+    // udf_type: Scalar
+    // leaf_func: leaf
+    // mid_func: mid
+    // id: count
 
-//     use petgraph::Graph;
+    use petgraph::Graph;
 
-//     struct ServiceName {
-//         fn leaf(my_node: String, graph: Graph) {
-//         return 0;
-//         }
+    struct ServiceName {
+        fn leaf(my_node: String, graph: Graph) {
+        return 0;
+        }
 
-//         fn mid(my_node: String, graph: Graph) {
-//         return 1;
-//         }
-//     }
-//     ";
+        fn mid(my_node: String, graph: Graph) {
+        return 1;
+        }
+    }
+    ";
 
-//     static AVG: &str = "
-//         // udf_type: Scalar
-//     // init_func: init
-//     // exec_func: exec
-//     // struct_name: Avg
-//     // id: avg
+    static AVG: &str = "
+    // udf_type: Aggregation
+    // init_func: init
+    // exec_func: exec
+    // struct_name: Avg
+    // id: avg
 
-//     #[derive(Clone, Copy, Debug)]
-//     pub struct Avg {
-//         avg: u64,
-//         total: u64,
-//         num_instances: u64,
-//     }
+    #[derive(Clone, Copy, Debug)]
+    pub struct Avg {
+        avg: u64,
+        total: u64,
+        num_instances: u64,
+    }
 
-//     impl Avg {
-//         fn new() -> Avg {
-//             Avg { avg: 0, total: 0 , num_instances: 0}
-//         }
-//         fn execute(&mut self, _trace_id: u64, instance: String) {
-//             self.total += instance.parse::<u64>().unwrap();
-//             self.num_instances += 1;
-//             self.avg = self.total/self.num_instances;
-//             self.avg.to_string()
-//         }
-//     }
-//     ";
-//     fn get_codegen_from_query(input: String) -> VisitorResults {
-//         let tf = CommonTokenFactory::default();
-//         let query_stream = InputStream::new_owned(input.to_string().into_boxed_str());
-//         let mut _lexer = CypherLexer::new_with_token_factory(query_stream, &tf);
-//         let token_source = CommonTokenStream::new(_lexer);
-//         let mut parser = CypherParser::new(token_source);
-//         let result = parser.oC_Cypher().expect("parsed unsuccessfully");
-//         visit_result(result, "".to_string())
-//     }
+    impl Avg {
+        fn new() -> Avg {
+            Avg { avg: 0, total: 0 , num_instances: 0}
+        }
+        fn execute(&mut self, _trace_id: u64, instance: String) {
+            self.total += instance.parse::<u64>().unwrap();
+            self.num_instances += 1;
+            self.avg = self.total/self.num_instances;
+            self.avg.to_string()
+        }
+    }
+    ";
+    fn get_codegen_from_query(input: String) -> VisitorResults {
+        let tf = CommonTokenFactory::default();
+        let query_stream = InputStream::new_owned(input.to_string().into_boxed_str());
+        let mut _lexer = CypherLexer::new_with_token_factory(query_stream, &tf);
+        let token_source = CommonTokenStream::new(_lexer);
+        let mut parser = CypherParser::new(token_source);
+        let result = parser.oC_Cypher().expect("parsed unsuccessfully");
+        visit_result(result, "".to_string())
+    }
 
-//     #[test]
-//     fn get_codegen_doesnt_throw_error() {
-//         let result =
-//             get_codegen_from_query("MATCH (a) -[]-> (b {})-[]->(c) RETURN a.count".to_string());
-//         assert!(!result.struct_filters.is_empty());
-//         let _codegen = CodeGenEnvoy::generate_code_blocks(result, [COUNT.to_string()].to_vec());
-//     }
+    #[test]
+    fn get_codegen_doesnt_throw_error() {
+        let result =
+            get_codegen_from_query("MATCH (a) -[]-> (b {})-[]->(c) RETURN a.count".to_string());
+        assert!(!result.struct_filters.is_empty());
+        let _codegen = generate_code_blocks(result, [COUNT.to_string()].to_vec());
+    }
 
-//     #[test]
-//     fn get_codegen_doesnt_throw_error_with_mult_periods() {
-//         let result = get_codegen_from_query(
-//             "MATCH (a) -[]-> (b {})-[]->(c) RETURN a.node.metadata.WORKLOAD_NAME".to_string(),
-//         );
-//         assert!(!result.struct_filters.is_empty());
-//         let _codegen = CodeGenEnvoy::generate_code_blocks(result, [COUNT.to_string()].to_vec());
-//     }
+    #[test]
+    fn get_codegen_doesnt_throw_error_with_mult_periods() {
+        let result = get_codegen_from_query(
+            "MATCH (a) -[]-> (b {})-[]->(c) RETURN a.node.metadata.WORKLOAD_NAME".to_string(),
+        );
+        assert!(!result.struct_filters.is_empty());
+        let _codegen = generate_code_blocks(result, [COUNT.to_string()].to_vec());
+    }
 
-//     #[test]
-//     fn get_group_by() {
-//         let result = get_codegen_from_query(
-//             "MATCH (a {}) WHERE a.node.metadata.WORKLOAD_NAME = 'productpage-v1' RETURN a.count, agg".to_string(),
-//         );
-//         assert!(!result.struct_filters.is_empty());
-//         let _codegen = CodeGenEnvoy::generate_code_blocks(result, [COUNT.to_string()].to_vec());
-//         assert!(!_codegen.target_blocks.is_empty());
-//         assert!(!_codegen.ir.struct_filters.is_empty());
-//         assert!(!_codegen.ir.aggregate.is_none());
-//     }
+    #[test]
+    fn get_group_by() {
+        // TODO: These tests are odd, not sure what we want to test here
+        let result = get_codegen_from_query(
+            "MATCH (a {}) WHERE a.node.metadata.WORKLOAD_NAME = 'productpage-v1' RETURN count(a), agg".to_string(),
+        );
+        assert!(!result.struct_filters.is_empty());
+        // Do not throw an error parsing this expression.
+        let _codegen = generate_code_blocks(result, [COUNT.to_string()].to_vec());
+    }
 
-//     #[test]
-//     fn test_where() {
-//         let result = get_codegen_from_query(
-//             "MATCH (a) -[]-> (b)-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' AND trace.request.total_size = 1 RETURN a.request.total_size, avg(a.request.total_size)".to_string(),
-//         );
-//         assert!(!result.struct_filters.is_empty());
-//         let _codegen = CodeGenEnvoy::generate_code_blocks(result, [COUNT.to_string()].to_vec());
-//         assert!(!_codegen.ir.attr_filters.is_empty());
-//     }
+    #[test]
+    fn test_where() {
+        // TODO: These tests are odd, not sure what we want to test here
+        let result = get_codegen_from_query(
+            "MATCH (a) -[]-> (b)-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' AND trace.request.total_size = 1 RETURN a.request.total_size, avg(a.request.total_size)".to_string(),
+        );
+        assert!(!result.struct_filters.is_empty());
+        assert!(!result.attr_filters.is_empty());
+        // Do not throw an error parsing this expression.
+        let _codegen = generate_code_blocks(result, [AVG.to_string()].to_vec());
+    }
 
-//     #[test]
-//     fn test_aggr_udf() {
-//         let result = get_codegen_from_query(
-//             "MATCH (a) -[]-> (b)-[]->(c) RETURN a.request.total_size, avg".to_string(),
-//         );
-//         let _codegen = CodeGenEnvoy::generate_code_blocks(
-//             result,
-//             [COUNT.to_string(), AVG.to_string()].to_vec(),
-//         );
-//         assert!(_codegen.aggregation_udf_table.keys().count() == 1);
-//     }
-// }
+    #[test]
+    fn test_aggr_udf() {
+        let result = get_codegen_from_query(
+            "MATCH (a) -[]-> (b)-[]->(c) RETURN a.request.total_size, avg".to_string(),
+        );
+        // Do not throw an error parsing this expression.
+        let codegen = generate_code_blocks(result, [AVG.to_string()].to_vec());
+        assert!(codegen.aggregation_udf_table.keys().count() == 1);
+    }
+}

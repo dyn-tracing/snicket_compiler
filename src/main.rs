@@ -5,7 +5,6 @@ mod codegen_envoy;
 mod ir;
 mod to_ir;
 
-use crate::codegen_common::CodeGen;
 use crate::codegen_common::CodeStruct;
 use antlr_gen::lexer::CypherLexer;
 use antlr_gen::parser::CypherParser;
@@ -188,8 +187,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // );
         }
         "envoy" => {
-            let codegen_object =
-                codegen_envoy::CodeGenEnvoy::generate_code_blocks(visitor_results, udfs);
+            let codegen_object = codegen_envoy::generate_code_blocks(visitor_results, udfs);
             filter_str = match matches.is_present("distributed") {
                 true => "distributed_envoy_filter.rs.handlebars",
                 false => "envoy_filter.rs.handlebars",

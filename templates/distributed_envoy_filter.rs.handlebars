@@ -13,7 +13,7 @@ use utils::graph::serde::Property;
 {{#each scalar_udf_table}}{{{this.func_impl}}}{{/each}}
 
 pub fn get_root_name() -> String {
-    return "{{{this.ir.root_id}}}".to_string();
+    return "{{{this.root_id}}}".to_string();
 }
 pub fn create_target_graph() -> Graph<
     (
@@ -39,7 +39,7 @@ pub fn execute_udfs(http_headers: &HttpHeaders, fd: &mut FerriedData) {
 }
 pub fn check_trace_lvl_prop(http_headers: &HttpHeaders, fd: &mut FerriedData) -> bool {
     // Empty for this query, but in general, will be useful
-    let root_id = "{{this.ir.root_id}}";
+    let root_id = "{{this.root_id}}";
     {{#each trace_lvl_prop_blocks}}{{{this}}}{{/each}}
     return true;
 }
