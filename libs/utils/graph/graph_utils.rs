@@ -4,7 +4,7 @@ use indexmap::map::IndexMap;
 use petgraph::graph::{Graph, NodeIndex};
 use petgraph::visit::DfsPostOrder;
 use petgraph::Incoming;
-type GraphType = Graph<(String, IndexMap<String, String>), ()>;
+type GraphType<'a> = Graph<(&'a str, IndexMap<String, String>), ()>;
 
 /* This function creates a petgraph graph representing the query given by the user.
  * For example, if the cql query were MATCH n -> m, e WHERE ... the input to this function
@@ -18,11 +18,11 @@ type GraphType = Graph<(String, IndexMap<String, String>), ()>;
  * @graph: the constructed graph reprsenting the inputs
  */
 
-pub fn generate_target_graph(
-    vertices: Vec<String>,
-    edges: Vec<(String, String)>,
+pub fn generate_target_graph<'a>(
+    vertices: &'a Vec<String>,
+    edges: &Vec<(String, String)>,
     ids_to_properties: IndexMap<String, IndexMap<String, String>>,
-) -> GraphType {
+) -> GraphType<'a> {
     let mut graph = Graph::new();
 
     // In order to make edges, we have to know the handles of the nodes, and you
@@ -30,28 +30,25 @@ pub fn generate_target_graph(
 
     let mut nodes_to_node_handles: IndexMap<String, NodeIndex> = IndexMap::new();
     for node in vertices {
-        if ids_to_properties.contains_key(&node) {
+        if ids_to_properties.contains_key(node) {
             nodes_to_node_handles.insert(
                 node.clone(),
-                graph.add_node((node.clone(), ids_to_properties[&node].clone())),
+                graph.add_node((node.as_str(), ids_to_properties[node].clone())),
             );
         } else {
             nodes_to_node_handles.insert(
                 node.clone(),
-                graph.add_node((node.clone(), IndexMap::new())),
+                graph.add_node((&node, IndexMap::new())),
             );
         }
     }
 
     // Make edges with handles instead of the vertex names
-    let mut edge_handles = Vec::new();
     for edge in edges {
         let node0 = nodes_to_node_handles[&edge.0];
         let node1 = nodes_to_node_handles[&edge.1];
-        let new_edge = (node0, node1);
-        edge_handles.push(new_edge);
+        graph.add_edge(node0, node1, ());
     }
-    graph.extend_with_edges(edge_handles);
     graph
 }
 

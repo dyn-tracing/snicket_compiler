@@ -73,7 +73,7 @@ fn put_ferried_data_in_hdrs(fd: &mut FerriedData, hdr: &mut IndexMap<String,Stri
 
 pub fn create_target_graph() -> Graph<
     (
-        std::string::String,
+        &str,
         IndexMap<std::string::String, std::string::String>,
     ),
     (),
@@ -100,7 +100,7 @@ pub fn execute_udfs_and_check_trace_lvl_prop(filter: &Filter, fd: &mut FerriedDa
 pub fn get_value_for_storage(                                                   
     target_graph: &Graph<                                                       
         (                                                                       
-            std::string::String,                                                
+            &str,                                                
             IndexMap<std::string::String, std::string::String>,                 
         ),                                                                      
         (),                                                    
@@ -117,7 +117,7 @@ pub fn get_value_for_storage(
 #[derive(Clone, Debug)]
 pub struct Filter {
     pub whoami: Option<String>,
-    pub target_graph: Option<Graph<(String, IndexMap<String, String>), ()>>,
+    pub target_graph: Option<Graph<(&str, IndexMap<String, String>), ()>>,
     pub filter_state: IndexMap<String, String>,
     pub envoy_shared_data: IndexMap<String, String>, // trace ID to stored ferried data as string 
     pub collected_properties: Vec<String>, //properties to collect

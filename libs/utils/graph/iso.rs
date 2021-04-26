@@ -15,7 +15,7 @@ extern crate test;
 type SetSType = IndexMap<
         SetSKey,
         IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>>;
-type GraphType = Graph<(String, IndexMap<String, String>), ()>;
+type GraphType<'a> = Graph<(&'a str, IndexMap<String, String>), ()>;
 // -------------- Shamir Isomorphism Algorithm Helper Functions---------------
 #[derive(Debug, Hash, Eq, PartialEq)] 
 pub struct SetSKey {
