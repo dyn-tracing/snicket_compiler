@@ -5,8 +5,8 @@ mod codegen_envoy;
 mod ir;
 mod to_ir;
 
-use crate::codegen_common::CodeStruct;
 use crate::codegen_common::CodeGen;
+use crate::codegen_common::CodeStruct;
 use antlr_gen::lexer::CypherLexer;
 use antlr_gen::parser::CypherParser;
 use antlr_rust::common_token_stream::CommonTokenStream;

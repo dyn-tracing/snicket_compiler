@@ -443,7 +443,6 @@ impl HttpHeaders {
                 find_mapping_shamir_centralized(&stored_data.trace_graph, &self.target_graph);
             if let Some(mapping) = mapping_opt {
                 let value = match get_value_for_storage(
-                    &self.workload_name,
                     &self.target_graph,
                     &mapping,
                     &stored_data,

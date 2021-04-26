@@ -1,6 +1,7 @@
 /***********************************/
 // IR Structs
 /***********************************/
+use indexmap::IndexSet;
 use indexmap::map::IndexMap;
 use serde::Serialize;
 
@@ -57,27 +58,13 @@ pub struct VisitorResults {
     pub return_expr: IrReturnEnum,
     pub maps: Vec<String>,
     pub root_id: String,
-    pub properties: Vec<Property>,
-    pub udf_calls: Vec<UdfCall>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct Aggregate {
-    pub udf_reference: String,
-    pub property: String,
-}
-impl Aggregate {
-    pub fn new_with_items(udf_reference: String, property: String) -> Self {
-        Aggregate {
-            udf_reference,
-            property,
-        }
-    }
+    pub properties: IndexSet<Property>,
+    pub udf_calls: IndexSet<UdfCall>,
 }
 
 pub trait Expression {}
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize)]
 pub struct UdfCall {
     pub id: String,
     //TODO: Args may also be UDF calls
@@ -103,7 +90,7 @@ impl UdfCall {
 
 impl Expression for UdfCall {}
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize)]
 pub struct Property {
     pub parent: String,
     //TODO: Args may also be UDF calls
@@ -111,18 +98,30 @@ pub struct Property {
 }
 
 impl Property {
-    pub fn as_list_str(&self) -> String {
+    pub fn as_vec_str(&self) -> String {
         // TODO: Make this a little bit less stringbuildery
-        let mut lst_str = "[".to_string();
+        let mut lst_str = "vec![".to_string();
         // lst_str.push_str(&self.parent);
         // lst_str.push_str("\"");
         for member in &self.members {
-            lst_str.push_str(", \"");
-            lst_str.push_str(&member);
             lst_str.push_str("\"");
+            lst_str.push_str(&member);
+            lst_str.push_str("\", ");
         }
         lst_str.push_str("]");
         return lst_str;
+    }
+    pub fn to_string(&self) -> String {
+        // TODO: Make this a little bit less stringbuildery
+        let mut udf_str = String::new();
+        if let Some((last, front)) = self.members.split_last() {
+            for member in front {
+                udf_str.push_str(&member);
+                udf_str.push_str(".");
+            }
+            udf_str.push_str(last);
+        }
+        return udf_str;
     }
 }
 impl Expression for Property {}
@@ -135,28 +134,42 @@ impl Default for Property {
     }
 }
 
-pub struct AggregateAlt {
+#[derive(Clone, Debug, Hash, PartialEq)]
+pub struct Aggregate {
     pub udf_reference: PropertyOrUDF,
     pub property: PropertyOrUDF,
 }
-impl AggregateAlt {
+impl Aggregate {
     pub fn new_with_items(udf_reference: PropertyOrUDF, property: PropertyOrUDF) -> Self {
-        AggregateAlt {
+        Aggregate {
             udf_reference,
             property,
         }
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 pub enum PropertyOrUDF {
     Property(Property),
     UdfCall(UdfCall),
 }
 
+impl Default for PropertyOrUDF {
+    fn default() -> Self {
+        PropertyOrUDF::Property(Property::default())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum IrReturnEnum {
-    AggregateAlt(AggregateAlt),
+    Aggregate(Aggregate),
     PropertyOrUDF(PropertyOrUDF),
+}
+
+impl Default for IrReturnEnum {
+    fn default() -> Self {
+        IrReturnEnum::PropertyOrUDF(PropertyOrUDF::default())
+    }
 }
 
 pub type EntityReference = String;

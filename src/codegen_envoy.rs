@@ -1,3 +1,4 @@
+use indexmap::IndexSet;
 use super::codegen_common::AggregationUdf;
 use super::codegen_common::ScalarUdf;
 use super::codegen_common::UdfType;
@@ -5,6 +6,7 @@ use super::ir::IrReturnEnum;
 use super::ir::VisitorResults;
 use super::CodeGen;
 use crate::codegen_common::CodeStruct;
+use crate::ir::Aggregate;
 use crate::ir::PropertyOrUDF;
 
 use crate::ir::Property;
@@ -172,7 +174,7 @@ fn make_storage_rpc_value_from_trace(entity: String, property: &str) -> String {
            log::error!(\"Node {node_id} not found\");
                 return None;
         }}
-        let ret = &fd.trace_graph.node_weight(trace_node_idx.unwrap()).unwrap().1[ \"{prop}\" ];\n
+        let ret = &fd.trace_graph.node_weight(trace_node_idx.unwrap()).unwrap().1[\"{prop}\"];\n
         value = ret.to_string();\n",
         node_id = entity,
         prop = property
@@ -226,7 +228,7 @@ fn make_return_block(
     if let PropertyOrUDF::Property(prop) = entity_ref {
         let ret_block = match prop.parent.as_str() {
             "trace" => make_storage_rpc_value_from_trace(query_data.root_id.clone(), &prop.parent),
-            _ => make_storage_rpc_value_from_target(&prop.parent, &prop.as_list_str()),
+            _ => make_storage_rpc_value_from_target(&prop.parent, &prop.to_string()),
         };
         code_struct.response_blocks.push(ret_block);
     } else if let PropertyOrUDF::UdfCall(call) = entity_ref {
@@ -235,7 +237,6 @@ fn make_return_block(
             panic!("We currently only implement very specific arguments for UDFs!");
         }
         let node = &call.args[0];
-        log::info!("ASDASDASDADADASD {}", node);
         let ret_block = match node.as_str() {
             "trace" => make_storage_rpc_value_from_trace(query_data.root_id.clone(), &node),
             _ => make_storage_rpc_value_from_target(&node, &call.to_ref_str()),
@@ -244,33 +245,11 @@ fn make_return_block(
     }
 }
 
-fn make_aggr_block(code_struct: &mut CodeStruct, query_data: &VisitorResults) {
-    // if query_data.aggregate.is_none() {
-    //     return;
-    // }
-    // let entity = query_data.aggregate.as_ref().unwrap().clone().entity;
-    // let mut property = query_data.aggregate.as_ref().unwrap().clone().property;
-    // if property.chars().next().unwrap() == ".".chars().next().unwrap() {
-    //     property.remove(0);
-    // }
-
-    // let ret_block = match entity.as_str() {
-    //     "trace" => make_storage_rpc_value_from_trace(query_data.root_id.clone(), property),
-    //     _ => {
-    //         let num_struct_filters = query_data.struct_filters.len();
-    //         if !query_data.struct_filters[num_struct_filters - 1]
-    //             .vertices
-    //             .contains(&entity)
-    //         {
-    //             panic!("Unknown entity in return expression");
-    //         }
-    //         make_storage_rpc_value_from_target(entity, property)
-    //     }
-    // };
-    code_struct.response_blocks.push("".to_string());
+fn make_aggr_block(code_struct: &mut CodeStruct, agg: &Aggregate, query_data: &VisitorResults) {
+    make_return_block(code_struct, &agg.property, query_data);
 }
 
-fn generate_property_blocks(properties: &Vec<Property>) -> Vec<String> {
+fn generate_property_blocks(properties: &IndexSet<Property>) -> Vec<String> {
     let mut property_blocks = Vec::new();
     for property in properties {
         // There is nothing to fetch so ignore.
@@ -284,7 +263,7 @@ fn generate_property_blocks(properties: &Vec<Property>) -> Vec<String> {
                                         &{property},
                                         http_headers);
                                             ",
-            property = property.as_list_str(),
+            property = property.as_vec_str(),
         );
         property_blocks.push(get_prop_block);
         let push_block = "if let Some(prop_tuple) = prop_tuple_wrapped {
@@ -298,7 +277,7 @@ fn generate_property_blocks(properties: &Vec<Property>) -> Vec<String> {
     return property_blocks;
 }
 
-fn generate_udf_blocks(code_struct: &CodeStruct, udf_calls: &Vec<UdfCall>) -> Vec<String> {
+fn generate_udf_blocks(code_struct: &CodeStruct, udf_calls: &IndexSet<UdfCall>) -> Vec<String> {
     let mut udf_blocks = Vec::new();
     for call in udf_calls {
         let udf_ref = call.to_ref_str();
@@ -410,7 +389,9 @@ impl CodeGen for CodeGenEnvoy {
             IrReturnEnum::PropertyOrUDF(ref entity_ref) => {
                 make_return_block(&mut code_struct, entity_ref, &query_data)
             }
-            IrReturnEnum::AggregateAlt(ref _agg) => make_aggr_block(&mut code_struct, &query_data),
+            IrReturnEnum::Aggregate(ref agg) => {
+                make_aggr_block(&mut code_struct, &agg, &query_data)
+            }
         }
 
         return code_struct;

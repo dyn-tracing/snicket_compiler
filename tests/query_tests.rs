@@ -51,15 +51,14 @@ fn check_compilation_envoy(
     let out_file_str = fs::read_to_string(out_file).unwrap();
     let ref_file_str = fs::read_to_string(ref_file).unwrap();
     if out_file_str != ref_file_str {
-        let diff = diffy::create_patch(&out_file_str, &ref_file_str);
+        let diff = diffy::create_patch(&ref_file_str, &out_file_str);
         let diff_color = diffy::PatchFormatter::new().with_color();
         panic!(
             "Files differ in the following way:\n{}",
             diff_color.fmt_patch(&diff)
         );
-    } else {
-        Ok(())
     }
+    Ok(())
 }
 
 #[test_case("get_service_name.cql", vec![]; "get_service_name")]
@@ -109,13 +108,12 @@ fn check_compilation_sim(
     let out_file_str = fs::read_to_string(out_file).unwrap();
     let ref_file_str = fs::read_to_string(ref_file).unwrap();
     if out_file_str != ref_file_str {
-        let diff = diffy::create_patch(&out_file_str, &ref_file_str);
+        let diff = diffy::create_patch(&ref_file_str, &out_file_str);
         let diff_color = diffy::PatchFormatter::new().with_color();
         panic!(
             "Files differ in the following way:\n{}",
             diff_color.fmt_patch(&diff)
         );
-    } else {
-        Ok(())
     }
+    Ok(())
 }

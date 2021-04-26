@@ -38,7 +38,6 @@ pub struct AggregationUdf {
     pub func_impl: String,
 }
 
-
 #[derive(Serialize)]
 pub struct CodeStruct {
     // the IR, as defined in to_ir.rs
@@ -76,5 +75,4 @@ impl CodeStruct {
 
 pub trait CodeGen: Serialize {
     fn generate_code_blocks(ir: VisitorResults, udfs: Vec<String>) -> CodeStruct;
-
 }
