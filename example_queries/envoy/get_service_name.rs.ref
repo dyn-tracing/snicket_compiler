@@ -41,6 +41,8 @@ pub fn collect_envoy_properties(
                                             if let Some(prop_tuple) = prop_tuple_wrapped {
             fd.unassigned_properties.push(prop_tuple);
             } else {
+                log::error!("Failed to retrieve property: {:?}
+", {property});
                 return Err(());
             }prop_tuple_wrapped = fetch_property(&http_headers.workload_name,
                                         &vec!["node", "metadata", "WORKLOAD_NAME", ],
@@ -48,6 +50,8 @@ pub fn collect_envoy_properties(
                                             if let Some(prop_tuple) = prop_tuple_wrapped {
             fd.unassigned_properties.push(prop_tuple);
             } else {
+                log::error!("Failed to retrieve property: {:?}
+", {property});
                 return Err(());
             }
     return Ok(());

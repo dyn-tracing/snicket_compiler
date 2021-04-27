@@ -385,9 +385,9 @@ mod tests {
     #[test]
     fn get_codegen_doesnt_throw_error() {
         let result =
-            get_codegen_from_query("MATCH (a) -[]-> (b {})-[]->(c) RETURN a.count".to_string());
+            get_codegen_from_query("MATCH (a) -[]-> (b {})-[]->(c) RETURN count(a)".to_string());
         assert!(!result.struct_filters.is_empty());
-        let _codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());
+        let _codegen = generate_code_blocks(result, [COUNT.to_string()].to_vec());
     }
 
     #[test]
@@ -396,7 +396,7 @@ mod tests {
             "MATCH (a) -[]-> (b {})-[]->(c) RETURN a.node.metadata.WORKLOAD_NAME".to_string(),
         );
         assert!(!result.struct_filters.is_empty());
-        let _codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());
+        let _codegen = generate_code_blocks(result, [COUNT.to_string()].to_vec());
     }
 
     #[test]
@@ -405,28 +405,25 @@ mod tests {
             "MATCH (a {}) WHERE a.node.metadata.WORKLOAD_NAME = 'productpage-v1' RETURN a.count, agg".to_string(),
         );
         assert!(!result.struct_filters.is_empty());
-        let _codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());
+        let _codegen = generate_code_blocks(result, [COUNT.to_string()].to_vec());
         assert!(!_codegen.target_blocks.is_empty());
-        assert!(!_codegen.ir.struct_filters.is_empty());
-        assert!(!_codegen.ir.aggregate.is_none());
     }
 
     #[test]
     fn test_where() {
         let result = get_codegen_from_query(
-            "MATCH (a) -[]-> (b)-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' AND trace.request.total_size = 1 RETURN a.request.total_size, avg(a.request.total_size)".to_string(),
+            "MATCH (a) -[]-> (b)-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' AND trace.request.total_size = 1 RETURN avg(a.request.total_size)".to_string(),
         );
         assert!(!result.struct_filters.is_empty());
-        let _codegen = CodeGenSimulator::generate_code_blocks(result, [COUNT.to_string()].to_vec());
-        assert!(!_codegen.ir.attr_filters.is_empty());
+        let _codegen = generate_code_blocks(result, [AVG.to_string(), COUNT.to_string()].to_vec());
     }
 
     #[test]
     fn test_aggr_udf() {
         let result = get_codegen_from_query(
-            "MATCH (a) -[]-> (b)-[]->(c) RETURN a.request.total_size, avg".to_string(),
+            "MATCH (a) -[]-> (b)-[]->(c) RETURN avg(a.request.total_size)".to_string(),
         );
-        let _codegen = CodeGenSimulator::generate_code_blocks(
+        let _codegen = generate_code_blocks(
             result,
             [COUNT.to_string(), AVG.to_string()].to_vec(),
         );

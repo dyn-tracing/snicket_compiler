@@ -107,7 +107,7 @@ pub fn execute_udfs_and_check_trace_lvl_prop(filter: &Filter, fd: &mut FerriedDa
     
     let root_id = "productpage-v1";
     
-            if filter.whoami.as_ref().unwrap()== root_id {        let mut trace_prop_str : String;
+        if filter.whoami.as_ref().unwrap()== root_id {        let mut trace_prop_str : String;
        }
     return true;
 }
@@ -125,24 +125,24 @@ pub fn get_value_for_storage(
 ) -> Option<String> {
     let mut value : String;
     let node_ptr = graph_utils::get_node_with_id(target_graph, "a".to_string());
-        if node_ptr.is_none() {
-           log::warn!("Node a not found");
-                return None;
-        }
-        let mut trace_node_index = None;
-        for map in mapping {
-            if target_graph.node_weight(map.0).unwrap().0 == "a" {
-                trace_node_index = Some(map.1);
-                break;
-            }
-        }
-        if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("request.total_size") {
-            // we have not yet collected the return property or have a mapping error
+    if node_ptr.is_none() {
+       log::warn!("Node a not found");
             return None;
+    }
+    let mut trace_node_index = None;
+    for map in mapping {
+        if target_graph.node_weight(map.0).unwrap().0 == "a" {
+            trace_node_index = Some(map.1);
+            break;
         }
-        let mut ret_requesttotal_size = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "request.total_size" ];
+    }
+    if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("request.total_size") {
+        // we have not yet collected the return property or have a mapping error
+        return None;
+    }
+    let mut ret = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "request.total_size" ];
 
-        value = ret_requesttotal_size.to_string();
+    value = ret.to_string();
  
     return Some(value);
 
@@ -166,7 +166,7 @@ impl Filter {
             target_graph: None,
             filter_state: IndexMap::new(),
             envoy_shared_data: IndexMap::<String, String>::new(),
-            collected_properties: vec!( "node.metadata.WORKLOAD_NAME".to_string(), "request.total_size".to_string(),  ),
+            collected_properties: vec!(  ),
          }))
     }
 
@@ -178,7 +178,7 @@ impl Filter {
                                    target_graph: None,
                                    filter_state: string_data,
                                    envoy_shared_data: IndexMap::new(),
-                                   collected_properties: vec!("node.metadata.WORKLOAD_NAME".to_string(), "request.total_size".to_string(),  ),
+                                   collected_properties: vec!( ),
                                }))
      }
 
