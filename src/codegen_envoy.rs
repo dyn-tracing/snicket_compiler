@@ -1,19 +1,18 @@
+use super::codegen_common::parse_udf;
 use super::codegen_common::AggregationUdf;
+use super::codegen_common::CodeStruct;
+use super::codegen_common::ScalarOrAggregationUdf;
 use super::codegen_common::ScalarUdf;
-use super::codegen_common::UdfType;
+use super::ir::Aggregate;
+use super::ir::AttributeFilter;
 use super::ir::IrReturnEnum;
+use super::ir::Property;
+use super::ir::PropertyOrUDF;
+use super::ir::StructuralFilter;
+use super::ir::UdfCall;
 use super::ir::VisitorResults;
-use crate::codegen_common::CodeStruct;
-use crate::ir::Aggregate;
-use crate::ir::AttributeFilter;
-use crate::ir::Property;
-use crate::ir::PropertyOrUDF;
-use crate::ir::StructuralFilter;
-use crate::ir::UdfCall;
 use indexmap::IndexMap;
 use indexmap::IndexSet;
-use regex::Regex;
-use std::str::FromStr;
 
 /********************************/
 // Code Generation
@@ -305,53 +304,6 @@ fn generate_udf_blocks(
         udf_blocks.push(save_udf_vals);
     }
     udf_blocks
-}
-
-enum ScalarOrAggregationUdf {
-    ScalarUdf(ScalarUdf),
-    AggregationUdf(AggregationUdf),
-}
-
-fn parse_udf(udf: String) -> ScalarOrAggregationUdf {
-    let scalar_re = Regex::new(
-            r".*udf_type:\s+(?P<udf_type>\w+)\n.*leaf_func:\s+(?P<leaf_func>\w+)\n.*mid_func:\s+(?P<mid_func>\w+)\n.*id:\s+(?P<id>\w+)",
-        ).unwrap();
-
-    if let Some(rc) = scalar_re.captures(&udf) {
-        let udf_type = UdfType::from_str(rc.name("udf_type").unwrap().as_str()).unwrap();
-        let leaf_func = String::from(rc.name("leaf_func").unwrap().as_str());
-        let mid_func = String::from(rc.name("mid_func").unwrap().as_str());
-        let id = String::from(rc.name("id").unwrap().as_str());
-
-        return ScalarOrAggregationUdf::ScalarUdf(ScalarUdf {
-            udf_type,
-            leaf_func,
-            mid_func,
-            func_impl: udf,
-            id,
-        });
-    }
-    let aggr_re = Regex::new(
-            r".*udf_type:\s+(?P<udf_type>\w+)\n.*init_func:\s+(?P<init_func>\w+)\n.*exec_func:\s+(?P<exec_func>\w+)\n.*struct_name:\s+(?P<struct_name>\w+)\n.*id:\s+(?P<id>\w+)",
-        ).unwrap();
-    if let Some(rc) = aggr_re.captures(&udf) {
-        let udf_type = UdfType::from_str(rc.name("udf_type").unwrap().as_str()).unwrap();
-        let init_func = String::from(rc.name("init_func").unwrap().as_str());
-        let exec_func = String::from(rc.name("exec_func").unwrap().as_str());
-        let struct_name = String::from(rc.name("struct_name").unwrap().as_str());
-        let id = String::from(rc.name("id").unwrap().as_str());
-
-        return ScalarOrAggregationUdf::AggregationUdf(AggregationUdf {
-            udf_type,
-            init_func,
-            exec_func,
-            struct_name,
-            func_impl: udf,
-            id,
-        });
-    }
-    log::error!("Unable to parse input udf {:?}", udf);
-    std::process::exit(1);
 }
 
 pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) -> CodeStruct {
