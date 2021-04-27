@@ -48,7 +48,9 @@ impl FerriedData {
     pub fn assign_properties(&mut self) {
         let mut to_delete = Vec::new();
         for property in &mut self.unassigned_properties {
-            if let Some(node) = graph_utils::get_node_with_id(&self.trace_graph, property.entity.clone()) {
+            if let Some(node) =
+                graph_utils::get_node_with_id(&self.trace_graph, property.entity.clone())
+            {
                 self.trace_graph
                     .node_weight_mut(node)
                     .unwrap()
@@ -67,8 +69,8 @@ impl FerriedData {
         for node in other_data.trace_graph.node_indices() {
             //let node_name = &other_data.trace_graph.node_weight(node).unwrap().0;
             //if utils::get_node_with_id(&self.trace_graph, node_name.to_string()).is_none() {
-                self.trace_graph
-                    .add_node(other_data.trace_graph.node_weight(node).unwrap().clone());
+            self.trace_graph
+                .add_node(other_data.trace_graph.node_weight(node).unwrap().clone());
             //}
         }
         // add edges
@@ -83,11 +85,8 @@ impl FerriedData {
                     let edge1_in_stored_graph =
                         graph_utils::get_node_with_id(&self.trace_graph, edge1_weight.to_string())
                             .unwrap();
-                    self.trace_graph.add_edge(
-                        edge0_in_stored_graph,
-                        edge1_in_stored_graph,
-                        (),
-                    );
+                    self.trace_graph
+                        .add_edge(edge0_in_stored_graph, edge1_in_stored_graph, ());
                 }
                 None => {
                     log::error!("no edge endpoints found \n");

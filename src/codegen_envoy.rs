@@ -241,6 +241,7 @@ fn generate_property_blocks(properties: &IndexSet<Property>) -> Vec<String> {
         let push_block = "if let Some(prop_tuple) = prop_tuple_wrapped {
             fd.unassigned_properties.push(prop_tuple);
             } else {
+                log::error!(\"Failed to retrieve property: {:?}\n\", {property});
                 return Err(());
             }"
         .to_string();

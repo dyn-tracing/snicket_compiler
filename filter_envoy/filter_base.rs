@@ -111,13 +111,23 @@ pub fn fetch_property(
     let prop_tuple;
     let property_str: String;
     // Seems like we need a copy here, a little bit annoying
-    if let Some(property) = ctx.get_property(prop_query.to_vec()) {
-        property_str = String::from_utf8_lossy(&property).to_string();
-    } else {
-        log::error!("Failed to retrieve property: {:?}\n", prop_query);
-        return None;
-    }
-    //FIXME Adjust the format of this property
+    let property = ctx.get_property(prop_query.to_vec())?;
+    property_str = match std::str::from_utf8(&property) {
+        Ok(property_str_) => property_str_.to_string(),
+        Err(_err) => {
+            // Some values are stored as integers
+            // Try this, but we may get nonsense.
+            // TODO: Explicit types and casting
+            // https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/advanced/attributes
+            let mut byte_array = [0u8; 8];
+            for (place, element) in byte_array.iter_mut().zip(property.iter()) {
+                *place = *element;
+            }
+            let int_val = i64::from_ne_bytes(byte_array);
+            int_val.to_string()
+        }
+    };
+    //Todo: Adjust the format of this property
     prop_tuple = Property::new(
         node_name.to_string(),
         join_str(prop_query),
@@ -442,11 +452,8 @@ impl HttpHeaders {
             let mapping_opt =
                 find_mapping_shamir_centralized(&stored_data.trace_graph, &self.target_graph);
             if let Some(mapping) = mapping_opt {
-                let value = match get_value_for_storage(
-                    &self.target_graph,
-                    &mapping,
-                    &stored_data,
-                ) {
+                let value = match get_value_for_storage(&self.target_graph, &mapping, &stored_data)
+                {
                     Some(value_wrapped) => value_wrapped,
                     None => return,
                 };

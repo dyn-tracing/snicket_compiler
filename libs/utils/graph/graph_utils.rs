@@ -54,7 +54,6 @@ pub fn generate_target_graph(
     graph
 }
 
-
 pub fn get_node_with_id(
     graph: &Graph<(String, IndexMap<String, String>), ()>,
     node_name: String,
@@ -109,7 +108,6 @@ pub fn has_property_subset(
 mod tests {
     use super::*;
 
-
     fn make_small_target_graph() -> Graph<(String, IndexMap<String, String>), ()> {
         let a = String::from("a");
         let b = String::from("b");
@@ -151,11 +149,10 @@ mod tests {
         let a = graph.add_node(("a".to_string(), IndexMap::new()));
         let b = graph.add_node(("b".to_string(), IndexMap::new()));
         let c = graph.add_node(("c".to_string(), IndexMap::new()));
-        graph.add_edge(a,b,());
-        graph.add_edge(b,c,());
+        graph.add_edge(a, b, ());
+        graph.add_edge(b, c, ());
         graph
     }
-
 
     #[test]
     fn test_generate_target_graph() {
@@ -185,6 +182,10 @@ mod tests {
     fn test_find_root() {
         let graph = little_graph();
         let root = find_root(&graph);
-        assert!(graph.node_weight(root).unwrap().0 == "a", "root label is {:?}", graph.node_weight(root).unwrap());
+        assert!(
+            graph.node_weight(root).unwrap().0 == "a",
+            "root label is {:?}",
+            graph.node_weight(root).unwrap()
+        );
     }
 }
