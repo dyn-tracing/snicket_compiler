@@ -1,8 +1,8 @@
 #![feature(try_blocks)]
 mod antlr_gen;
 mod codegen_common;
-mod codegen_simulator;
 mod codegen_envoy;
+mod codegen_simulator;
 mod ir;
 mod to_ir;
 
@@ -172,8 +172,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let filter_agg_str: &str;
     match comp_mode {
         "sim" => {
-            let codegen_object =
-                codegen_simulator::generate_code_blocks(visitor_results, udfs);
+            let codegen_object = codegen_simulator::generate_code_blocks(visitor_results, udfs);
             filter_str = match matches.is_present("distributed") {
                 true => "simulation_filter_distributed.rs.handlebars",
                 false => "simulation_filter.rs.handlebars",

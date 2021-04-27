@@ -1,8 +1,8 @@
 use super::codegen_common::parse_udf;
-use super::codegen_common::ScalarOrAggregationUdf;
 use super::codegen_common::AggregationUdf;
-use super::codegen_common::ScalarUdf;
 use super::codegen_common::CodeStruct;
+use super::codegen_common::ScalarOrAggregationUdf;
+use super::codegen_common::ScalarUdf;
 use super::ir::Aggregate;
 use super::ir::AttributeFilter;
 use super::ir::IrReturnEnum;
@@ -25,16 +25,13 @@ fn make_struct_filter_blocks(
     let mut target_blocks = Vec::new();
 
     for struct_filter in struct_filters {
-        target_blocks
-            .push(" let vertices = vec!( ".to_string());
+        target_blocks.push(" let vertices = vec!( ".to_string());
         for vertex in &struct_filter.vertices {
-            target_blocks
-                .push(format!("\"{vertex}\".to_string(),", vertex = vertex));
+            target_blocks.push(format!("\"{vertex}\".to_string(),", vertex = vertex));
         }
         target_blocks.push(" );\n".to_string());
 
-        target_blocks
-            .push("        let edges = vec!( ".to_string());
+        target_blocks.push("        let edges = vec!( ".to_string());
         for edge in &struct_filter.edges {
             target_blocks.push(format!(
                 " (\"{edge1}\".to_string(), \"{edge2}\".to_string() ), ",
@@ -158,7 +155,6 @@ fn make_storage_rpc_value_from_trace(entity: String, property: &str) -> String {
     )
 }
 
-
 fn make_storage_rpc_value_from_target(entity: &str, property: &str) -> String {
     format!(
     "let node_ptr = graph_utils::get_node_with_id(target_graph, \"{node_id}\".to_string());
@@ -184,11 +180,12 @@ fn make_storage_rpc_value_from_target(entity: &str, property: &str) -> String {
     )
 }
 
-
 fn make_return_block(entity_ref: &PropertyOrUDF, query_data: &VisitorResults) -> String {
     match entity_ref {
         PropertyOrUDF::Property(prop) => match prop.parent.as_str() {
-            "trace" => make_storage_rpc_value_from_trace(query_data.root_id.clone(), &prop.to_dot_string()),
+            "trace" => {
+                make_storage_rpc_value_from_trace(query_data.root_id.clone(), &prop.to_dot_string())
+            }
             _ => make_storage_rpc_value_from_target(&prop.parent, &prop.to_dot_string()),
         },
         PropertyOrUDF::UdfCall(call) => {
@@ -209,10 +206,12 @@ fn make_aggr_block(agg: &Aggregate, query_data: &VisitorResults) -> String {
     make_return_block(&agg.property, query_data)
 }
 
-fn generate_property_blocks(properties: &IndexSet<Property>) -> Vec<String>{
+fn generate_property_blocks(properties: &IndexSet<Property>) -> Vec<String> {
     let mut property_blocks = Vec::new();
     for property in properties {
-        if property.members.is_empty() { continue; }
+        if property.members.is_empty() {
+            continue;
+        }
         let get_prop_block = format!(
             "prop_tuple = Property::new(filter.whoami.as_ref().unwrap().to_string(),
                                                    \"{property}\".to_string(),
@@ -224,22 +223,24 @@ fn generate_property_blocks(properties: &IndexSet<Property>) -> Vec<String>{
         property_blocks.push(get_prop_block);
         property_blocks.push(insert_hdr_block);
     }
-    return property_blocks;
+    property_blocks
 }
 
 fn generate_udf_blocks(
-    scalar_udf_table: &IndexMap<String, ScalarUdf>,                             
-    aggregation_udf_table: &IndexMap<String, AggregationUdf>,                   
+    scalar_udf_table: &IndexMap<String, ScalarUdf>,
+    aggregation_udf_table: &IndexMap<String, AggregationUdf>,
     udf_calls: &IndexSet<UdfCall>,
 ) -> Vec<String> {
     let mut udf_blocks = Vec::new();
     for call in udf_calls {
-        let udf_ref = call.to_ref_str(); 
-        if aggregation_udf_table.contains_key(&call.id) { continue; }
-        if !scalar_udf_table.contains_key(&call.id) {                           
-            log::error!("ID {:?} not found in the scalar UDF map!", call.id);   
-            std::process::exit(1);                                              
-        } 
+        let udf_ref = call.to_ref_str();
+        if aggregation_udf_table.contains_key(&call.id) {
+            continue;
+        }
+        if !scalar_udf_table.contains_key(&call.id) {
+            log::error!("ID {:?} not found in the scalar UDF map!", call.id);
+            std::process::exit(1);
+        }
         let get_udf_vals = format!(
             "let my_{id}_value;
             let child_iterator = fd.trace_graph.neighbors_directed(
@@ -279,46 +280,42 @@ fn generate_udf_blocks(
 }
 
 pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) -> CodeStruct {
-    let mut code_struct = CodeStruct::new(&query_data.root_id);                 
-    let mut scalar_udf_table: IndexMap<String, ScalarUdf> = IndexMap::new();    
-    // where we store udf implementations                                       
+    let mut code_struct = CodeStruct::new(&query_data.root_id);
+    let mut scalar_udf_table: IndexMap<String, ScalarUdf> = IndexMap::new();
+    // where we store udf implementations
     let mut aggregation_udf_table: IndexMap<String, AggregationUdf> = IndexMap::new();
-    for udf_path in udf_paths {                                                 
-        log::debug!("UDF: {:?}", udf_path);                                     
-        match parse_udf(udf_path) {                                             
-            ScalarOrAggregationUdf::ScalarUdf(udf) => {                         
-                scalar_udf_table.insert(udf.id.clone(), udf);                   
-            }                                                                   
-            ScalarOrAggregationUdf::AggregationUdf(udf) => {                    
-                aggregation_udf_table.insert(udf.id.clone(), udf);              
-            }                                                                   
-        }                                                                       
-    }                                                                           
-    // all the properties we collect                                            
+    for udf_path in udf_paths {
+        log::debug!("UDF: {:?}", udf_path);
+        match parse_udf(udf_path) {
+            ScalarOrAggregationUdf::ScalarUdf(udf) => {
+                scalar_udf_table.insert(udf.id.clone(), udf);
+            }
+            ScalarOrAggregationUdf::AggregationUdf(udf) => {
+                aggregation_udf_table.insert(udf.id.clone(), udf);
+            }
+        }
+    }
+    // all the properties we collect
     code_struct.request_blocks = generate_property_blocks(&query_data.properties);
-    code_struct.udf_blocks = generate_udf_blocks(                               
-        &scalar_udf_table,                                                      
-        &aggregation_udf_table,                                                 
-        &query_data.udf_calls,                                                  
-    );                                                                          
-    code_struct.target_blocks =                                                 
+    code_struct.udf_blocks = generate_udf_blocks(
+        &scalar_udf_table,
+        &aggregation_udf_table,
+        &query_data.udf_calls,
+    );
+    code_struct.target_blocks =
         make_struct_filter_blocks(&query_data.attr_filters, &query_data.struct_filters);
-    code_struct.trace_lvl_prop_blocks =                                         
-        make_attr_filter_blocks(&query_data.root_id, &query_data.attr_filters); 
-                                                                                
-    let resp_block = match query_data.return_expr {                             
+    code_struct.trace_lvl_prop_blocks =
+        make_attr_filter_blocks(&query_data.root_id, &query_data.attr_filters);
+
+    let resp_block = match query_data.return_expr {
         IrReturnEnum::PropertyOrUDF(ref entity_ref) => make_return_block(entity_ref, &query_data),
-        IrReturnEnum::Aggregate(ref agg) => make_aggr_block(&agg, &query_data), 
-    };                                                                          
-    code_struct.response_blocks.push(resp_block);                               
-    code_struct.aggregation_udf_table = aggregation_udf_table;                  
-    code_struct.scalar_udf_table = scalar_udf_table;                            
-    code_struct                                                                 
+        IrReturnEnum::Aggregate(ref agg) => make_aggr_block(&agg, &query_data),
+    };
+    code_struct.response_blocks.push(resp_block);
+    code_struct.aggregation_udf_table = aggregation_udf_table;
+    code_struct.scalar_udf_table = scalar_udf_table;
+    code_struct
 }
-
-
-
-
 
 #[cfg(test)]
 mod tests {
