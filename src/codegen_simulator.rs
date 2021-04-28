@@ -423,10 +423,7 @@ mod tests {
         let result = get_codegen_from_query(
             "MATCH (a) -[]-> (b)-[]->(c) RETURN avg(a.request.total_size)".to_string(),
         );
-        let _codegen = generate_code_blocks(
-            result,
-            [COUNT.to_string(), AVG.to_string()].to_vec(),
-        );
+        let _codegen = generate_code_blocks(result, [COUNT.to_string(), AVG.to_string()].to_vec());
         assert!(_codegen.aggregation_udf_table.keys().count() == 1);
     }
 }
