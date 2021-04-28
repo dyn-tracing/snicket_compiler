@@ -381,7 +381,7 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
                 process::exit(1)
             }
             let udf = self.obj_references[0].clone();
-            self.return_expr = IrReturnEnum::Aggregate(Aggregate::new_with_items(return_item, udf));
+            self.return_expr = IrReturnEnum::Aggregate(Aggregate::new_with_items(udf, return_item));
         } else {
             log::error!("More than two return items not supported");
             process::exit(1);

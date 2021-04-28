@@ -201,7 +201,7 @@ fn make_storage_rpc_value_from_target(entity: &str, property: &str) -> String {
 fn make_return_block(entity_ref: &PropertyOrUDF, query_data: &VisitorResults) -> String {
     match entity_ref {
         PropertyOrUDF::Property(prop) => match prop.parent.as_str() {
-            "trace" => make_storage_rpc_value_from_trace(query_data.root_id.clone(), &prop.parent),
+            "trace" => make_storage_rpc_value_from_trace(query_data.root_id.clone(), &prop.to_dot_string()),
             _ => make_storage_rpc_value_from_target(&prop.parent, &prop.to_dot_string()),
         },
         PropertyOrUDF::UdfCall(call) => {
@@ -211,8 +211,8 @@ fn make_return_block(entity_ref: &PropertyOrUDF, query_data: &VisitorResults) ->
             }
             let node = &call.args[0];
             match node.as_str() {
-                "trace" => make_storage_rpc_value_from_trace(query_data.root_id.clone(), &node),
-                _ => make_storage_rpc_value_from_target(&node, &call.to_ref_str()),
+                "trace" => make_storage_rpc_value_from_trace(query_data.root_id.clone(), &call.id),
+                _ => make_storage_rpc_value_from_target(&node, &call.id),
             }
         }
     }
@@ -223,6 +223,8 @@ fn make_aggr_block(agg: &Aggregate, query_data: &VisitorResults) -> String {
 }
 
 fn generate_property_blocks(properties: &IndexSet<Property>) -> Vec<String> {
+    // TODO:  here, we can have duplicates because they have different entities,
+    // but we still just need to collect one version of the property
     let mut property_blocks = Vec::new();
     for property in properties {
         // There is nothing to fetch so ignore.
@@ -249,7 +251,6 @@ fn generate_udf_blocks(
 ) -> Vec<String> {
     let mut udf_blocks = Vec::new();
     for call in udf_calls {
-        let udf_ref = call.to_ref_str();
         if aggregation_udf_table.contains_key(&call.id) {
             // TODO: Aggregations are handled separately, where do they go?
             continue;
@@ -265,7 +266,7 @@ fn generate_udf_blocks(
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
             for child in child_iterator {{
-                child_values.push(fd.trace_graph.node_weight(child).unwrap().1[\"{udf_ref}\"].clone());
+                child_values.push(fd.trace_graph.node_weight(child).unwrap().1[\"{id}\"].clone());
             }}
             if child_values.len() == 0 {{
                 my_{id}_value = {leaf_func}(&fd.trace_graph).to_string();
@@ -275,7 +276,6 @@ fn generate_udf_blocks(
 
         ",
             id = call.id,
-            udf_ref = udf_ref,
             leaf_func = scalar_udf_table[&call.id].leaf_func,
             mid_func = scalar_udf_table[&call.id].mid_func
         );
@@ -285,14 +285,13 @@ fn generate_udf_blocks(
             "
         let node = get_node_with_id(&fd.trace_graph, http_headers.workload_name.clone()).unwrap();
         // if we already have the property, don't add it
-        if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key(\"{udf_ref}\") &&
-               fd.trace_graph.node_weight(node).unwrap().1[\"{udf_ref}\"] == my_{id}_value ) {{
+        if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key(\"{id}\") &&
+               fd.trace_graph.node_weight(node).unwrap().1[\"{id}\"] == my_{id}_value ) {{
            fd.trace_graph.node_weight_mut(node).unwrap().1.insert(
-               \"{udf_ref}\".to_string(), my_{id}_value);
+               \"{id}\".to_string(), my_{id}_value);
         }}
         ",
             id = call.id,
-            udf_ref = udf_ref
         );
         udf_blocks.push(save_udf_vals);
     }
