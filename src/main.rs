@@ -170,6 +170,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let visitor_results = to_ir::visit_result(result, root_id.to_string());
     let filter_str: &str;
     let filter_agg_str: &str;
+    /*
     match comp_mode {
         "sim" => {
             let codegen_object = codegen_simulator::generate_code_blocks(visitor_results, udfs);
@@ -207,5 +208,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::process::exit(-1);
         }
     }
+    */
     Ok(())
 }

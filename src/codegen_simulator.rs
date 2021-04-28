@@ -51,31 +51,17 @@ fn make_struct_filter_blocks(
             );
             target_blocks.push(ids_to_properties_hashmap_init);
         }
-        for node in struct_filter.properties.keys() {
-            let get_hashmap = format!(
-                "        let mut {node}_hashmap = ids_to_properties.get_mut(\"{node}\").unwrap();\n",
-                node = node
-            );
-            target_blocks.push(get_hashmap);
-            for property_name in struct_filter.properties[node].keys() {
-                let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
-                                               node=node,
-                                               property_name=property_name,
-                                               property_value=struct_filter.properties[node][property_name]);
-                target_blocks.push(fill_in_hashmap);
-            }
-            for property_filter in attr_filters {
-                if property_filter.node != "trace" {
-                    let mut property_name_without_period = property_filter.property.clone();
-                    if property_name_without_period.starts_with('.') {
-                        property_name_without_period.remove(0);
-                    }
-                    let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
-                                                   node=property_filter.node,
-                                                   property_name=property_name_without_period,
-                                                   property_value=property_filter.value);
-                    target_blocks.push(fill_in_hashmap);
+        for property_filter in attr_filters {
+            if property_filter.node != "trace" {
+                let mut property_name_without_period = property_filter.property.clone();
+                if property_name_without_period.starts_with('.') {
+                    property_name_without_period.remove(0);
                 }
+                let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
+                                               node=property_filter.node,
+                                               property_name=property_name_without_period,
+                                               property_value=property_filter.value);
+                target_blocks.push(fill_in_hashmap);
             }
         }
         let make_graph = "        return graph_utils::generate_target_graph(vertices, edges, ids_to_properties);\n".to_string();
@@ -195,15 +181,19 @@ fn make_return_block(entity_ref: &PropertyOrUDF, query_data: &VisitorResults) ->
             }
             let node = &call.args[0];
             match node.as_str() {
-                "trace" => make_storage_rpc_value_from_trace(query_data.root_id.clone(), &node),
-                _ => make_storage_rpc_value_from_target(&node, &call.to_ref_str()),
+                "trace" => make_storage_rpc_value_from_trace(query_data.root_id.clone(), &call.id),
+                _ => make_storage_rpc_value_from_target(&node, &call.id),
             }
         }
     }
 }
 
 fn make_aggr_block(agg: &Aggregate, query_data: &VisitorResults) -> String {
-    make_return_block(&agg.property, query_data)
+    let mut to_return = String::new();
+    for arg in &agg.args {
+        to_return.push_str(&make_return_block(&arg, query_data));
+    }
+    to_return
 }
 
 fn generate_property_blocks(properties: &IndexSet<Property>) -> Vec<String> {
@@ -233,7 +223,6 @@ fn generate_udf_blocks(
 ) -> Vec<String> {
     let mut udf_blocks = Vec::new();
     for call in udf_calls {
-        let udf_ref = call.to_ref_str();
         if aggregation_udf_table.contains_key(&call.id) {
             continue;
         }
@@ -248,7 +237,7 @@ fn generate_udf_blocks(
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
             for child in child_iterator {{
-                child_values.push(fd.trace_graph.node_weight(child).unwrap().1[\"{udf_ref}\"].clone());
+                child_values.push(fd.trace_graph.node_weight(child).unwrap().1[\"{id}\"].clone());
             }}
             if child_values.len() == 0 {{
                 my_{id}_value = {leaf_func}(&fd.trace_graph).to_string();
@@ -258,7 +247,6 @@ fn generate_udf_blocks(
 
         ",
             id = call.id,
-            udf_ref = udf_ref,
             leaf_func = scalar_udf_table[&call.id].leaf_func,
             mid_func = scalar_udf_table[&call.id].mid_func
         );
@@ -267,12 +255,12 @@ fn generate_udf_blocks(
         let save_udf_vals = format!("
         let node = graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap().to_string()).unwrap();
         // if we already have the property, don't add it
-        if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key(\"{udf_ref}\") &&
-               fd.trace_graph.node_weight(node).unwrap().1[\"{udf_ref}\"] == my_{id}_value ) {{
+        if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key(\"{id}\") &&
+               fd.trace_graph.node_weight(node).unwrap().1[\"{id}\"] == my_{id}_value ) {{
            fd.trace_graph.node_weight_mut(node).unwrap().1.insert(
-               \"{udf_ref}\".to_string(), my_{id}_value);
+               \"{id}\".to_string(), my_{id}_value);
         }}
-        ", id=call.id, udf_ref=udf_ref);
+        ", id=call.id);
 
         udf_blocks.push(save_udf_vals);
     }
@@ -399,15 +387,17 @@ mod tests {
         let _codegen = generate_code_blocks(result, [COUNT.to_string()].to_vec());
     }
 
+    /*
     #[test]
     fn get_group_by() {
         let result = get_codegen_from_query(
-            "MATCH (a {}) WHERE a.node.metadata.WORKLOAD_NAME = 'productpage-v1' RETURN a.count, agg".to_string(),
+            "MATCH (a) WHERE a.node.metadata.WORKLOAD_NAME = 'productpage-v1' RETURN agg(a.count), a.count".to_string(),
         );
         assert!(!result.struct_filters.is_empty());
         let _codegen = generate_code_blocks(result, [COUNT.to_string()].to_vec());
         assert!(!_codegen.target_blocks.is_empty());
     }
+    */
 
     #[test]
     fn test_where() {

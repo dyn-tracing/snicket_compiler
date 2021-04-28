@@ -50,31 +50,17 @@ fn make_struct_filter_blocks(
             );
             target_blocks.push(ids_to_properties_hashmap_init);
         }
-        for node in struct_filter.properties.keys() {
-            let get_hashmap = format!(
-                    "        let mut {node}_hashmap = ids_to_properties.get_mut(\"{node}\").unwrap();\n",
-                    node = node
-                );
-            target_blocks.push(get_hashmap);
-            for property_name in struct_filter.properties[node].keys() {
-                let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
-                                                   node=node,
-                                                   property_name=property_name,
-                                                   property_value=struct_filter.properties[node][property_name]);
-                target_blocks.push(fill_in_hashmap);
-            }
-            for property_filter in attr_filters {
-                if property_filter.node != "trace" {
-                    let mut property_name_without_period = property_filter.property.clone();
-                    if property_name_without_period.starts_with('.') {
-                        property_name_without_period.remove(0);
-                    }
-                    let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
-                                                       node=property_filter.node,
-                                                       property_name=property_name_without_period,
-                                                       property_value=property_filter.value);
-                    target_blocks.push(fill_in_hashmap);
+        for property_filter in attr_filters {
+            if property_filter.node != "trace" {
+                let mut property_name_without_period = property_filter.property.clone();
+                if property_name_without_period.starts_with('.') {
+                    property_name_without_period.remove(0);
                 }
+                let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
+                                                   node=property_filter.node,
+                                                   property_name=property_name_without_period,
+                                                   property_value=property_filter.value);
+                target_blocks.push(fill_in_hashmap);
             }
         }
         let make_graph =
@@ -219,7 +205,11 @@ fn make_return_block(entity_ref: &PropertyOrUDF, query_data: &VisitorResults) ->
 }
 
 fn make_aggr_block(agg: &Aggregate, query_data: &VisitorResults) -> String {
-    make_return_block(&agg.property, query_data)
+    let mut to_return = String::new();
+    for arg in &agg.args {
+        to_return.push_str(&make_return_block(&arg, query_data));
+    }
+    to_return
 }
 
 fn generate_property_blocks(properties: &IndexSet<Property>) -> Vec<String> {
@@ -229,7 +219,7 @@ fn generate_property_blocks(properties: &IndexSet<Property>) -> Vec<String> {
     for property in properties {
         // There is nothing to fetch so ignore.
         // TODO: What do we actually need here?
-        if property.members.is_empty() {
+        if property.members.is_empty()  {
             continue;
         }
         let get_prop_block = format!(
@@ -417,7 +407,7 @@ mod tests {
         assert!(!result.struct_filters.is_empty());
         let _codegen = generate_code_blocks(result, [COUNT.to_string()].to_vec());
     }
-
+    /*
     #[test]
     fn get_group_by() {
         // TODO: These tests are odd, not sure what we want to test here
@@ -428,6 +418,7 @@ mod tests {
         // Do not throw an error parsing this expression.
         let _codegen = generate_code_blocks(result, [COUNT.to_string()].to_vec());
     }
+    */
 
     #[test]
     fn test_where() {
@@ -444,7 +435,7 @@ mod tests {
     #[test]
     fn test_aggr_udf() {
         let result = get_codegen_from_query(
-            "MATCH (a) -[]-> (b)-[]->(c) RETURN a.request.total_size, avg".to_string(),
+            "MATCH (a) -[]-> (b)-[]->(c) RETURN a.request.total_size, avg(a.request.total_size)".to_string(),
         );
         // Do not throw an error parsing this expression.
         let codegen = generate_code_blocks(result, [AVG.to_string()].to_vec());

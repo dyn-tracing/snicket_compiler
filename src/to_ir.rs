@@ -1,6 +1,7 @@
 use super::antlr_gen::parser::*;
 use super::antlr_gen::visitor::CypherVisitor;
 use super::ir::IrReturnEnum;
+use super::ir::PropertyOrUDF;
 use super::ir::*;
 use antlr_rust::tree::ParseTree;
 use antlr_rust::tree::ParseTreeVisitor;
@@ -15,7 +16,6 @@ use std::rc::Rc;
 /***********************************/
 // FilterVisitor:  visits tree and fills out structural and property filters
 /***********************************/
-
 pub struct PropertyAndUdfVisitor {
     properties: IndexSet<Property>,
     udf_calls: IndexSet<UdfCall>,
@@ -68,13 +68,13 @@ impl<'i> CypherVisitor<'i> for PropertyAndUdfVisitor {
         log::debug!("Generating Property");
         let atom = prop.oC_Atom().unwrap();
         let entity: String;
-        if let Some(var) = atom.oC_Variable() {
-            entity = var.get_text();
-            log::debug!("Storing var: {:?}", entity);
-        } else if let Some(func) = atom.oC_FunctionInvocation() {
+        if let Some(func) = atom.oC_FunctionInvocation() {
             func.accept(self);
             // TODO:  Technically, UDFs can return an object
             return;
+        } else if let Some(var) = atom.oC_Variable() {
+            entity = var.get_text();
+            log::debug!("Storing var: {:?}", entity);
         } else if let Some(var) = atom.oC_Literal() {
             // TODO:  Literals are values, not property. How do we treat them?
             log::debug!("Storing literal: {:?}", var);
@@ -96,10 +96,13 @@ impl<'i> CypherVisitor<'i> for PropertyAndUdfVisitor {
                 panic!("Expected identifer to follow property notation.")
             }
         }
-        self.properties.insert(Property {
-            parent: entity,
-            members: property_vec,
-        });
+        // if it's 0, that means you likely just found a variable inside a UDF, like height(c)
+        if property_vec.len() > 0 {
+            self.properties.insert(Property {
+                parent: entity,
+                members: property_vec,
+            });
+        }
     }
 }
 
@@ -140,13 +143,26 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
     ) {
         log::debug!("Generating IrReturn");
         let atom = ctx.oC_Atom().unwrap();
-        let entity: String;
+        let mut entity: String;
+        let mut property_str = String::new();
+        for property in ctx.oC_PropertyLookup_all() {
+            // this includes the dots
+            property_str.push_str(&property.get_text())
+        }
+        print!("property string: {:?}\n", property_str);
+        log::debug!("Property String {:?}", property_str);
+        
         if let Some(func) = atom.oC_FunctionInvocation() {
             entity = func.get_text();
-            // TODO: We can make this UDF more precise
             log::debug!("Storing UDF: {:?}", entity);
+            // this is not the correct "parse-y" way to do it.  But I can't figure out another way
+            if let Some(index) = entity.find('(') {
+                property_str = entity[0..index].to_string();
+                entity = entity[index+1..entity.len()-1].to_string();
+            } else { log::error!("could not find parenthesis in UDF"); }
         } else if let Some(var) = atom.oC_Variable() {
             entity = var.get_text();
+            print!("entity: {:?}\n", entity);
             log::debug!("Storing var: {:?}", entity);
         } else if let Some(var) = atom.oC_Literal() {
             entity = var.get_text();
@@ -160,16 +176,11 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
             process::exit(1);
         }
 
-        let mut property_str = String::new();
-        for property in ctx.oC_PropertyLookup_all() {
-            // this includes the dots
-            property_str.push_str(&property.get_text())
-        }
-        log::debug!("Property String {:?}", property_str);
         self.return_items.push(IrReturn {
             entity,
             property: property_str,
         });
+
         if atom.oC_Literal().is_some() {
             //TODO: This check can be removed once we are done with the transition
             return;
@@ -183,6 +194,11 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
         let node = self.return_items[0].entity.clone();
         let property = self.return_items[0].property.clone();
         self.return_items.clear();
+
+        if property.is_empty() {
+            // skip
+            return;
+        }
 
         // process the right node
         let value;
@@ -203,43 +219,36 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
     }
 
     fn visit_oC_PatternElement(&mut self, ctx: &OC_PatternElementContext<'i>) {
-        let mut struct_filter = StructuralFilter::default();
+        if self.struct_filters.is_empty() {
+            let mut new_struct_filter = StructuralFilter::default();
+            self.struct_filters.push(new_struct_filter);
+        }
+        let mut struct_filter = &mut self.struct_filters[0];
 
         let mut left_node = ctx.oC_NodePattern().unwrap().oC_Variable().unwrap();
-        struct_filter.vertices.push(left_node.get_text());
+        struct_filter.vertices.insert(left_node.get_text());
         for pattern_element_i in ctx.oC_PatternElementChain_all() {
             let relationship = pattern_element_i.oC_RelationshipPattern().unwrap();
             let node_pattern = pattern_element_i.oC_NodePattern().unwrap();
 
             let right_node = node_pattern.oC_Variable().unwrap();
-            struct_filter.vertices.push(right_node.get_text());
+            struct_filter.vertices.insert(right_node.get_text());
 
             // only add right-side edges for now
             if relationship.oC_RightArrowHead().is_some() {
                 struct_filter
                     .edges
-                    .push((left_node.get_text(), right_node.get_text()));
+                    .insert((left_node.get_text(), right_node.get_text()));
             } else {
                 log::error!("Unsupported direction");
                 process::exit(1);
             }
-            if let Some(prop) = node_pattern.oC_Properties() {
-                let map_literal = prop.oC_MapLiteral().unwrap();
-                let mut prop_hashmap = IndexMap::new();
-                for (j, prop_key_name) in
-                    map_literal.oC_PropertyKeyName_all().into_iter().enumerate()
-                {
-                    let expression = map_literal.oC_Expression(j).unwrap();
-                    prop_hashmap.insert(prop_key_name.get_text(), expression.get_text());
-                }
-                struct_filter
-                    .properties
-                    .insert(right_node.get_text(), prop_hashmap);
-            }
             // update the left node
             left_node = right_node;
         }
-        self.struct_filters.push(struct_filter);
+        if let Some(extra_struct) = ctx.oC_PatternElement() {
+            extra_struct.accept(self);
+        }
     }
 
     /// This function visits a match clause.  It extracts the graph inside, complete with any
@@ -352,8 +361,7 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
     }
 
     fn visit_oC_ProjectionItems(&mut self, ctx: &OC_ProjectionItemsContext<'i>) {
-        // For now we assume that a single element implies a return expression
-        // Two elements imply an aggregation
+        // For now we distinguish between aggregation and UDFs in the codegen
         // FIXME: Make this more explicit with a dedicated visit tree
         self.obj_references.clear();
         let proj_items = ctx.oC_ProjectionItem_all();
@@ -380,8 +388,14 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
                 log::error!("Agg term has unexpected format or was not found.");
                 process::exit(1)
             }
-            let udf = self.obj_references[0].clone();
-            self.return_expr = IrReturnEnum::Aggregate(Aggregate::new_with_items(udf, return_item));
+            if let PropertyOrUDF::UdfCall(udf) = self.obj_references[0].clone() {
+                self.return_expr = IrReturnEnum::Aggregate(Aggregate::new_with_items(udf, vec![return_item]));
+
+            } else {
+                log::error!("Could not parse aggregation function");
+                process::exit(1);
+            }
+            
         } else {
             log::error!("More than two return items not supported");
             process::exit(1);
@@ -415,7 +429,6 @@ pub fn visit_result(result: Rc<OC_CypherContextAll>, root_id: String) -> Visitor
         struct_filters: filter_visitor.struct_filters,
         attr_filters: filter_visitor.attr_filters,
         return_expr: return_visitor.return_expr,
-        maps: Vec::new(),
         root_id,
         properties: prop_visitor.properties,
         udf_calls: prop_visitor.udf_calls,
@@ -440,222 +453,144 @@ mod tests {
         return result;
     }
 
+
     #[test]
-    fn test_parser_finds_match() {
+    fn test_structural_filter() {
+        // non branching
         let tf = CommonTokenFactory::default();
         let result = run_parser(
             &tf,
-            "MATCH (a) -[]-> (b)-[]->(c) WHERE b.metadata.WORKLOAD_NAME = 'reviews-v1' RETURN a.request.total_size",
+            "MATCH (a) -[]-> (b)-[]->(c) RETURN a.request.total_size",
         );
         let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
         assert!(!visitor.struct_filters.is_empty());
-    }
+        let mut correct_vertices = IndexSet::new();
+        correct_vertices.insert("a".to_string());
+        correct_vertices.insert("b".to_string());
+        correct_vertices.insert("c".to_string());
+        let mut correct_edges = IndexSet::new();
+        correct_edges.insert(("a".to_string(), "b".to_string()));
+        correct_edges.insert(("b".to_string(), "c".to_string()));
+        assert!(visitor.struct_filters[0].vertices == correct_vertices);
+        assert!(visitor.struct_filters[0].edges == correct_edges);
 
-    #[test]
-    fn test_parser_finds_vertices_edges_properties() {
+        // branching
         let tf = CommonTokenFactory::default();
         let result = run_parser(
             &tf,
-            "MATCH (a {}) -[]->(b {}) -[]->(c {}) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' RETURN a.request.total_size"
-        );
-        let mut visitor = FilterVisitor::default();
-        let _res = result.accept(&mut visitor);
-        assert!(visitor.attr_filters[0].node == "b");
-        assert!(visitor.attr_filters[0].property == ".node.metadata.WORKLOAD_NAME");
-        assert!(
-            visitor.attr_filters[0].value == "\'reviews-v1\'",
-            "value is {:?}",
-            visitor.attr_filters[0].value
-        );
-        assert!(visitor.struct_filters[0].vertices == vec!["a", "b", "c"]);
-        assert!(
-            visitor.struct_filters[0].edges
-                == vec![
-                    ("a".to_string(), "b".to_string()),
-                    ("b".to_string(), "c".to_string())
-                ],
-            "edges are {:?}",
-            visitor.struct_filters[0].edges
-        );
-    }
-
-    #[test]
-    fn test_match_where() {
-        let tf = CommonTokenFactory::default();
-        let result = run_parser(
-            &tf,
-            "MATCH (a) -[]-> (b {})-[]->(c) WHERE trace.latency = 500 RETURN a.request.total_size",
+            "MATCH (a) -[]-> (b), (a) -[]-> (c)  RETURN height(a)"
         );
         let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
         assert!(!visitor.struct_filters.is_empty());
-        assert!(!visitor.attr_filters.is_empty());
-        assert!(visitor.attr_filters[0].node == "trace".to_string());
-        assert!(visitor.attr_filters[0].property == ".latency".to_string());
-        assert!(visitor.attr_filters[0].value == "500".to_string());
-        assert!(
-            visitor.property_references == vec!["trace.latency".to_string()],
-            "Received {:?} instead.",
-            visitor.property_references
-        );
+        let mut correct_vertices = IndexSet::new();
+        correct_vertices.insert("a".to_string());
+        correct_vertices.insert("b".to_string());
+        correct_vertices.insert("c".to_string());
+        let mut correct_edges = IndexSet::new();
+        correct_edges.insert(("a".to_string(), "b".to_string()));
+        correct_edges.insert(("a".to_string(), "c".to_string()));
+        assert!(visitor.struct_filters[0].vertices == correct_vertices,
+            "vertices are {:?}", visitor.struct_filters[0].vertices);
+        assert!(visitor.struct_filters[0].edges == correct_edges);
+    }
 
-        let mut visitor = ReturnVisitor::default();
+
+    #[test]
+    fn test_attribute_filter() {
+        let tf = CommonTokenFactory::default();
+        let result = run_parser(
+            &tf,
+            "MATCH (a) -[]-> (b)-[]->(c) WHERE a.request.total_size = 5 RETURN a.workload_name",
+        );
+        let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
-        // TODO: This is hideous. Is there no better way to express equality?
-        assert!(
-            visitor.return_expr
-                == IrReturnEnum::PropertyOrUDF(PropertyOrUDF::Property({
-                    Property {
-                        parent: "a".to_string(),
-                        members: vec!["request".to_string(), "total_size".to_string()],
-                    }
-                }))
+        assert!(visitor.attr_filters.len()==1);
+        assert!(visitor.attr_filters.contains(&AttributeFilter { node: "a".to_string(), property: ".request.total_size".to_string(), value: "5".to_string() } ));
+    }
+
+
+    #[test]
+    fn test_properties_and_udf_calls() {
+        let tf = CommonTokenFactory::default();
+        let result = run_parser(
+            &tf,
+            "MATCH (a) -[]-> (b)-[]->(c) WHERE height(a) = 2 RETURN a.workload_name",
         );
         let mut visitor = PropertyAndUdfVisitor::default();
         let _res = result.accept(&mut visitor);
-        // TODO: Kinda ugly. Fix up
-        let mut ref_set = IndexSet::new();
-        ref_set.insert(Property {
-            parent: "trace".to_string(),
-            members: vec!["latency".to_string()],
-        });
-        ref_set.insert(Property {
-            parent: "a".to_string(),
-            members: vec!["request".to_string(), "total_size".to_string()],
-        });
-        assert!(
-            visitor.properties == ref_set,
-            "Received {:?} instead.",
-            visitor.properties
-        );
-        assert!(visitor.udf_calls.is_empty());
-    }
+        assert!(visitor.properties.len()==1);
+        assert!(visitor.properties.contains(
+            &Property {
+                parent: "a".to_string(),
+                members: vec!["workload_name".to_string()]
+            }
+        ));
+        assert!(visitor.udf_calls.len()==1);
+        assert!(visitor.udf_calls.contains(
+            &UdfCall {
+                id: "height".to_string(),
+                args: vec!["a".to_string()]
+            }
+        ));
 
-    #[test]
-    fn test_return_udf() {
-        let tf = CommonTokenFactory::default();
-        let result = run_parser(&tf, "MATCH (a) -[]-> (b {})-[]->(c) RETURN height(a)");
-        let mut visitor = PropertyAndUdfVisitor::default();
-        let _res = result.accept(&mut visitor);
-        // TODO: Kinda ugly. Fix up
-        let mut ref_set = IndexSet::new();
-        ref_set.insert(UdfCall {
-            id: "height".to_string(),
-            args: vec!["a".to_string()],
-        });
-        assert!(
-            visitor.udf_calls == ref_set,
-            "Received {:?} instead.",
-            visitor.properties
-        );
+        // check that attribute part of regular visitor is working properly too 
         let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
-        assert!(visitor.property_references.is_empty());
-        let mut visitor = ReturnVisitor::default();
-        let _res = result.accept(&mut visitor);
-        assert!(
-            visitor.return_expr
-                == IrReturnEnum::PropertyOrUDF(PropertyOrUDF::UdfCall({
-                    UdfCall {
-                        id: "height".to_string(),
-                        args: vec!["a".to_string()],
-                    }
-                }))
+        assert!(visitor.attr_filters.len()==1, "attr filters are {:?}", visitor.attr_filters);
+        assert!(visitor.attr_filters.contains(
+            &AttributeFilter {
+                node: "a".to_string(),
+                property: "height".to_string(),
+                value: "2".to_string()
+            }),
+            "attr filter is {:?}", visitor.attr_filters[0]
         );
     }
 
     #[test]
-    fn test_match_multiple_where() {
-        let tf = CommonTokenFactory::default();
-        let result = run_parser(&tf, "MATCH (a) -[]-> (b {})-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' AND b.latency = 500 AND trace.client = xyz RETURN a.request.total_size");
-        let mut visitor = FilterVisitor::default();
-        let _res = result.accept(&mut visitor);
-        assert!(!visitor.struct_filters.is_empty());
-        assert!(visitor.attr_filters.len() == 3);
-        assert!(visitor.attr_filters[1].node == "b".to_string());
-        assert!(visitor.attr_filters[1].property == ".latency".to_string());
-        assert!(visitor.attr_filters[1].value == "500".to_string());
-
-        assert!(visitor.attr_filters[2].node == "trace".to_string());
-        assert!(visitor.attr_filters[2].property == ".client".to_string());
-        assert!(visitor.attr_filters[2].value == "xyz".to_string());
-    }
-
-    #[test]
-    fn test_return() {
+    fn test_return_expr() {
+        // regular return
         let tf = CommonTokenFactory::default();
         let result = run_parser(
             &tf,
-            "MATCH (a) -[]-> (b {})-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' RETURN a.request.total_size",
+            "MATCH (a) -[]-> (b)-[]->(c) WHERE height(a) = 2 RETURN a.request.total_size",
         );
-        let mut visitor = ReturnVisitor::default();
-        let _res = result.accept(&mut visitor);
-        assert!(
-            visitor.return_expr
-                == IrReturnEnum::PropertyOrUDF(PropertyOrUDF::Property({
-                    Property {
-                        parent: "a".to_string(),
-                        members: vec!["request".to_string(), "total_size".to_string()],
-                    }
-                }))
-        );
-    }
-
-    #[test]
-    fn test_aggregate() {
-        let tf = CommonTokenFactory::default();
-        let result = run_parser(
-            &tf,
-            "MATCH (a) -[]-> (b {})-[]->(c) RETURN a.return_code, histogram(a.request.total_size) ",
-        );
-        let mut visitor = ReturnVisitor::default();
-        let _res = result.accept(&mut visitor);
-
-        assert!(
-            visitor.return_expr
-                == IrReturnEnum::Aggregate(Aggregate {
-                    udf_reference: PropertyOrUDF::Property({
-                        Property {
-                            parent: "a".to_string(),
-                            members: vec!["return_code".to_string()],
-                        }
-                    }),
-                    property: PropertyOrUDF::UdfCall({
-                        UdfCall {
-                            id: "histogram".to_string(),
-                            args: vec!["a.request.total_size".to_string()],
-                        }
-                    }),
-                })
-        );
-    }
-
-    #[test]
-    fn test_return_whole_trace() {
-        let tf = CommonTokenFactory::default();
-        let result = run_parser(&tf, "MATCH (a) -[]-> (b)-[]->(c) RETURN trace");
-        let mut filter_visitor = FilterVisitor::default();
         let mut return_visitor = ReturnVisitor::default();
-        let _res = result.accept(&mut filter_visitor);
         let _res = result.accept(&mut return_visitor);
-        let results = VisitorResults {
-            struct_filters: filter_visitor.struct_filters,
-            attr_filters: filter_visitor.attr_filters,
-            return_expr: return_visitor.return_expr,
-            maps: Vec::new(),
-            root_id: "".to_string(),
-            properties: IndexSet::new(),
-            udf_calls: IndexSet::new(),
-        };
-        assert!(
-            results.return_expr
+        assert!(return_visitor.return_expr
                 == IrReturnEnum::PropertyOrUDF(PropertyOrUDF::Property({
                     Property {
-                        parent: "trace".to_string(),
-                        members: vec![],
+                        parent: "a".to_string(),
+                        members: vec!["request".to_string(), "total_size".to_string()],
                     }
                 }))
         );
+
+        // aggregation
+        let tf = CommonTokenFactory::default();
+        let result = run_parser(
+            &tf,
+            "MATCH (a) -[]-> (b)-[]->(c) WHERE height(a) = 2 RETURN a.request.total_size, avg(a.request.total_size)",
+        );
+        let mut return_visitor = ReturnVisitor::default();
+        let _res = result.accept(&mut return_visitor);
+
+        if let IrReturnEnum::Aggregate(agg) = return_visitor.return_expr {
+            assert!(agg.udf_reference.id == "avg".to_string());
+            assert!(agg.udf_reference.args.len() == 1);
+            assert!(agg.udf_reference.args[0] == "a.request.total_size".to_string());
+
+            assert!(agg.args.len() == 1);
+            if let PropertyOrUDF::Property(prop) = &agg.args[0] {
+                assert!(prop.parent == "a".to_string());
+                assert!(prop.members == vec!["request".to_string(), "total_size".to_string()] );
+            } else {
+                assert!(false, "could not get property in aggregation function");
+            }
+        } else {
+            assert!(false, "did not recognize aggregation function as aggregation");
+        }
     }
 }
