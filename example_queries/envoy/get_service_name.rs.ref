@@ -32,28 +32,16 @@ pub fn create_target_graph() -> Graph<
 pub fn collect_envoy_properties(
     http_headers: &HttpHeaders,
     fd: &mut FerriedData,
-) -> Result<(), ()> {
-    let mut prop_tuple: Property;
-    let mut prop_tuple_wrapped: Option<Property>;
-    prop_tuple_wrapped = fetch_property(&http_headers.workload_name,
+) -> Result<(), String> {
+    let prop_tuple = fetch_property(&http_headers.workload_name,
                                         &vec!["node", "metadata", "WORKLOAD_NAME", ],
-                                        http_headers);
-                                            if let Some(prop_tuple) = prop_tuple_wrapped {
-            fd.unassigned_properties.push(prop_tuple);
-            } else {
-                log::error!("Failed to retrieve property: {:?}
-", {property});
-                return Err(());
-            }prop_tuple_wrapped = fetch_property(&http_headers.workload_name,
+                                        http_headers)?;
+    fd.unassigned_properties.push(prop_tuple);
+    let prop_tuple = fetch_property(&http_headers.workload_name,
                                         &vec!["node", "metadata", "WORKLOAD_NAME", ],
-                                        http_headers);
-                                            if let Some(prop_tuple) = prop_tuple_wrapped {
-            fd.unassigned_properties.push(prop_tuple);
-            } else {
-                log::error!("Failed to retrieve property: {:?}
-", {property});
-                return Err(());
-            }
+                                        http_headers)?;
+    fd.unassigned_properties.push(prop_tuple);
+    
     return Ok(());
 }
 

@@ -34,24 +34,20 @@ pub fn create_target_graph() -> Graph<
 pub fn collect_envoy_properties(
     http_headers: &HttpHeaders,
     fd: &mut FerriedData,
-) -> Result<(), ()> {
-    let mut prop_tuple: Property;
-    let mut prop_tuple_wrapped: Option<Property>;
-    prop_tuple_wrapped = fetch_property(&http_headers.workload_name,
-                                        &"node.metadata.WORKLOAD_NAME".split(".").collect(),
-                                        http_headers);
-                                            if let Some(prop_tuple) = prop_tuple_wrapped {
-            fd.unassigned_properties.push(prop_tuple);
-            } else {
-                return Err(());
-            }prop_tuple_wrapped = fetch_property(&http_headers.workload_name,
-                                        &"request.total_size".split(".").collect(),
-                                        http_headers);
-                                            if let Some(prop_tuple) = prop_tuple_wrapped {
-            fd.unassigned_properties.push(prop_tuple);
-            } else {
-                return Err(());
-            }
+) -> Result<(), String> {
+    let prop_tuple = fetch_property(&http_headers.workload_name,
+                                        &vec!["node", "metadata", "WORKLOAD_NAME", ],
+                                        http_headers)?;
+    fd.unassigned_properties.push(prop_tuple);
+    let prop_tuple = fetch_property(&http_headers.workload_name,
+                                        &vec!["request", "total_size", ],
+                                        http_headers)?;
+    fd.unassigned_properties.push(prop_tuple);
+    let prop_tuple = fetch_property(&http_headers.workload_name,
+                                        &vec!["request", "total_size", ],
+                                        http_headers)?;
+    fd.unassigned_properties.push(prop_tuple);
+    
     return Ok(());
 }
 
@@ -94,20 +90,20 @@ pub fn get_value_for_storage(
     stored_data: &FerriedData,
 ) -> Option<String> {
     let value: String;
-    let node_ptr = get_node_with_id(target_graph, "a".to_string());
+    let node_ptr = get_node_with_id(target_graph, "a.request.total_size".to_string());
         if node_ptr.is_none() {
-           log::error!("Node a not found");
+           log::error!("Node a.request.total_size not found");
                 return None;
         }
         let mut trace_node_idx_opt = None;
         for map in mapping {
-            if target_graph.node_weight(map.0).unwrap().0 == "a" {
+            if target_graph.node_weight(map.0).unwrap().0 == "a.request.total_size" {
                 trace_node_idx_opt = Some(map.1);
                 break;
             }
         }
         if trace_node_idx_opt.is_none() {
-            log::error!("Node index a not found.");
+            log::error!("Node index a.request.total_size not found.");
             // we have not yet collected the return property or have a mapping error
             return None;
         }
@@ -117,15 +113,15 @@ pub fn get_value_for_storage(
             .node_weight(trace_node_idx)
             .unwrap()
             .1
-            .contains_key("request.total_size")
+            .contains_key("avg(a.request.total_size)")
         {
             // we have not yet collected the return property
-            log::error!("Missing return property request.total_size");
+            log::error!("Missing return property avg(a.request.total_size)");
             return None;
         }
-        let ret_requesttotal_size = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ "request.total_size" ];
+        let ret = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ "avg(a.request.total_size)" ];
 
-        value = ret_requesttotal_size.to_string();
+        value = ret.to_string();
 
 
     return Some(value);
