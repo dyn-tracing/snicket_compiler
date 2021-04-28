@@ -212,24 +212,35 @@ pub fn fetch_property(
     node_name: &str,
     prop_query: &Vec<&str>,
     ctx: &HttpHeaders,
-) -> Option<Property> {
+) -> Result<Property, String> {
     // Insert properties to collect
     let prop_tuple;
-    let property_str: String;
     // Seems like we need a copy here, a little bit annoying
-    if let Some(property) = ctx.get_property(prop_query.to_vec()) {
-        property_str = String::from_utf8_lossy(&property).to_string();
-    } else {
-        log::error!("Failed to retrieve property: {:?}\n", prop_query);
-        return None;
-    }
-    //FIXME Adjust the format of this property
+    let property = ctx
+        .get_property(prop_query.to_vec())
+        .ok_or_else(|| format!("Failed to retrieve property {:?}.", prop_query))?;
+    let property_str = match std::str::from_utf8(&property) {
+        Ok(property_str_) => property_str_.to_string(),
+        Err(_err) => {
+            // Some values are stored as integers
+            // Try this, but we may get nonsense.
+            // TODO: Explicit types and casting
+            // https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/advanced/attributes
+            let mut byte_array = [0u8; 8];
+            for (place, element) in byte_array.iter_mut().zip(property.iter()) {
+                *place = *element;
+            }
+            let int_val = i64::from_ne_bytes(byte_array);
+            int_val.to_string()
+        }
+    };
+    //TODO: Adjust the format of this property
     prop_tuple = Property::new(
         node_name.to_string(),
         join_str(prop_query),
         property_str.clone(),
     );
-    return Some(prop_tuple);
+    return Ok(prop_tuple);
 }
 
 fn get_shared_data(trace_id: &str, ctx: &HttpHeaders) -> Option<FerriedData> {

@@ -231,21 +231,13 @@ fn generate_property_blocks(properties: &IndexSet<Property>) -> Vec<String> {
             continue;
         }
         let get_prop_block = format!(
-            "prop_tuple_wrapped = fetch_property(&http_headers.workload_name,
+            "let prop_tuple = fetch_property(&http_headers.workload_name,
                                         &{property},
-                                        http_headers);
-                                            ",
+                                        http_headers)?;",
             property = property.as_vec_str(),
         );
         property_blocks.push(get_prop_block);
-        let push_block = "if let Some(prop_tuple) = prop_tuple_wrapped {
-            fd.unassigned_properties.push(prop_tuple);
-            } else {
-                log::error!(\"Failed to retrieve property: {:?}\n\", {property});
-                return Err(());
-            }"
-        .to_string();
-        property_blocks.push(push_block);
+        property_blocks.push("fd.unassigned_properties.push(prop_tuple);".to_string())
     }
     property_blocks
 }

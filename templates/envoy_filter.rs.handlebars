@@ -25,10 +25,10 @@ pub fn create_target_graph() -> Graph<
 pub fn collect_envoy_properties(
     http_headers: &HttpHeaders,
     fd: &mut FerriedData,
-) -> Result<(), ()> {
-    let mut prop_tuple: Property;
-    let mut prop_tuple_wrapped: Option<Property>;
-    {{#each request_blocks}}{{{this}}}{{/each}}
+) -> Result<(), String> {
+    {{#each request_blocks}}
+    {{{~this}}}
+    {{/each}}
     return Ok(());
 }
 
