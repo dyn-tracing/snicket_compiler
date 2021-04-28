@@ -57,6 +57,11 @@ fn make_struct_filter_blocks(
                 if property_name_without_period.starts_with('.') {
                     property_name_without_period.remove(0);
                 }
+                let get_hashmap = format!(
+                    "        let mut {node}_hashmap = ids_to_properties.get_mut(\"{node}\").unwrap();\n",
+                    node = property_filter.node
+                );
+                target_blocks.push(get_hashmap);
                 let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
                                                node=property_filter.node,
                                                property_name=property_name_without_period,
@@ -196,10 +201,14 @@ fn make_aggr_block(agg: &Aggregate, query_data: &VisitorResults) -> String {
     to_return
 }
 
-fn generate_property_blocks(properties: &IndexSet<Property>) -> Vec<String> {
+fn generate_property_blocks(
+    properties: &IndexSet<Property>,
+    scalar_udf_table: &IndexMap<String, ScalarUdf>,
+) -> Vec<String> {
     let mut property_blocks = Vec::new();
+    // some "properties" are created by UDFs, and if so, shouldn't be collected here
     for property in properties {
-        if property.members.is_empty() {
+        if property.members.is_empty() || scalar_udf_table.contains_key(&property.to_dot_string()) {
             continue;
         }
         let get_prop_block = format!(
@@ -284,7 +293,8 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
         }
     }
     // all the properties we collect
-    code_struct.request_blocks = generate_property_blocks(&query_data.properties);
+    code_struct.request_blocks =
+        generate_property_blocks(&query_data.properties, &scalar_udf_table);
     code_struct.udf_blocks = generate_udf_blocks(
         &scalar_udf_table,
         &aggregation_udf_table,

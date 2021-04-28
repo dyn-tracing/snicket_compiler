@@ -105,7 +105,6 @@ pub fn create_target_graph() -> Graph<
          ids_to_properties.insert("a".to_string(), IndexMap::new());
          ids_to_properties.insert("b".to_string(), IndexMap::new());
          ids_to_properties.insert("c".to_string(), IndexMap::new());
-         let mut b_hashmap = ids_to_properties.get_mut("b").unwrap();
          return graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
  
 
@@ -126,7 +125,7 @@ pub fn execute_udfs_and_check_trace_lvl_prop(filter: &Filter, fd: &mut FerriedDa
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
             for child in child_iterator {
-                child_values.push(fd.trace_graph.node_weight(child).unwrap().1["height(a)"].clone());
+                child_values.push(fd.trace_graph.node_weight(child).unwrap().1["height"].clone());
             }
             if child_values.len() == 0 {
                 my_height_value = leaf_height(&fd.trace_graph).to_string();
@@ -137,10 +136,10 @@ pub fn execute_udfs_and_check_trace_lvl_prop(filter: &Filter, fd: &mut FerriedDa
          
         let node = graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap().to_string()).unwrap();
         // if we already have the property, don't add it
-        if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key("height(a)") &&
-               fd.trace_graph.node_weight(node).unwrap().1["height(a)"] == my_height_value ) {
+        if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key("height") &&
+               fd.trace_graph.node_weight(node).unwrap().1["height"] == my_height_value ) {
            fd.trace_graph.node_weight_mut(node).unwrap().1.insert(
-               "height(a)".to_string(), my_height_value);
+               "height".to_string(), my_height_value);
         }
          
     let root_id = "productpage-v1";
@@ -174,11 +173,11 @@ pub fn get_value_for_storage(
             break;
         }
     }
-    if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("height(a)") {
+    if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("height") {
         // we have not yet collected the return property or have a mapping error
         return None;
     }
-    let mut ret = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "height(a)" ];
+    let mut ret = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "height" ];
 
     value = ret.to_string();
  

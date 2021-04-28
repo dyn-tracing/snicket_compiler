@@ -8,7 +8,6 @@ use antlr_rust::tree::ParseTreeVisitor;
 use antlr_rust::tree::TerminalNode;
 use antlr_rust::tree::Tree;
 use antlr_rust::tree::Visitable;
-use indexmap::map::IndexMap;
 use indexmap::IndexSet;
 use std::process;
 use std::rc::Rc;
@@ -97,7 +96,7 @@ impl<'i> CypherVisitor<'i> for PropertyAndUdfVisitor {
             }
         }
         // if it's 0, that means you likely just found a variable inside a UDF, like height(c)
-        if property_vec.len() > 0 {
+        if !property_vec.is_empty() {
             self.properties.insert(Property {
                 parent: entity,
                 members: property_vec,
@@ -149,20 +148,20 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
             // this includes the dots
             property_str.push_str(&property.get_text())
         }
-        print!("property string: {:?}\n", property_str);
         log::debug!("Property String {:?}", property_str);
-        
+
         if let Some(func) = atom.oC_FunctionInvocation() {
             entity = func.get_text();
             log::debug!("Storing UDF: {:?}", entity);
             // this is not the correct "parse-y" way to do it.  But I can't figure out another way
             if let Some(index) = entity.find('(') {
                 property_str = entity[0..index].to_string();
-                entity = entity[index+1..entity.len()-1].to_string();
-            } else { log::error!("could not find parenthesis in UDF"); }
+                entity = entity[index + 1..entity.len() - 1].to_string();
+            } else {
+                log::error!("could not find parenthesis in UDF");
+            }
         } else if let Some(var) = atom.oC_Variable() {
             entity = var.get_text();
-            print!("entity: {:?}\n", entity);
             log::debug!("Storing var: {:?}", entity);
         } else if let Some(var) = atom.oC_Literal() {
             entity = var.get_text();
@@ -220,10 +219,10 @@ impl<'i> CypherVisitor<'i> for FilterVisitor {
 
     fn visit_oC_PatternElement(&mut self, ctx: &OC_PatternElementContext<'i>) {
         if self.struct_filters.is_empty() {
-            let mut new_struct_filter = StructuralFilter::default();
+            let new_struct_filter = StructuralFilter::default();
             self.struct_filters.push(new_struct_filter);
         }
-        let mut struct_filter = &mut self.struct_filters[0];
+        let struct_filter = &mut self.struct_filters[0];
 
         let mut left_node = ctx.oC_NodePattern().unwrap().oC_Variable().unwrap();
         struct_filter.vertices.insert(left_node.get_text());
@@ -389,13 +388,12 @@ impl<'i> CypherVisitor<'i> for ReturnVisitor {
                 process::exit(1)
             }
             if let PropertyOrUDF::UdfCall(udf) = self.obj_references[0].clone() {
-                self.return_expr = IrReturnEnum::Aggregate(Aggregate::new_with_items(udf, vec![return_item]));
-
+                self.return_expr =
+                    IrReturnEnum::Aggregate(Aggregate::new_with_items(udf, vec![return_item]));
             } else {
                 log::error!("Could not parse aggregation function");
                 process::exit(1);
             }
-            
         } else {
             log::error!("More than two return items not supported");
             process::exit(1);
@@ -453,7 +451,6 @@ mod tests {
         return result;
     }
 
-
     #[test]
     fn test_structural_filter() {
         // non branching
@@ -477,10 +474,7 @@ mod tests {
 
         // branching
         let tf = CommonTokenFactory::default();
-        let result = run_parser(
-            &tf,
-            "MATCH (a) -[]-> (b), (a) -[]-> (c)  RETURN height(a)"
-        );
+        let result = run_parser(&tf, "MATCH (a) -[]-> (b), (a) -[]-> (c)  RETURN height(a)");
         let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
         assert!(!visitor.struct_filters.is_empty());
@@ -491,11 +485,13 @@ mod tests {
         let mut correct_edges = IndexSet::new();
         correct_edges.insert(("a".to_string(), "b".to_string()));
         correct_edges.insert(("a".to_string(), "c".to_string()));
-        assert!(visitor.struct_filters[0].vertices == correct_vertices,
-            "vertices are {:?}", visitor.struct_filters[0].vertices);
+        assert!(
+            visitor.struct_filters[0].vertices == correct_vertices,
+            "vertices are {:?}",
+            visitor.struct_filters[0].vertices
+        );
         assert!(visitor.struct_filters[0].edges == correct_edges);
     }
-
 
     #[test]
     fn test_attribute_filter() {
@@ -506,10 +502,13 @@ mod tests {
         );
         let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
-        assert!(visitor.attr_filters.len()==1);
-        assert!(visitor.attr_filters.contains(&AttributeFilter { node: "a".to_string(), property: ".request.total_size".to_string(), value: "5".to_string() } ));
+        assert!(visitor.attr_filters.len() == 1);
+        assert!(visitor.attr_filters.contains(&AttributeFilter {
+            node: "a".to_string(),
+            property: ".request.total_size".to_string(),
+            value: "5".to_string()
+        }));
     }
-
 
     #[test]
     fn test_properties_and_udf_calls() {
@@ -520,33 +519,43 @@ mod tests {
         );
         let mut visitor = PropertyAndUdfVisitor::default();
         let _res = result.accept(&mut visitor);
-        assert!(visitor.properties.len()==1);
-        assert!(visitor.properties.contains(
-            &Property {
-                parent: "a".to_string(),
-                members: vec!["workload_name".to_string()]
-            }
-        ));
-        assert!(visitor.udf_calls.len()==1);
-        assert!(visitor.udf_calls.contains(
-            &UdfCall {
-                id: "height".to_string(),
-                args: vec!["a".to_string()]
-            }
-        ));
+        assert!(visitor.properties.len() == 1);
+        assert!(visitor.properties.contains(&Property {
+            parent: "a".to_string(),
+            members: vec!["workload_name".to_string()]
+        }));
+        assert!(visitor.udf_calls.len() == 1);
+        assert!(visitor.udf_calls.contains(&UdfCall {
+            id: "height".to_string(),
+            args: vec!["a".to_string()]
+        }));
 
-        // check that attribute part of regular visitor is working properly too 
+        // check that attribute part of regular visitor is working properly too
         let mut visitor = FilterVisitor::default();
         let _res = result.accept(&mut visitor);
-        assert!(visitor.attr_filters.len()==1, "attr filters are {:?}", visitor.attr_filters);
-        assert!(visitor.attr_filters.contains(
-            &AttributeFilter {
+        assert!(
+            visitor.attr_filters.len() == 1,
+            "attr filters are {:?}",
+            visitor.attr_filters
+        );
+        assert!(
+            visitor.attr_filters.contains(&AttributeFilter {
                 node: "a".to_string(),
                 property: "height".to_string(),
                 value: "2".to_string()
             }),
-            "attr filter is {:?}", visitor.attr_filters[0]
+            "attr filter is {:?}",
+            visitor.attr_filters[0]
         );
+
+        // copying another one here that seems to be failing?
+        let tf = CommonTokenFactory::default();
+        let result = run_parser(
+            &tf,
+            "MATCH (a) -[]-> (b)-[]->(c) WHERE c.node.metadata.WORKLOAD_NAME = 'ratings-v1' RETURN height(a), avg(height(a))"
+        );
+        let mut visitor = PropertyAndUdfVisitor::default();
+        let _res = result.accept(&mut visitor);
     }
 
     #[test]
@@ -559,7 +568,8 @@ mod tests {
         );
         let mut return_visitor = ReturnVisitor::default();
         let _res = result.accept(&mut return_visitor);
-        assert!(return_visitor.return_expr
+        assert!(
+            return_visitor.return_expr
                 == IrReturnEnum::PropertyOrUDF(PropertyOrUDF::Property({
                     Property {
                         parent: "a".to_string(),
@@ -585,12 +595,15 @@ mod tests {
             assert!(agg.args.len() == 1);
             if let PropertyOrUDF::Property(prop) = &agg.args[0] {
                 assert!(prop.parent == "a".to_string());
-                assert!(prop.members == vec!["request".to_string(), "total_size".to_string()] );
+                assert!(prop.members == vec!["request".to_string(), "total_size".to_string()]);
             } else {
                 assert!(false, "could not get property in aggregation function");
             }
         } else {
-            assert!(false, "did not recognize aggregation function as aggregation");
+            assert!(
+                false,
+                "did not recognize aggregation function as aggregation"
+            );
         }
     }
 }

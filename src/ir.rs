@@ -1,7 +1,6 @@
 /***********************************/
 // IR Structs
 /***********************************/
-use indexmap::map::IndexMap;
 use indexmap::IndexSet;
 use serde::Serialize;
 
@@ -49,11 +48,6 @@ pub struct IrReturn {
     pub property: String,
 }
 
-impl IrReturn {
-    pub fn new_with_items(entity: String, property: String) -> Self {
-        IrReturn { entity, property }
-    }
-}
 pub struct VisitorResults {
     pub root_id: String,
     pub struct_filters: Vec<StructuralFilter>,
@@ -144,7 +138,7 @@ impl Aggregate {
     pub fn new_with_items(udf_reference: UdfCall, args: Vec<PropertyOrUDF>) -> Self {
         Aggregate {
             udf_reference,
-            args
+            args,
         }
     }
 }

@@ -56,6 +56,11 @@ fn make_struct_filter_blocks(
                 if property_name_without_period.starts_with('.') {
                     property_name_without_period.remove(0);
                 }
+                let get_hashmap = format!(
+                    "        let mut {node}_hashmap = ids_to_properties.get_mut(\"{node}\").unwrap();\n",
+                    node = property_filter.node
+                );
+                target_blocks.push(get_hashmap);
                 let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
                                                    node=property_filter.node,
                                                    property_name=property_name_without_period,
@@ -187,7 +192,9 @@ fn make_storage_rpc_value_from_target(entity: &str, property: &str) -> String {
 fn make_return_block(entity_ref: &PropertyOrUDF, query_data: &VisitorResults) -> String {
     match entity_ref {
         PropertyOrUDF::Property(prop) => match prop.parent.as_str() {
-            "trace" => make_storage_rpc_value_from_trace(query_data.root_id.clone(), &prop.to_dot_string()),
+            "trace" => {
+                make_storage_rpc_value_from_trace(query_data.root_id.clone(), &prop.to_dot_string())
+            }
             _ => make_storage_rpc_value_from_target(&prop.parent, &prop.to_dot_string()),
         },
         PropertyOrUDF::UdfCall(call) => {
@@ -212,14 +219,17 @@ fn make_aggr_block(agg: &Aggregate, query_data: &VisitorResults) -> String {
     to_return
 }
 
-fn generate_property_blocks(properties: &IndexSet<Property>) -> Vec<String> {
+fn generate_property_blocks(
+    properties: &IndexSet<Property>,
+    scalar_udf_table: &IndexMap<String, ScalarUdf>,
+) -> Vec<String> {
     // TODO:  here, we can have duplicates because they have different entities,
     // but we still just need to collect one version of the property
     let mut property_blocks = Vec::new();
     for property in properties {
         // There is nothing to fetch so ignore.
         // TODO: What do we actually need here?
-        if property.members.is_empty()  {
+        if property.members.is_empty() || scalar_udf_table.contains_key(&property.to_dot_string()) {
             continue;
         }
         let get_prop_block = format!(
@@ -305,7 +315,8 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
         }
     }
     // all the properties we collect
-    code_struct.request_blocks = generate_property_blocks(&query_data.properties);
+    code_struct.request_blocks =
+        generate_property_blocks(&query_data.properties, &scalar_udf_table);
     code_struct.udf_blocks = generate_udf_blocks(
         &scalar_udf_table,
         &aggregation_udf_table,
@@ -435,7 +446,8 @@ mod tests {
     #[test]
     fn test_aggr_udf() {
         let result = get_codegen_from_query(
-            "MATCH (a) -[]-> (b)-[]->(c) RETURN a.request.total_size, avg(a.request.total_size)".to_string(),
+            "MATCH (a) -[]-> (b)-[]->(c) RETURN a.request.total_size, avg(a.request.total_size)"
+                .to_string(),
         );
         // Do not throw an error parsing this expression.
         let codegen = generate_code_blocks(result, [AVG.to_string()].to_vec());

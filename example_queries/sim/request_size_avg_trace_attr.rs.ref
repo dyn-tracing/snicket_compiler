@@ -84,6 +84,8 @@ pub fn create_target_graph() -> Graph<
          ids_to_properties.insert("a".to_string(), IndexMap::new());
          ids_to_properties.insert("b".to_string(), IndexMap::new());
          ids_to_properties.insert("c".to_string(), IndexMap::new());
+         let mut b_hashmap = ids_to_properties.get_mut("b").unwrap();
+         b_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "reviews-v1".to_string());
          return graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
  
 
@@ -107,25 +109,25 @@ pub fn execute_udfs_and_check_trace_lvl_prop(filter: &Filter, fd: &mut FerriedDa
     
     let root_id = "productpage-v1";
     
-            if filter.whoami.as_ref().unwrap()== root_id {        let mut trace_prop_str : String;
+        if filter.whoami.as_ref().unwrap()== root_id {        let mut trace_prop_str : String;
 
-                let root_node = graph_utils::get_node_with_id(&fd.trace_graph, "productpage-v1".to_string()).unwrap();
-                if ! ( fd.trace_graph.node_weight(root_node).unwrap().1.contains_key("request.total_size") &&
-                    fd.trace_graph.node_weight(root_node).unwrap().1["request.total_size"] == "1" ){
-                    // TODO:  replace fd
-                    match serde_json::to_string(&fd) {
-                        Ok(fd_str) => {
-                            return false;
-                        }
-                        Err(e) => {
-                            log::error!("could not serialize baggage {0}
+            let root_node = graph_utils::get_node_with_id(&fd.trace_graph, "productpage-v1".to_string()).unwrap();
+            if ! ( fd.trace_graph.node_weight(root_node).unwrap().1.contains_key("request.total_size") &&
+                fd.trace_graph.node_weight(root_node).unwrap().1["request.total_size"] == "1" ){
+                // TODO:  replace fd
+                match serde_json::to_string(&fd) {
+                    Ok(fd_str) => {
+                        return false;
+                    }
+                    Err(e) => {
+                        log::error!("could not serialize baggage {0}
 ", e);
-                            return false;
-                        }
-                     }
-                     return false;
-                }
-                       }
+                        return false;
+                    }
+                 }
+                 return false;
+            }
+                   }
     return true;
 }
 
@@ -142,13 +144,13 @@ pub fn get_value_for_storage(
 ) -> Option<String> {
     let mut value : String;
     let trace_node_index = graph_utils::get_node_with_id(&fd.trace_graph, "productpage-v1".to_string());
-        if trace_node_index.is_none() {
-           log::warn!("Node productpage-v1 not found");
-                return None;
-        }
-        let mut ret_requesttotal_size = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "request.total_size" ];
+    if trace_node_index.is_none() {
+       log::warn!("Node productpage-v1 not found");
+            return None;
+    }
+    let mut ret = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "request.total_size" ];
 
-        value = ret_requesttotal_size.to_string();
+    value = ret.to_string();
  
     return Some(value);
 
@@ -172,7 +174,7 @@ impl Filter {
             target_graph: None,
             filter_state: IndexMap::new(),
             envoy_shared_data: IndexMap::<String, String>::new(),
-            collected_properties: vec!( "node.metadata.WORKLOAD_NAME".to_string(), "request.total_size".to_string(),  ),
+            collected_properties: vec!(  ),
          }))
     }
 
@@ -184,7 +186,7 @@ impl Filter {
                                    target_graph: None,
                                    filter_state: string_data,
                                    envoy_shared_data: IndexMap::new(),
-                                   collected_properties: vec!("node.metadata.WORKLOAD_NAME".to_string(), "request.total_size".to_string(),  ),
+                                   collected_properties: vec!( ),
                                }))
      }
 
