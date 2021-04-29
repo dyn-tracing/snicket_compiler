@@ -106,31 +106,42 @@ pub fn fetch_property(
     node_name: &str,
     prop_query: &Vec<&str>,
     ctx: &HttpHeaders,
-) -> Option<Property> {
+) -> Result<Property, String> {
     // Insert properties to collect
     let prop_tuple;
-    let property_str: String;
     // Seems like we need a copy here, a little bit annoying
-    if let Some(property) = ctx.get_property(prop_query.to_vec()) {
-        property_str = String::from_utf8_lossy(&property).to_string();
-    } else {
-        log::error!("Failed to retrieve property: {:?}\n", prop_query);
-        return None;
-    }
-    //FIXME Adjust the format of this property
+    let property = ctx
+        .get_property(prop_query.to_vec())
+        .ok_or_else(|| format!("Failed to retrieve property {:?}.", prop_query))?;
+    let property_str = match std::str::from_utf8(&property) {
+        Ok(property_str_) => property_str_.to_string(),
+        Err(_err) => {
+            // Some values are stored as integers
+            // Try this, but we may get nonsense.
+            // TODO: Explicit types and casting
+            // https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/advanced/attributes
+            let mut byte_array = [0u8; 8];
+            for (place, element) in byte_array.iter_mut().zip(property.iter()) {
+                *place = *element;
+            }
+            let int_val = i64::from_ne_bytes(byte_array);
+            int_val.to_string()
+        }
+    };
+    //TODO: Adjust the format of this property
     prop_tuple = Property::new(
         node_name.to_string(),
         join_str(prop_query),
         property_str.clone(),
     );
-    return Some(prop_tuple);
+    return Ok(prop_tuple);
 }
 
 fn get_shared_data(trace_id: &str, ctx: &HttpHeaders) -> Option<FerriedData> {
     let mut stored_data: FerriedData = FerriedData::default();
     if let (Some(data), _) = ctx.get_shared_data(&trace_id) {
         // Add a header on the response.
-        // FIXME: There must be  a nicer way to resolve this
+        // TODO: There must be  a nicer way to resolve this
         let cast_string = String::from_utf8_lossy(&data).to_string();
         match serde_json::from_str(&cast_string) {
             Ok(d) => {
@@ -217,7 +228,7 @@ impl RootContext for HttpHeadersRoot {
         Some(Box::new(HttpHeaders {
             context_id,
             workload_name,
-            // FIXME: This should be a reference instead of a copy
+            // TODO: This should be a reference instead of a copy
             // Extremely annoying but I can not guarantee a life-time here
             target_graph: self.target_graph.clone(),
         }))
@@ -260,13 +271,19 @@ impl HttpContext for HttpHeaders {
             direction
         );
         self.print_headers(HttpType::Request);
+        let result: Result<(), String>;
         if direction == TrafficDirection::Inbound {
-            self.on_http_request_headers_inbound(num_headers);
+            result = self.on_http_request_headers_inbound(num_headers);
         } else if direction == TrafficDirection::Outbound {
-            self.on_http_request_headers_outbound(num_headers);
+            result = self.on_http_request_headers_outbound(num_headers);
         } else {
-            log::error!("Unknown request direction!");
+            result = Err("Unknown request direction!".to_string())
         }
+        match result {
+            Err(e) => log::error!("{:?}", e),
+            Ok(_) => (),
+        }
+
         Action::Continue
     }
 
@@ -278,14 +295,19 @@ impl HttpContext for HttpHeaders {
             direction
         );
         self.print_headers(HttpType::Response);
-
+        let result: Result<(), String>;
         if direction == TrafficDirection::Inbound {
-            self.on_http_response_headers_inbound(num_headers);
+            result = self.on_http_response_headers_inbound(num_headers);
         } else if direction == TrafficDirection::Outbound {
-            self.on_http_response_headers_outbound(num_headers);
+            result = self.on_http_response_headers_outbound(num_headers);
         } else {
-            log::error!("Unknown request direction!");
+            result = Err("Unknown request direction!".to_string())
         }
+        match result {
+            Err(e) => log::error!("{:?}", e),
+            Ok(_) => (),
+        }
+
         Action::Continue
     }
 
@@ -321,77 +343,35 @@ impl HttpHeaders {
         }
     }
 
-    fn on_http_request_headers_inbound(&mut self, _num_headers: usize) {
-        let trace_id: String;
-        if let Some(trace_id_) = self.get_http_request_header("x-request-id") {
-            trace_id = trace_id_;
-            log::warn!("Request inbound: Using trace id {}!", trace_id);
-        } else {
-            log::error!("Request inbound: x-request-id not found in header!",);
-            return;
-        }
+    fn on_http_request_headers_inbound(&mut self, _num_headers: usize) -> Result<(), String> {
+        let trace_id = self
+            .get_http_request_header("x-request-id")
+            .ok_or_else(|| "Request inbound: x-request-id not found in header!")?;
+        log::warn!("Request inbound: Using trace id {}!", trace_id);
 
         // Fetch ferried data
         let mut ferried_data = fetch_data_from_headers(self, HttpType::Request);
 
-        match collect_envoy_properties(self, &mut ferried_data) {
-            Ok(_) => {}
-            Err(_) => {
-                return;
-            }
-        }
+        collect_envoy_properties(self, &mut ferried_data)?;
 
         store_data(&mut ferried_data, &trace_id, self);
+        Ok(())
     }
 
-    fn on_http_request_headers_outbound(&mut self, _num_headers: usize) {
-        let trace_id: String;
-        if let Some(trace_id_) = self.get_http_request_header("x-request-id") {
-            trace_id = trace_id_;
-            log::warn!("Request outbound: Using trace id {}!", trace_id);
-        } else {
-            log::error!("Request outbound: x-request-id not found in header!",);
-            return;
-        }
-
-        // TODO: Okay this does nothing in the original
-        // I am not sure about the logic here
-        // There may be a bug in the original code
-
-        // // Retrieve the data we have stored
-        // let stored_data_opt = get_shared_data(&trace_id, self);
-
-        // if stored_data_opt.is_none() {
-        //     // We failed to parse the shared data, this might lead to wrong results
-        //     // Abort
-        //     return;
-        // }
-        // // Unpack the data we have
-        // let stored_data = stored_data_opt.unwrap();
-
-        // // Now store the data again after we have merged it
-        // let stored_data_str_opt = data_to_str(&stored_data);
-        // if stored_data_str_opt.is_none() {
-        //     // We failed to serialize the shared data.
-        //     // This might lead to wrong results, abort.
-        //     return;
-        // }
-        // // Unpack the data we have
-        // let stored_data_str = stored_data_str_opt.unwrap();
-        // // Set the header
-        // log::warn!("Attaching {:?}", stored_data_str);
-        // self.set_http_request_header("ferried_data", Some(&stored_data_str));
+    fn on_http_request_headers_outbound(&mut self, _num_headers: usize) -> Result<(), String> {
+        let trace_id = self
+            .get_http_request_header("x-request-id")
+            .ok_or_else(|| "Request outbound: x-request-id not found in header!")?;
+        log::warn!("Request outbound: Using trace id {}!", trace_id);
+        Ok(())
     }
 
-    fn on_http_response_headers_inbound(&mut self, _num_headers: usize) {
-        let trace_id: String;
-        if let Some(trace_id_) = self.get_http_response_header("x-request-id") {
-            trace_id = trace_id_;
-            log::warn!("Response inbound: Using trace id {}!", trace_id);
-        } else {
-            log::error!("Response inbound: x-request-id not found in header!",);
-            return;
-        }
+    fn on_http_response_headers_inbound(&mut self, _num_headers: usize) -> Result<(), String> {
+        let trace_id = self
+            .get_http_response_header("x-request-id")
+            .ok_or_else(|| "Response inbound: x-request-id not found in header!")?;
+        log::warn!("Response inbound: Using trace id {}!", trace_id);
+
         // TODO:  Do not really understand the purpose of this yet
         let mut my_indexmap = IndexMap::new();
         my_indexmap.insert(
@@ -400,14 +380,10 @@ impl HttpHeaders {
         );
 
         // Retrieve the data we have stored
-        let stored_data_opt = get_shared_data(&trace_id, self);
-        if stored_data_opt.is_none() {
-            // We failed to deserialize the shared data.
-            // This might lead to wrong results, abort.
-            return;
-        }
-        // Unpack the data we have
-        let mut stored_data = stored_data_opt.unwrap();
+        // We failed to deserialize the shared data.
+        // This might lead to wrong results, abort.
+        let mut stored_data = get_shared_data(&trace_id, self)
+            .ok_or_else(|| format!("Shared data for {:?}", trace_id))?;
 
         // Figure out what needs to be done here
         // Also handle case where stored data is fresh?
@@ -428,28 +404,22 @@ impl HttpHeaders {
             .add_node((self.workload_name.clone(), my_indexmap));
 
         for previous_root in previous_roots {
-            stored_data
-                .trace_graph
-                .add_edge(me, previous_root, ());
+            stored_data.trace_graph.add_edge(me, previous_root, ());
         }
         stored_data.assign_properties();
 
-        // if we are not the root id, return
+        // If we are not the root id, return
         // TODO:: Add some diagnostic when we are not the root node
         let trace_prop_sat = execute_udfs_and_check_trace_lvl_prop(self, &mut stored_data);
 
         if self.workload_name == "productpage-v1" && trace_prop_sat {
             // 2. calculate UDFs and store result, and check trace level properties
 
-            let mapping_opt =
-                find_mapping_shamir_centralized(&stored_data.trace_graph, &self.target_graph);
-            if let Some(mapping) = mapping_opt {
-                let value_wrapped =
-                    get_value_for_storage(&self.target_graph, &mapping, &stored_data);
-                if value_wrapped.is_none() {
-                    return;
-                }
-                let value = value_wrapped.unwrap();
+            if let Some(mapping) =
+                find_mapping_shamir_centralized(&stored_data.trace_graph, &self.target_graph)
+            {
+                let value = get_value_for_storage(&self.target_graph, &mapping, &stored_data)
+                    .ok_or_else(|| "Failed to retrieve value from storage.")?;
                 let call_result = self.dispatch_http_call(
                     "storage-upstream",
                     vec![
@@ -458,7 +428,7 @@ impl HttpHeaders {
                         (":authority", "storage-upstream"),
                         ("key", &trace_id),
                         ("value", &value),
-                        ("x-request-id", &trace_id)
+                        ("x-request-id", &trace_id),
                     ],
                     None,
                     vec![],
@@ -480,31 +450,25 @@ impl HttpHeaders {
         }
 
         // Now store the data again after we have computed over it
-        let stored_data_str_opt = data_to_str(&stored_data);
-        if stored_data_str_opt.is_none() {
-            // We failed to serialize the shared data.
-            // This might lead to wrong results, abort.
-            return;
-        }
-        // Unpack the data we have
-        let stored_data_str = stored_data_str_opt.unwrap();
+        // We failed to serialize the shared data.
+        // This might lead to wrong results, abort.
+        let stored_data_str =
+            data_to_str(&stored_data).ok_or_else(|| "Failed to convert data to string.")?;
         // Set the header
         log::warn!("Attaching {:?}", stored_data_str);
         self.set_http_response_header("ferried_data", Some(&stored_data_str));
+        Ok(())
     }
 
-    fn on_http_response_headers_outbound(&mut self, _num_headers: usize) {
-        let trace_id: String;
-        if let Some(trace_id_) = self.get_http_response_header("x-request-id") {
-            trace_id = trace_id_;
-            log::warn!("Response outbound: Using trace id {}!", trace_id);
-        } else {
-            log::error!("Response outbound: x-request-id not found in header!",);
-            return;
-        }
+    fn on_http_response_headers_outbound(&mut self, _num_headers: usize) -> Result<(), String> {
+        let trace_id = self
+            .get_http_response_header("x-request-id")
+            .ok_or_else(|| "Response outbound: x-request-id not found in header!")?;
+        log::warn!("Response outbound: Using trace id {}!", trace_id);
         // Fetch ferried data
         let mut ferried_data = fetch_data_from_headers(self, HttpType::Response);
 
         store_data(&mut ferried_data, &trace_id, self);
+        Ok(())
     }
 }

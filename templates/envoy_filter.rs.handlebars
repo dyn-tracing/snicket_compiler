@@ -25,17 +25,17 @@ pub fn create_target_graph() -> Graph<
 pub fn collect_envoy_properties(
     http_headers: &HttpHeaders,
     fd: &mut FerriedData,
-) -> Result<(), ()> {
-    let mut prop_tuple: Property;
-    let mut prop_tuple_wrapped: Option<Property>;
-    {{#each request_blocks}}{{{this}}}{{/each}}
+) -> Result<(), String> {
+    {{#each request_blocks}}
+    {{{~this}}}
+    {{/each}}
     return Ok(());
 }
 
 pub fn execute_udfs_and_check_trace_lvl_prop(http_headers: &HttpHeaders, fd: &mut FerriedData) -> bool {
     // Empty for this query, but in general, will be useful
     {{#each udf_blocks}}{{{this}}}{{/each}}
-    let root_id = "{{this.ir.root_id}}";
+    let root_id = "{{this.root_id}}";
     {{#each trace_lvl_prop_blocks}}{{{this}}}{{/each}}
     return true;
 }

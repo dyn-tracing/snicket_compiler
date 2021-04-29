@@ -1,1 +1,1 @@
-MATCH (a) -[]-> (b {} )-[]->(c) RETURN a.height
+MATCH (a) -[]-> (b {} )-[]->(c) RETURN height(a)

@@ -1,295 +1,102 @@
+use super::codegen_common::parse_udf;
 use super::codegen_common::AggregationUdf;
+use super::codegen_common::CodeStruct;
+use super::codegen_common::ScalarOrAggregationUdf;
 use super::codegen_common::ScalarUdf;
-use super::codegen_common::UdfType;
+use super::ir::Aggregate;
+use super::ir::AttributeFilter;
+use super::ir::IrReturnEnum;
+use super::ir::Property;
+use super::ir::PropertyOrUDF;
+use super::ir::StructuralFilter;
+use super::ir::UdfCall;
 use super::ir::VisitorResults;
-use super::CodeGen;
-use indexmap::map::IndexMap;
-use regex::Regex;
-use serde::Serialize;
-use std::mem;
-use std::str::FromStr;
+use indexmap::IndexMap;
+use indexmap::IndexSet;
 
 /********************************/
 // Code Generation
 /********************************/
-#[derive(Serialize)]
-pub struct CodeGenEnvoy {
-    // the IR, as defined in to_ir.rs
-    ir: VisitorResults,
-    // code blocks used in incoming requests
-    request_blocks: Vec<String>,
-    // code blocks in outgoing responses, after matching
-    response_blocks: Vec<String>,
-    // code blocks to create target graph
-    target_blocks: Vec<String>,
-    // code blocks to be used in outgoing responses, to compute UDF before matching
-    udf_blocks: Vec<String>,
-    // code blocks to be used in outgoing responses, to compute UDF before matching
-    trace_lvl_prop_blocks: Vec<String>,
-    // where we store udf implementations
-    scalar_udf_table: IndexMap<String, ScalarUdf>,
-    // where we store udf implementations
-    aggregation_udf_table: IndexMap<String, AggregationUdf>,
-    envoy_properties: Vec<String>,
-    // all the properties we collect
-    collected_properties: Vec<String>,
-}
 
-impl CodeGen for CodeGenEnvoy {
-    fn generate_code_blocks(ir: VisitorResults, udfs: Vec<String>) -> Self {
-        let mut to_return = CodeGenEnvoy {
-            ir,
-            request_blocks: Vec::new(),
-            response_blocks: Vec::new(),
-            target_blocks: Vec::new(),
-            udf_blocks: Vec::new(),
-            trace_lvl_prop_blocks: Vec::new(),
-            scalar_udf_table: IndexMap::default(),
-            aggregation_udf_table: IndexMap::default(),
-            envoy_properties: Vec::new(),
-            collected_properties: Vec::new(),
-        };
-        for udf in &udfs {
-            log::info!("udf: {:?}\n\n\n\n", udf);
+fn make_struct_filter_blocks(
+    attr_filters: &[AttributeFilter],
+    struct_filters: &[StructuralFilter],
+) -> Vec<String> {
+    let mut target_blocks = Vec::new();
+    for struct_filter in struct_filters {
+        target_blocks.push(" let vertices = vec!( ".to_string());
+        for vertex in &struct_filter.vertices {
+            target_blocks.push(format!("\"{vertex}\".to_string(),", vertex = vertex));
         }
-        for udf in udfs {
-            to_return.parse_udf(udf);
+        target_blocks.push(" );\n".to_string());
+
+        target_blocks.push("        let edges = vec!( ".to_string());
+        for edge in &struct_filter.edges {
+            target_blocks.push(format!(
+                " (\"{edge1}\".to_string(), \"{edge2}\".to_string() ), ",
+                edge1 = edge.0,
+                edge2 = edge.1
+            ));
         }
-        to_return
-            .envoy_properties
-            .push("request.total_size".to_string());
-        to_return
-            .envoy_properties
-            .push("node.metadata.WORKLOAD_NAME".to_string());
-        to_return.get_maps();
-        to_return.make_struct_filter_blocks();
-        to_return.make_attr_filter_blocks();
-        to_return.make_return_block();
-        to_return.make_aggr_block();
-        to_return
-    }
+        target_blocks.push(" );\n".to_string());
 
-    fn parse_udf(&mut self, udf: String) {
-        let udf_clone = udf.clone();
-        let scalar_re = Regex::new(
-            r".*udf_type:\s+(?P<udf_type>\w+)\n.*leaf_func:\s+(?P<leaf_func>\w+)\n.*mid_func:\s+(?P<mid_func>\w+)\n.*id:\s+(?P<id>\w+)",
-        ).unwrap();
+        let ids_to_prop_block = "        let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();\n".to_string();
+        target_blocks.push(ids_to_prop_block);
 
-        let aggr_re = Regex::new(
-            r".*udf_type:\s+(?P<udf_type>\w+)\n.*init_func:\s+(?P<init_func>\w+)\n.*exec_func:\s+(?P<exec_func>\w+)\n.*struct_name:\s+(?P<struct_name>\w+)\n.*id:\s+(?P<id>\w+)",
-        ).unwrap();
-
-        let scalar_rust_caps = scalar_re.captures(&udf_clone);
-        let aggr_rust_caps = aggr_re.captures(&udf_clone);
-
-        if let Some(rc) = scalar_rust_caps {
-            let udf_type = UdfType::from_str(rc.name("udf_type").unwrap().as_str()).unwrap();
-            let leaf_func = String::from(rc.name("leaf_func").unwrap().as_str());
-            let mid_func = String::from(rc.name("mid_func").unwrap().as_str());
-            let id = String::from(rc.name("id").unwrap().as_str());
-
-            self.scalar_udf_table.insert(
-                id.clone(),
-                ScalarUdf {
-                    udf_type,
-                    leaf_func,
-                    mid_func,
-                    func_impl: udf,
-                    id,
-                },
+        for vertex in &struct_filter.vertices {
+            let ids_to_properties_hashmap_init = format!(
+                "        ids_to_properties.insert(\"{node}\".to_string(), IndexMap::new());\n",
+                node = vertex
             );
-        } else if let Some(rc) = aggr_rust_caps {
-            let udf_type = UdfType::from_str(rc.name("udf_type").unwrap().as_str()).unwrap();
-            let init_func = String::from(rc.name("init_func").unwrap().as_str());
-            let exec_func = String::from(rc.name("exec_func").unwrap().as_str());
-            let struct_name = String::from(rc.name("struct_name").unwrap().as_str());
-            let id = String::from(rc.name("id").unwrap().as_str());
-
-            self.aggregation_udf_table.insert(
-                id.clone(),
-                AggregationUdf {
-                    udf_type,
-                    init_func,
-                    exec_func,
-                    struct_name,
-                    func_impl: udf,
-                    id,
-                },
-            );
+            target_blocks.push(ids_to_properties_hashmap_init);
         }
-    }
-
-    fn collect_envoy_property(&mut self, property: String) {
-        // FIXME: Properties should be lists already...
-        let get_prop_block = format!(
-            "prop_tuple_wrapped = fetch_property(&http_headers.workload_name,
-                                        &\"{property}\".split(\".\").collect(),
-                                        http_headers);
-                                            ",
-            property = property,
-        );
-        self.request_blocks.push(get_prop_block);
-        let push_block = "if let Some(prop_tuple) = prop_tuple_wrapped {
-            fd.unassigned_properties.push(prop_tuple);
-            } else {
-                return Err(());
-            }"
-        .to_string();
-        self.request_blocks.push(push_block);
-    }
-
-    fn collect_udf_property(&mut self, udf_id: String) {
-        let get_udf_vals = format!(
-            "let my_{id}_value;
-            let child_iterator = fd.trace_graph.neighbors_directed(
-                get_node_with_id(&fd.trace_graph, http_headers.workload_name.clone()).unwrap(),
-                petgraph::Outgoing);
-            let mut child_values = Vec::new();
-            for child in child_iterator {{
-                child_values.push(fd.trace_graph.node_weight(child).unwrap().1[\"{id}\"].clone());
-            }}
-            if child_values.len() == 0 {{
-                my_{id}_value = {leaf_func}(&fd.trace_graph).to_string();
-            }} else {{
-                my_{id}_value = {mid_func}(&fd.trace_graph, child_values).to_string();
-            }}
-
-        ",
-            id = udf_id,
-            leaf_func = self.scalar_udf_table[&udf_id].leaf_func,
-            mid_func = self.scalar_udf_table[&udf_id].mid_func
-        );
-        self.udf_blocks.push(get_udf_vals);
-
-        let save_udf_vals = format!(
-            "
-        let node = get_node_with_id(&fd.trace_graph, http_headers.workload_name.clone()).unwrap();
-        // if we already have the property, don't add it
-        if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key(\"{id}\") &&
-               fd.trace_graph.node_weight(node).unwrap().1[\"{id}\"] == my_{id}_value ) {{
-           fd.trace_graph.node_weight_mut(node).unwrap().1.insert(
-               \"{id}\".to_string(), my_{id}_value);
-        }}
-        ",
-            id = udf_id
-        );
-
-        self.udf_blocks.push(save_udf_vals);
-    }
-
-    fn get_maps(&mut self) {
-        let mut maps = Vec::new();
-        mem::swap(&mut maps, &mut self.ir.maps);
-        for map in &maps {
-            let mut map_name = map.clone();
-            let mut has_period = false;
-            if map_name.starts_with('.') {
-                map_name.remove(0);
-                has_period = true;
-            }
-            if !has_period || !self.ir.maps.contains(&map_name) {
-                // we might have duplicates bc some have preceding periods
-                if !self.scalar_udf_table.contains_key(&map_name)
-                    && !map_name.is_empty()
-                    && !self.envoy_properties.contains(&map_name)
-                {
-                    panic!("unrecognized UDF {:?}", map_name);
+        for property_filter in attr_filters {
+            if property_filter.node != "trace" {
+                let mut property_name_without_period = property_filter.property.clone();
+                if property_name_without_period.starts_with('.') {
+                    property_name_without_period.remove(0);
                 }
-                self.collected_properties.push(map_name.clone());
-                if self.envoy_properties.contains(&map_name) {
-                    self.collect_envoy_property(map_name);
-                } else {
-                    self.collect_udf_property(map_name);
-                }
-            }
-        }
-        mem::swap(&mut maps, &mut self.ir.maps);
-    }
-
-    fn make_struct_filter_blocks(&mut self) {
-        for struct_filter in &self.ir.struct_filters {
-            self.target_blocks
-                .push(" let vertices = vec!( ".to_string());
-            for vertex in &struct_filter.vertices {
-                self.target_blocks
-                    .push(format!("\"{vertex}\".to_string(),", vertex = vertex));
-            }
-            self.target_blocks.push(" );\n".to_string());
-
-            self.target_blocks
-                .push("        let edges = vec!( ".to_string());
-            for edge in &struct_filter.edges {
-                self.target_blocks.push(format!(
-                    " (\"{edge1}\".to_string(), \"{edge2}\".to_string() ), ",
-                    edge1 = edge.0,
-                    edge2 = edge.1
-                ));
-            }
-            self.target_blocks.push(" );\n".to_string());
-
-            let ids_to_prop_block = "        let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();\n".to_string();
-            self.target_blocks.push(ids_to_prop_block);
-
-            for vertex in &struct_filter.vertices {
-                let ids_to_properties_hashmap_init = format!(
-                    "        ids_to_properties.insert(\"{node}\".to_string(), IndexMap::new());\n",
-                    node = vertex
-                );
-                self.target_blocks.push(ids_to_properties_hashmap_init);
-            }
-            for node in struct_filter.properties.keys() {
                 let get_hashmap = format!(
                     "        let mut {node}_hashmap = ids_to_properties.get_mut(\"{node}\").unwrap();\n",
-                    node = node
+                    node = property_filter.node
                 );
-                self.target_blocks.push(get_hashmap);
-                for property_name in struct_filter.properties[node].keys() {
-                    let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
-                                                   node=node,
-                                                   property_name=property_name,
-                                                   property_value=struct_filter.properties[node][property_name]);
-                    self.target_blocks.push(fill_in_hashmap);
-                }
-                for property_filter in &self.ir.attr_filters {
-                    if property_filter.node != "trace" {
-                        let mut property_name_without_period = property_filter.property.clone();
-                        if property_name_without_period.starts_with('.') {
-                            property_name_without_period.remove(0);
-                        }
-                        let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
-                                                       node=property_filter.node,
-                                                       property_name=property_name_without_period,
-                                                       property_value=property_filter.value);
-                        self.target_blocks.push(fill_in_hashmap);
-                    }
-                }
+                target_blocks.push(get_hashmap);
+                let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
+                                                   node=property_filter.node,
+                                                   property_name=property_name_without_period,
+                                                   property_value=property_filter.value);
+                target_blocks.push(fill_in_hashmap);
             }
-            let make_graph =
-                "        return generate_target_graph(vertices, edges, ids_to_properties);\n"
-                    .to_string();
-            self.target_blocks.push(make_graph);
         }
+        let make_graph =
+            "        return generate_target_graph(vertices, edges, ids_to_properties);\n"
+                .to_string();
+
+        target_blocks.push(make_graph);
     }
+    target_blocks
+}
 
-    fn make_attr_filter_blocks(&mut self) {
-        // for everything except trace level attributes, the UDF/envoy property
-        // collection will make the attribute filtering happen at the same time as
-        // the struct filtering.  This is not the case for trace-level attributes
+fn make_attr_filter_blocks(root_id: &str, attr_filters: &[AttributeFilter]) -> Vec<String> {
+    // for everything except trace level attributes, the UDF/envoy property
+    // collection will make the attribute filtering happen at the same time as
+    // the struct filtering.  This is not the case for trace-level attributes
+    let mut trace_lvl_prop_blocks = Vec::new();
 
-        let if_root_block = "
+    let if_root_block = "
             if &http_headers.workload_name == root_id {"
-            .to_string();
-        self.trace_lvl_prop_blocks.push(if_root_block);
-        let init_trace_prop_str = "        let mut trace_prop_str : String;\n".to_string();
-        self.trace_lvl_prop_blocks.push(init_trace_prop_str);
+        .to_string();
+    trace_lvl_prop_blocks.push(if_root_block);
+    let init_trace_prop_str = "        let mut trace_prop_str : String;\n".to_string();
+    trace_lvl_prop_blocks.push(init_trace_prop_str);
 
-        for attr_filter in &self.ir.attr_filters {
-            if attr_filter.node == "trace" {
-                let mut prop = attr_filter.property.clone();
-                if prop.starts_with('.') {
-                    prop.remove(0);
-                }
-                let trace_filter_block = format!(
+    for attr_filter in attr_filters {
+        if attr_filter.node == "trace" {
+            let mut prop = attr_filter.property.clone();
+            if prop.starts_with('.') {
+                prop.remove(0);
+            }
+            let trace_filter_block = format!(
                 "
                 let root_node = get_node_with_id(&fd.trace_graph, \"{root_id}\".to_string()).unwrap();
                 if ! ( fd.trace_graph.node_weight(root_node).unwrap().1.contains_key(\"{prop_name}\") &&
@@ -306,47 +113,44 @@ impl CodeGen for CodeGenEnvoy {
                      }}
                      return false;
                 }}
-                ", root_id=self.ir.root_id, prop_name=prop, value=attr_filter.value);
-                self.trace_lvl_prop_blocks.push(trace_filter_block);
-            }
+                ", root_id=root_id, prop_name=prop, value=attr_filter.value);
+            trace_lvl_prop_blocks.push(trace_filter_block);
         }
-
-        let end_root_block = "       }".to_string();
-        self.trace_lvl_prop_blocks.push(end_root_block);
     }
-    fn make_trace_rpc_value(&mut self) {
-        let ret_block = "
+
+    let end_root_block = "       }".to_string();
+    trace_lvl_prop_blocks.push(end_root_block);
+    trace_lvl_prop_blocks
+}
+
+#[allow(dead_code)]
+fn make_trace_rpc_value(code_struct: &mut CodeStruct) {
+    let ret_block = "
         match serde_json::to_string(fd) {
             Ok(trace_str) => { value = trace_str; }
             Err(e) => { log::error!(\"Error:  could not translate ferried data to string\"); return; }\
         }
         "
         .to_string();
-        self.response_blocks.push(ret_block);
-    }
+    code_struct.response_blocks.push(ret_block);
+}
 
-    fn make_storage_rpc_value_from_trace(&mut self, entity: String, property: String) {
-        let mut prop_wo_periods = property.clone();
-        prop_wo_periods.retain(|c| c != '.');
-        let ret_block = format!(
+fn make_storage_rpc_value_from_trace(entity: String, property: &str) -> String {
+    return format!(
         "let trace_node_idx = get_node_with_id(&fd.trace_graph, \"{node_id}\".to_string());
         if trace_node_idx.is_none() {{
            log::error!(\"Node {node_id} not found\");
                 return None;
         }}
-        let ret_{prop_var} = &fd.trace_graph.node_weight(trace_node_idx.unwrap()).unwrap().1[ \"{prop}\" ];\n
-        value = ret_{prop_var}.to_string();\n",
-                node_id = entity,
-                prop_var = prop_wo_periods,
-                prop = property
-        );
+        let ret = &fd.trace_graph.node_weight(trace_node_idx.unwrap()).unwrap().1[\"{prop}\"];\n
+        value = ret.to_string();\n",
+        node_id = entity,
+        prop = property
+    );
+}
 
-        self.response_blocks.push(ret_block);
-    }
-    fn make_storage_rpc_value_from_target(&mut self, entity: String, property: String) {
-        let mut prop_wo_periods = property.clone();
-        prop_wo_periods.retain(|c| c != '.');
-        let ret_block = format!(
+fn make_storage_rpc_value_from_target(entity: &str, property: &str) -> String {
+    let ret_block = format!(
         "let node_ptr = get_node_with_id(target_graph, \"{node_id}\".to_string());
         if node_ptr.is_none() {{
            log::error!(\"Node {node_id} not found\");
@@ -370,69 +174,167 @@ impl CodeGen for CodeGenEnvoy {
             .node_weight(trace_node_idx)
             .unwrap()
             .1
-            .contains_key(\"{prop}\")
+            .contains_key(\"{property}\")
         {{
             // we have not yet collected the return property
-            log::error!(\"Missing return property {prop}\");
+            log::error!(\"Missing return property {property}\");
             return None;
         }}
-        let ret_{prop_var} = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ \"{prop}\" ];\n
-        value = ret_{prop_var}.to_string();\n",
+        let ret = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ \"{property}\" ];\n
+        value = ret.to_string();\n",
                 node_id = entity,
-                prop_var = prop_wo_periods,
-                prop = property
+                property = property
         );
 
-        self.response_blocks.push(ret_block);
-    }
+    ret_block
+}
 
-    fn make_return_block(&mut self) {
-        if self.ir.return_expr.is_none() {
-            return;
-        }
-        let entity = self.ir.return_expr.as_ref().unwrap().clone().entity;
-        let mut property = self.ir.return_expr.as_ref().unwrap().clone().property;
-        if property.chars().next().unwrap() == ".".chars().next().unwrap() {
-            property.remove(0);
-        }
-
-        if entity == "trace" {
-            self.make_storage_rpc_value_from_trace(self.ir.root_id.clone(), property);
-        } else {
-            let num_struct_filters = self.ir.struct_filters.len();
-            if !self.ir.struct_filters[num_struct_filters - 1]
-                .vertices
-                .contains(&entity)
-            {
-                panic!("Unknown entity in return expression");
+fn make_return_block(entity_ref: &PropertyOrUDF, query_data: &VisitorResults) -> String {
+    match entity_ref {
+        PropertyOrUDF::Property(prop) => match prop.parent.as_str() {
+            "trace" => {
+                make_storage_rpc_value_from_trace(query_data.root_id.clone(), &prop.to_dot_string())
             }
-            self.make_storage_rpc_value_from_target(entity, property);
-        }
-    }
-
-    fn make_aggr_block(&mut self) {
-        if self.ir.aggregate.is_none() {
-            return;
-        }
-        let entity = self.ir.aggregate.as_ref().unwrap().clone().entity;
-        let mut property = self.ir.aggregate.as_ref().unwrap().clone().property;
-        if property.chars().next().unwrap() == ".".chars().next().unwrap() {
-            property.remove(0);
-        }
-
-        if entity == "trace" {
-            self.make_storage_rpc_value_from_trace(self.ir.root_id.clone(), property);
-        } else {
-            let num_struct_filters = self.ir.struct_filters.len();
-            if !self.ir.struct_filters[num_struct_filters - 1]
-                .vertices
-                .contains(&entity)
-            {
-                panic!("Unknown entity in return expression");
+            _ => make_storage_rpc_value_from_target(&prop.parent, &prop.to_dot_string()),
+        },
+        PropertyOrUDF::UdfCall(call) => {
+            // Because of quirky design we need to get the first arg
+            if call.args.len() != 1 {
+                panic!("We currently only implement very specific arguments for UDFs!");
             }
-            self.make_storage_rpc_value_from_target(entity, property);
+            let node = &call.args[0];
+            match node.as_str() {
+                "trace" => make_storage_rpc_value_from_trace(query_data.root_id.clone(), &call.id),
+                _ => make_storage_rpc_value_from_target(&node, &call.id),
+            }
         }
     }
+}
+
+fn make_aggr_block(agg: &Aggregate, query_data: &VisitorResults) -> String {
+    let mut to_return = String::new();
+    for arg in &agg.args {
+        to_return.push_str(&make_return_block(&arg, query_data));
+    }
+    to_return
+}
+
+fn generate_property_blocks(
+    properties: &IndexSet<Property>,
+    scalar_udf_table: &IndexMap<String, ScalarUdf>,
+) -> Vec<String> {
+    // TODO:  here, we can have duplicates because they have different entities,
+    // but we still just need to collect one version of the property
+    let mut property_blocks = Vec::new();
+    for property in properties {
+        // There is nothing to fetch so ignore.
+        // TODO: What do we actually need here?
+        if property.members.is_empty() || scalar_udf_table.contains_key(&property.to_dot_string()) {
+            continue;
+        }
+        let get_prop_block = format!(
+            "let prop_tuple = fetch_property(&http_headers.workload_name,
+                                        &{property},
+                                        http_headers)?;",
+            property = property.as_vec_str(),
+        );
+        property_blocks.push(get_prop_block);
+        property_blocks.push("fd.unassigned_properties.push(prop_tuple);".to_string())
+    }
+    property_blocks
+}
+
+fn generate_udf_blocks(
+    scalar_udf_table: &IndexMap<String, ScalarUdf>,
+    aggregation_udf_table: &IndexMap<String, AggregationUdf>,
+    udf_calls: &IndexSet<UdfCall>,
+) -> Vec<String> {
+    let mut udf_blocks = Vec::new();
+    for call in udf_calls {
+        if aggregation_udf_table.contains_key(&call.id) {
+            // TODO: Aggregations are handled separately, where do they go?
+            continue;
+        }
+        if !scalar_udf_table.contains_key(&call.id) {
+            log::error!("ID {:?} not found in the scalar UDF map!", call.id);
+            std::process::exit(1);
+        }
+        let get_udf_vals = format!(
+            "let my_{id}_value;
+            let child_iterator = fd.trace_graph.neighbors_directed(
+                get_node_with_id(&fd.trace_graph, http_headers.workload_name.clone()).unwrap(),
+                petgraph::Outgoing);
+            let mut child_values = Vec::new();
+            for child in child_iterator {{
+                child_values.push(fd.trace_graph.node_weight(child).unwrap().1[\"{id}\"].clone());
+            }}
+            if child_values.len() == 0 {{
+                my_{id}_value = {leaf_func}(&fd.trace_graph).to_string();
+            }} else {{
+                my_{id}_value = {mid_func}(&fd.trace_graph, child_values).to_string();
+            }}
+
+        ",
+            id = call.id,
+            leaf_func = scalar_udf_table[&call.id].leaf_func,
+            mid_func = scalar_udf_table[&call.id].mid_func
+        );
+        udf_blocks.push(get_udf_vals);
+
+        let save_udf_vals = format!(
+            "
+        let node = get_node_with_id(&fd.trace_graph, http_headers.workload_name.clone()).unwrap();
+        // if we already have the property, don't add it
+        if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key(\"{id}\") &&
+               fd.trace_graph.node_weight(node).unwrap().1[\"{id}\"] == my_{id}_value ) {{
+           fd.trace_graph.node_weight_mut(node).unwrap().1.insert(
+               \"{id}\".to_string(), my_{id}_value);
+        }}
+        ",
+            id = call.id,
+        );
+        udf_blocks.push(save_udf_vals);
+    }
+    udf_blocks
+}
+
+pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) -> CodeStruct {
+    let mut code_struct = CodeStruct::new(&query_data.root_id);
+    let mut scalar_udf_table: IndexMap<String, ScalarUdf> = IndexMap::new();
+    // where we store udf implementations
+    let mut aggregation_udf_table: IndexMap<String, AggregationUdf> = IndexMap::new();
+    for udf_path in udf_paths {
+        log::debug!("UDF: {:?}", udf_path);
+        match parse_udf(udf_path) {
+            ScalarOrAggregationUdf::ScalarUdf(udf) => {
+                scalar_udf_table.insert(udf.id.clone(), udf);
+            }
+            ScalarOrAggregationUdf::AggregationUdf(udf) => {
+                aggregation_udf_table.insert(udf.id.clone(), udf);
+            }
+        }
+    }
+    // all the properties we collect
+    code_struct.request_blocks =
+        generate_property_blocks(&query_data.properties, &scalar_udf_table);
+    code_struct.udf_blocks = generate_udf_blocks(
+        &scalar_udf_table,
+        &aggregation_udf_table,
+        &query_data.udf_calls,
+    );
+    code_struct.target_blocks =
+        make_struct_filter_blocks(&query_data.attr_filters, &query_data.struct_filters);
+    code_struct.trace_lvl_prop_blocks =
+        make_attr_filter_blocks(&query_data.root_id, &query_data.attr_filters);
+
+    let resp_block = match query_data.return_expr {
+        IrReturnEnum::PropertyOrUDF(ref entity_ref) => make_return_block(entity_ref, &query_data),
+        IrReturnEnum::Aggregate(ref agg) => make_aggr_block(&agg, &query_data),
+    };
+    code_struct.response_blocks.push(resp_block);
+    code_struct.aggregation_udf_table = aggregation_udf_table;
+    code_struct.scalar_udf_table = scalar_udf_table;
+    code_struct
 }
 
 #[cfg(test)]
@@ -465,7 +367,7 @@ mod tests {
     ";
 
     static AVG: &str = "
-        // udf_type: Scalar
+    // udf_type: Aggregation
     // init_func: init
     // exec_func: exec
     // struct_name: Avg
@@ -505,7 +407,7 @@ mod tests {
         let result =
             get_codegen_from_query("MATCH (a) -[]-> (b {})-[]->(c) RETURN a.count".to_string());
         assert!(!result.struct_filters.is_empty());
-        let _codegen = CodeGenEnvoy::generate_code_blocks(result, [COUNT.to_string()].to_vec());
+        let _codegen = generate_code_blocks(result, [COUNT.to_string()].to_vec());
     }
 
     #[test]
@@ -514,40 +416,41 @@ mod tests {
             "MATCH (a) -[]-> (b {})-[]->(c) RETURN a.node.metadata.WORKLOAD_NAME".to_string(),
         );
         assert!(!result.struct_filters.is_empty());
-        let _codegen = CodeGenEnvoy::generate_code_blocks(result, [COUNT.to_string()].to_vec());
+        let _codegen = generate_code_blocks(result, [COUNT.to_string()].to_vec());
     }
-
+    /*
     #[test]
     fn get_group_by() {
+        // TODO: These tests are odd, not sure what we want to test here
         let result = get_codegen_from_query(
-            "MATCH (a {}) WHERE a.node.metadata.WORKLOAD_NAME = 'productpage-v1' RETURN a.count, agg".to_string(),
+            "MATCH (a {}) WHERE a.node.metadata.WORKLOAD_NAME = 'productpage-v1' RETURN count(a), agg".to_string(),
         );
         assert!(!result.struct_filters.is_empty());
-        let _codegen = CodeGenEnvoy::generate_code_blocks(result, [COUNT.to_string()].to_vec());
-        assert!(!_codegen.target_blocks.is_empty());
-        assert!(!_codegen.ir.struct_filters.is_empty());
-        assert!(!_codegen.ir.aggregate.is_none());
+        // Do not throw an error parsing this expression.
+        let _codegen = generate_code_blocks(result, [COUNT.to_string()].to_vec());
     }
+    */
 
     #[test]
     fn test_where() {
+        // TODO: These tests are odd, not sure what we want to test here
         let result = get_codegen_from_query(
             "MATCH (a) -[]-> (b)-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' AND trace.request.total_size = 1 RETURN a.request.total_size, avg(a.request.total_size)".to_string(),
         );
         assert!(!result.struct_filters.is_empty());
-        let _codegen = CodeGenEnvoy::generate_code_blocks(result, [COUNT.to_string()].to_vec());
-        assert!(!_codegen.ir.attr_filters.is_empty());
+        assert!(!result.attr_filters.is_empty());
+        // Do not throw an error parsing this expression.
+        let _codegen = generate_code_blocks(result, [AVG.to_string()].to_vec());
     }
 
     #[test]
     fn test_aggr_udf() {
         let result = get_codegen_from_query(
-            "MATCH (a) -[]-> (b)-[]->(c) RETURN a.request.total_size, avg".to_string(),
+            "MATCH (a) -[]-> (b)-[]->(c) RETURN a.request.total_size, avg(a.request.total_size)"
+                .to_string(),
         );
-        let _codegen = CodeGenEnvoy::generate_code_blocks(
-            result,
-            [COUNT.to_string(), AVG.to_string()].to_vec(),
-        );
-        assert!(_codegen.aggregation_udf_table.keys().count() == 1);
+        // Do not throw an error parsing this expression.
+        let codegen = generate_code_blocks(result, [AVG.to_string()].to_vec());
+        assert!(codegen.aggregation_udf_table.keys().count() == 1);
     }
 }

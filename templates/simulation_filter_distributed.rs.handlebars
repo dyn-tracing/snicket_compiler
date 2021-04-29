@@ -155,7 +155,7 @@ pub fn execute_udfs(filter: &Filter, fd: &mut FerriedData) {
 }
 
 pub fn check_trace_lvl_prop(filter: &Filter, fd: &FerriedData) -> bool {
-    let root_id = "{{this.ir.root_id}}";
+    let root_id = "{{this.root_id}}";
     {{#each trace_lvl_prop_blocks}}{{{this}}}{{/each}}
     return true;
 }
@@ -356,7 +356,7 @@ impl Filter {
 
         // 3. update isomorphism and possibly return
         if !ferried_data.found_match {
-            let am_root = self.whoami.as_ref().unwrap() == "{{this.ir.root_id}}";
+            let am_root = self.whoami.as_ref().unwrap() == "{{this.root_id}}";
             let mapping = find_mapping_shamir_decentralized(
                 &ferried_data.trace_graph,
                 self.target_graph.as_ref().unwrap(),

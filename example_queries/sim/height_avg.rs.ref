@@ -74,12 +74,12 @@ fn put_ferried_data_in_hdrs(fd: &mut FerriedData, hdr: &mut IndexMap<String,Stri
 // mid_func: mid_height
 // id: height
 
-fn leaf_height(_graph: &Graph<(String, IndexMap<String, String>), String>) -> u32 {
+fn leaf_height(_graph: &Graph<(String, IndexMap<String, String>), ()>) -> u32 {
     return 0;
 }
 
 // TODO:  must children's responses always be in string form?  can we generalize?
-fn mid_height(_graph: &Graph<(String, IndexMap<String, String>), String>, children_responses: Vec<String>) -> u32 {
+fn mid_height(_graph: &Graph<(String, IndexMap<String, String>), ()>, children_responses: Vec<String>) -> u32 {
     let mut max = 0;
     for response in children_responses {
         let response_as_u32 = response.parse::<u32>();
@@ -97,7 +97,7 @@ pub fn create_target_graph() -> Graph<
         std::string::String,
         IndexMap<std::string::String, std::string::String>,
     ),
-    std::string::String,
+    (),
 > {
      let vertices = vec!(  "a".to_string(), "b".to_string(), "c".to_string(),  );
          let edges = vec!(   ("a".to_string(), "b".to_string() ),   ("b".to_string(), "c".to_string() ),   );
@@ -105,6 +105,8 @@ pub fn create_target_graph() -> Graph<
          ids_to_properties.insert("a".to_string(), IndexMap::new());
          ids_to_properties.insert("b".to_string(), IndexMap::new());
          ids_to_properties.insert("c".to_string(), IndexMap::new());
+         let mut c_hashmap = ids_to_properties.get_mut("c").unwrap();
+         c_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "ratings-v1".to_string());
          return graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
  
 
@@ -147,7 +149,7 @@ pub fn execute_udfs_and_check_trace_lvl_prop(filter: &Filter, fd: &mut FerriedDa
          
     let root_id = "productpage-v1";
     
-            if filter.whoami.as_ref().unwrap()== root_id {        let mut trace_prop_str : String;
+        if filter.whoami.as_ref().unwrap()== root_id {        let mut trace_prop_str : String;
        }
     return true;
 }
@@ -158,31 +160,31 @@ pub fn get_value_for_storage(
             std::string::String,                                                
             IndexMap<std::string::String, std::string::String>,                 
         ),                                                                      
-        std::string::String,                                                    
+        (),                                                    
     >,                                                                          
     mapping: &Vec<(NodeIndex, NodeIndex)>,                                      
     fd: &FerriedData,                                                  
 ) -> Option<String> {
     let mut value : String;
     let node_ptr = graph_utils::get_node_with_id(target_graph, "a".to_string());
-        if node_ptr.is_none() {
-           log::warn!("Node a not found");
-                return None;
-        }
-        let mut trace_node_index = None;
-        for map in mapping {
-            if target_graph.node_weight(map.0).unwrap().0 == "a" {
-                trace_node_index = Some(map.1);
-                break;
-            }
-        }
-        if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("height") {
-            // we have not yet collected the return property or have a mapping error
+    if node_ptr.is_none() {
+       log::warn!("Node a not found");
             return None;
+    }
+    let mut trace_node_index = None;
+    for map in mapping {
+        if target_graph.node_weight(map.0).unwrap().0 == "a" {
+            trace_node_index = Some(map.1);
+            break;
         }
-        let mut ret_height = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "height" ];
+    }
+    if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("height") {
+        // we have not yet collected the return property or have a mapping error
+        return None;
+    }
+    let mut ret = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "height" ];
 
-        value = ret_height.to_string();
+    value = ret.to_string();
  
     return Some(value);
 
@@ -191,7 +193,7 @@ pub fn get_value_for_storage(
 #[derive(Clone, Debug)]
 pub struct Filter {
     pub whoami: Option<String>,
-    pub target_graph: Option<Graph<(String, IndexMap<String, String>), String>>,
+    pub target_graph: Option<Graph<(String, IndexMap<String, String>), ()>>,
     pub filter_state: IndexMap<String, String>,
     pub envoy_shared_data: IndexMap<String, String>, // trace ID to stored ferried data as string 
     pub collected_properties: Vec<String>, //properties to collect
@@ -206,7 +208,7 @@ impl Filter {
             target_graph: None,
             filter_state: IndexMap::new(),
             envoy_shared_data: IndexMap::<String, String>::new(),
-            collected_properties: vec!( "node.metadata.WORKLOAD_NAME".to_string(), "height".to_string(),  ),
+            collected_properties: vec!(  ),
          }))
     }
 
@@ -218,7 +220,7 @@ impl Filter {
                                    target_graph: None,
                                    filter_state: string_data,
                                    envoy_shared_data: IndexMap::new(),
-                                   collected_properties: vec!("node.metadata.WORKLOAD_NAME".to_string(), "height".to_string(),  ),
+                                   collected_properties: vec!( ),
                                }))
      }
 
@@ -280,7 +282,7 @@ impl Filter {
                     let edge1_weight = &data.trace_graph.node_weight(edge1).unwrap().0;
                     let edge0_in_stored_graph = graph_utils::get_node_with_id(&stored_data.trace_graph, edge0_weight.to_string()).unwrap();
                     let edge1_in_stored_graph = graph_utils::get_node_with_id(&stored_data.trace_graph, edge1_weight.to_string()).unwrap();
-                    stored_data.trace_graph.add_edge(edge0_in_stored_graph, edge1_in_stored_graph, String::new());
+                    stored_data.trace_graph.add_edge(edge0_in_stored_graph, edge1_in_stored_graph, ());
                 }
                 None => {
                     log::error!("no edge endpoints found \n");
@@ -329,7 +331,7 @@ impl Filter {
                             (self.whoami.as_ref().unwrap().to_string(), my_indexmap));
     
                         for previous_root in previous_roots {
-                            data.trace_graph.add_edge(me, previous_root, String::new());
+                            data.trace_graph.add_edge(me, previous_root, ());
                         }
                         data.assign_properties();
 

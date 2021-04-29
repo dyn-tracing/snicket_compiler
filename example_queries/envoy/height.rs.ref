@@ -46,7 +46,6 @@ pub fn create_target_graph() -> Graph<
         ids_to_properties.insert("a".to_string(), IndexMap::new());
         ids_to_properties.insert("b".to_string(), IndexMap::new());
         ids_to_properties.insert("c".to_string(), IndexMap::new());
-        let mut b_hashmap = ids_to_properties.get_mut("b").unwrap();
         return generate_target_graph(vertices, edges, ids_to_properties);
 
 }
@@ -54,9 +53,7 @@ pub fn create_target_graph() -> Graph<
 pub fn collect_envoy_properties(
     http_headers: &HttpHeaders,
     fd: &mut FerriedData,
-) -> Result<(), ()> {
-    let mut prop_tuple: Property;
-    let mut prop_tuple_wrapped: Option<Property>;
+) -> Result<(), String> {
     
     return Ok(());
 }
@@ -134,9 +131,9 @@ pub fn get_value_for_storage(
             log::error!("Missing return property height");
             return None;
         }
-        let ret_height = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ "height" ];
+        let ret = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ "height" ];
 
-        value = ret_height.to_string();
+        value = ret.to_string();
 
 
     return Some(value);

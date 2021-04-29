@@ -25,6 +25,8 @@ pub fn create_target_graph() -> Graph<
         ids_to_properties.insert("a".to_string(), IndexMap::new());
         ids_to_properties.insert("b".to_string(), IndexMap::new());
         ids_to_properties.insert("c".to_string(), IndexMap::new());
+        let mut c_hashmap = ids_to_properties.get_mut("c").unwrap();
+        c_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "ratings-v1".to_string());
         return generate_target_graph(vertices, edges, ids_to_properties);
 
 }
@@ -32,24 +34,16 @@ pub fn create_target_graph() -> Graph<
 pub fn collect_envoy_properties(
     http_headers: &HttpHeaders,
     fd: &mut FerriedData,
-) -> Result<(), ()> {
-    let mut prop_tuple: Property;
-    let mut prop_tuple_wrapped: Option<Property>;
-    prop_tuple_wrapped = fetch_property(&http_headers.workload_name,
-                                        &"node.metadata.WORKLOAD_NAME".split(".").collect(),
-                                        http_headers);
-                                            if let Some(prop_tuple) = prop_tuple_wrapped {
-            fd.unassigned_properties.push(prop_tuple);
-            } else {
-                return Err(());
-            }prop_tuple_wrapped = fetch_property(&http_headers.workload_name,
-                                        &"request.total_size".split(".").collect(),
-                                        http_headers);
-                                            if let Some(prop_tuple) = prop_tuple_wrapped {
-            fd.unassigned_properties.push(prop_tuple);
-            } else {
-                return Err(());
-            }
+) -> Result<(), String> {
+    let prop_tuple = fetch_property(&http_headers.workload_name,
+                                        &vec!["node", "metadata", "WORKLOAD_NAME", ],
+                                        http_headers)?;
+    fd.unassigned_properties.push(prop_tuple);
+    let prop_tuple = fetch_property(&http_headers.workload_name,
+                                        &vec!["request", "total_size", ],
+                                        http_headers)?;
+    fd.unassigned_properties.push(prop_tuple);
+    
     return Ok(());
 }
 
@@ -104,9 +98,9 @@ pub fn get_value_for_storage(
             log::error!("Missing return property request.total_size");
             return None;
         }
-        let ret_requesttotal_size = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ "request.total_size" ];
+        let ret = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ "request.total_size" ];
 
-        value = ret_requesttotal_size.to_string();
+        value = ret.to_string();
 
 
     return Some(value);

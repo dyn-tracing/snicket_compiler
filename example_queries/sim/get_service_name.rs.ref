@@ -84,6 +84,8 @@ pub fn create_target_graph() -> Graph<
          ids_to_properties.insert("a".to_string(), IndexMap::new());
          ids_to_properties.insert("b".to_string(), IndexMap::new());
          ids_to_properties.insert("c".to_string(), IndexMap::new());
+         let mut c_hashmap = ids_to_properties.get_mut("c").unwrap();
+         c_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "ratings-v1".to_string());
          return graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
  
 
@@ -97,6 +99,9 @@ pub fn collect_envoy_properties(
     prop_tuple = Property::new(filter.whoami.as_ref().unwrap().to_string(),
                                                    "node.metadata.WORKLOAD_NAME".to_string(),
                                                    filter.filter_state["node.metadata.WORKLOAD_NAME"].clone());
+                                             fd.unassigned_properties.push(prop_tuple); prop_tuple = Property::new(filter.whoami.as_ref().unwrap().to_string(),
+                                                   "node.metadata.WORKLOAD_NAME".to_string(),
+                                                   filter.filter_state["node.metadata.WORKLOAD_NAME"].clone());
                                              fd.unassigned_properties.push(prop_tuple); 
 }
 
@@ -104,7 +109,7 @@ pub fn execute_udfs_and_check_trace_lvl_prop(filter: &Filter, fd: &mut FerriedDa
     
     let root_id = "productpage-v1";
     
-            if filter.whoami.as_ref().unwrap()== root_id {        let mut trace_prop_str : String;
+        if filter.whoami.as_ref().unwrap()== root_id {        let mut trace_prop_str : String;
        }
     return true;
 }
@@ -122,24 +127,24 @@ pub fn get_value_for_storage(
 ) -> Option<String> {
     let mut value : String;
     let node_ptr = graph_utils::get_node_with_id(target_graph, "a".to_string());
-        if node_ptr.is_none() {
-           log::warn!("Node a not found");
-                return None;
-        }
-        let mut trace_node_index = None;
-        for map in mapping {
-            if target_graph.node_weight(map.0).unwrap().0 == "a" {
-                trace_node_index = Some(map.1);
-                break;
-            }
-        }
-        if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("node.metadata.WORKLOAD_NAME") {
-            // we have not yet collected the return property or have a mapping error
+    if node_ptr.is_none() {
+       log::warn!("Node a not found");
             return None;
+    }
+    let mut trace_node_index = None;
+    for map in mapping {
+        if target_graph.node_weight(map.0).unwrap().0 == "a" {
+            trace_node_index = Some(map.1);
+            break;
         }
-        let mut ret_nodemetadataWORKLOAD_NAME = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "node.metadata.WORKLOAD_NAME" ];
+    }
+    if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("node.metadata.WORKLOAD_NAME") {
+        // we have not yet collected the return property or have a mapping error
+        return None;
+    }
+    let mut ret = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "node.metadata.WORKLOAD_NAME" ];
 
-        value = ret_nodemetadataWORKLOAD_NAME.to_string();
+    value = ret.to_string();
  
     return Some(value);
 
@@ -163,7 +168,7 @@ impl Filter {
             target_graph: None,
             filter_state: IndexMap::new(),
             envoy_shared_data: IndexMap::<String, String>::new(),
-            collected_properties: vec!( "node.metadata.WORKLOAD_NAME".to_string(),  ),
+            collected_properties: vec!(  ),
          }))
     }
 
@@ -175,7 +180,7 @@ impl Filter {
                                    target_graph: None,
                                    filter_state: string_data,
                                    envoy_shared_data: IndexMap::new(),
-                                   collected_properties: vec!("node.metadata.WORKLOAD_NAME".to_string(),  ),
+                                   collected_properties: vec!( ),
                                }))
      }
 
