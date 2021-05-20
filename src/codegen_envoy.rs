@@ -235,42 +235,44 @@ fn generate_property_blocks(
         }
         // Now collect the property
         let get_prop_block = format!(
-            "let mut prop_tuple;
+            "
              let property = http_headers
                             .get_property({property}.to_vec())
-                            .ok_or_else(|| format!(\"Failed to retrieve property {:?}.\", prop_query))?;
+                            .ok_or_else(|| format!(\"Failed to retrieve property {property_str}.\"))?;
             ",
-            property=property.as_vec_str());
+            property=property.as_vec_str(),
+            property_str = property.to_dot_string());
         property_blocks.push(get_prop_block);
         let dot_str = property.to_dot_string();
+        log::warn!("dot str is {:?}", dot_str);
         match property_to_type[dot_str.as_str()] {
             "int" => {
-                let cast_block = "let mut byte_array = [0u8; 8];                                      
-                for (place, element) in byte_array.iter_mut().zip(property.iter()) {
+                let cast_block = format!("let mut byte_array = [0u8; 8];                                      
+                for (place, element) in byte_array.iter_mut().zip(property.iter()) {{
                     *place = *element;                                              
-                }                                                                   
+                }}                                                                   
                 let int_val = i64::from_ne_bytes(byte_array);                       
                 fd.unassigned_properties.push(Property::new(
-                    node_name.to_string(), 
-                    join_str(prop_query),
+                    http_headers.workload_name.to_string(), 
+                    join_str(&{property}),
                     int_val.to_string() 
                 ));
-                ";
+                ", property = property.as_vec_str());
                 property_blocks.push(cast_block.to_string());
 
             }
             "uint" => {
-                let cast_block = "let mut byte_array = [0u8; 8];                                      
-                for (place, element) in byte_array.iter_mut().zip(property.iter()) {
+                let cast_block = format!("let mut byte_array = [0u8; 8];                                      
+                for (place, element) in byte_array.iter_mut().zip(property.iter()) {{
                     *place = *element;                                              
-                }                                                                   
+                }}                                                                   
                 let int_val = u64::from_ne_bytes(byte_array);                       
                 fd.unassigned_properties.push(Property::new(
-                    node_name.to_string(), 
-                    join_str(prop_query),
+                    http_headers.workload_name.to_string(), 
+                    join_str(&{property}),
                     int_val.to_string() 
                 ));
-                ";
+                ", property = property.as_vec_str());
                 property_blocks.push(cast_block.to_string());
             }
             "bool" => {
@@ -297,17 +299,18 @@ fn generate_property_blocks(
             }
             _ => {
                 // when in doubt, it's a string
-                let cast_block = "
-                     let property_str = match std::str::from_utf8(&property) {                   
-                        Ok(property_str_) => property_str_.to_string(),   
-                        Err(e) => return e
-                    }
-                    fd.unassigned_properties.push(Property::new(
-                        node_name.to_string(), 
-                        join_str(prop_query),
-                        property_str.clone()
-                    ));
-                ";
+                let cast_block = format!("
+                     let property_str = match std::str::from_utf8(&property) {{
+                        Ok(property_str_) => {{
+                            fd.unassigned_properties.push(Property::new(
+                                http_headers.workload_name.to_string(), 
+                                join_str(&{property}),
+                                property_str_.to_string()
+                            ));
+                        }}
+                        Err(e) => {{ return Err(e.to_string()); }}
+                    }};
+                ", property = property.as_vec_str());
                 property_blocks.push(cast_block.to_string());
                 
             }
@@ -413,6 +416,7 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
         ("listener_metadata", "metadata"),
         ("route_metadata", "metadata"),
         ("upstream_host_metadata", "metadata"),
+        ("node.metadata.WORKLOAD_NAME", "String")
     ].iter().cloned().collect();
     let mut code_struct = CodeStruct::new(&query_data.root_id);
     let mut scalar_udf_table: IndexMap<String, ScalarUdf> = IndexMap::new();
