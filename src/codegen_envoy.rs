@@ -222,24 +222,98 @@ fn make_aggr_block(agg: &Aggregate, query_data: &VisitorResults) -> String {
 fn generate_property_blocks(
     properties: &IndexSet<Property>,
     scalar_udf_table: &IndexMap<String, ScalarUdf>,
+    property_to_type: &IndexMap<&str, &str>
 ) -> Vec<String> {
     // TODO:  here, we can have duplicates because they have different entities,
     // but we still just need to collect one version of the property
     let mut property_blocks = Vec::new();
     for property in properties {
         // There is nothing to fetch so ignore.
-        // TODO: What do we actually need here?
+        // TODO: What do we actually need here?  this is no longer relevant because we don't return traces, right?
         if property.members.is_empty() || scalar_udf_table.contains_key(&property.to_dot_string()) {
             continue;
         }
+        // Now collect the property
         let get_prop_block = format!(
-            "let prop_tuple = fetch_property(&http_headers.workload_name,
-                                        &{property},
-                                        http_headers)?;",
-            property = property.as_vec_str(),
-        );
+            "let mut prop_tuple;
+             let property = http_headers
+                            .get_property({property}.to_vec())
+                            .ok_or_else(|| format!(\"Failed to retrieve property {:?}.\", prop_query))?;
+            ",
+            property=property.as_vec_str());
         property_blocks.push(get_prop_block);
-        property_blocks.push("fd.unassigned_properties.push(prop_tuple);".to_string())
+        let dot_str = property.to_dot_string();
+        match property_to_type[dot_str.as_str()] {
+            "int" => {
+                let cast_block = "let mut byte_array = [0u8; 8];                                      
+                for (place, element) in byte_array.iter_mut().zip(property.iter()) {
+                    *place = *element;                                              
+                }                                                                   
+                let int_val = i64::from_ne_bytes(byte_array);                       
+                fd.unassigned_properties.push(Property::new(
+                    node_name.to_string(), 
+                    join_str(prop_query),
+                    int_val.to_string() 
+                ));
+                ";
+                property_blocks.push(cast_block.to_string());
+
+            }
+            "uint" => {
+                let cast_block = "let mut byte_array = [0u8; 8];                                      
+                for (place, element) in byte_array.iter_mut().zip(property.iter()) {
+                    *place = *element;                                              
+                }                                                                   
+                let int_val = u64::from_ne_bytes(byte_array);                       
+                fd.unassigned_properties.push(Property::new(
+                    node_name.to_string(), 
+                    join_str(prop_query),
+                    int_val.to_string() 
+                ));
+                ";
+                property_blocks.push(cast_block.to_string());
+            }
+            "bool" => {
+                // TODO
+            }
+            "Map" => {
+                // TODO
+            }
+            "Timestamp" => {
+                // TODO
+
+            }
+            "Duration" => {
+                // TODO
+
+            }
+            "metadata" => {
+                // TODO
+
+            }
+            "Node" => {
+                // TODO
+
+            }
+            _ => {
+                // when in doubt, it's a string
+                let cast_block = "
+                     let property_str = match std::str::from_utf8(&property) {                   
+                        Ok(property_str_) => property_str_.to_string(),   
+                        Err(e) => return e
+                    }
+                    fd.unassigned_properties.push(Property::new(
+                        node_name.to_string(), 
+                        join_str(prop_query),
+                        property_str.clone()
+                    ));
+                ";
+                property_blocks.push(cast_block.to_string());
+                
+            }
+
+
+        }
     }
     property_blocks
 }
@@ -299,6 +373,47 @@ fn generate_udf_blocks(
 }
 
 pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) -> CodeStruct {
+    // TODO: dynamically retrieve this from https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/advanced/attributes
+
+    let property_to_type : IndexMap<&str, &str> = [
+        ("request.path", "String"),
+        ("request.url_path", "String"),
+        ("request.host", "String"),
+        ("request.scheme", "String"),
+        ("request.method", "String"),
+        ("request.headers", "Map"),
+        ("request.referer", "String"),
+        ("request.useragent", "String"),
+        ("request.time", "Timestamp"),
+        ("request.id", "String"),
+        ("request.protocol", "String"),
+        ("request.duration", "Duration"),
+        ("request.size", "int"),
+        ("request.total_size", "int"),
+        ("response.code", "int"),
+        ("response.code_details", "String"),
+        ("response.flags", "int"),
+        ("response.grpc_status", "int"),
+        ("response.headers", "Map"),
+        ("response.trailers", "Map"),
+        ("response.size", "int"),
+        ("response.total_size", "int"),
+        ("source.address", "String"),
+        ("source.port", "int"),
+        ("destination.address", "String"),
+        ("destination.port", "int"),
+        ("connection.id", "uint"),
+        ("connection.mlts", "bool"),// More strings here
+        ("upstream.port", "int"),
+        ("metadata", "metadata"), // and more strings here
+        ("filter_state", "Map"),
+        ("node", "Node"),
+        ("cluster_metadata", "metadata"),
+        ("listener_direction", "int"),
+        ("listener_metadata", "metadata"),
+        ("route_metadata", "metadata"),
+        ("upstream_host_metadata", "metadata"),
+    ].iter().cloned().collect();
     let mut code_struct = CodeStruct::new(&query_data.root_id);
     let mut scalar_udf_table: IndexMap<String, ScalarUdf> = IndexMap::new();
     // where we store udf implementations
@@ -316,7 +431,7 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
     }
     // all the properties we collect
     code_struct.request_blocks =
-        generate_property_blocks(&query_data.properties, &scalar_udf_table);
+        generate_property_blocks(&query_data.properties, &scalar_udf_table, &property_to_type);
     code_struct.udf_blocks = generate_udf_blocks(
         &scalar_udf_table,
         &aggregation_udf_table,
