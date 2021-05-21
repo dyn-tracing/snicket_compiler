@@ -244,7 +244,6 @@ fn generate_property_blocks(
             property_str = property.to_dot_string());
         property_blocks.push(get_prop_block);
         let dot_str = property.to_dot_string();
-        log::warn!("dot str is {:?}", dot_str);
         match property_to_type[dot_str.as_str()] {
             "int" => {
                 let cast_block = format!("let mut byte_array = [0u8; 8];                                      
@@ -296,7 +295,7 @@ fn generate_property_blocks(
                 property_blocks.push(cast_block.to_string());
             }
             "Map" => {
-                // TODO
+                log::error!("Maps have not yet been implemented in the Rust wasm SDK;  they give an \" envoy assert panic: not implemented error\".  Until they are implemented in the SDK, they cannot be implemented here.");
             }
             "Timestamp" => {
                 // both timestamp and duration are approximated to nanoseconds
@@ -330,12 +329,10 @@ fn generate_property_blocks(
                 property_blocks.push(cast_block.to_string());
             }
             "metadata" => {
-                // TODO
-
+                log::error!("metadata by itself is not supported.  You must specify some property of metadata");
             }
             "Node" => {
-                // TODO
-
+                log::error!("node by itself is not supported.  You must specify some property of node");
             }
             _ => {
                 // when in doubt, it's a string

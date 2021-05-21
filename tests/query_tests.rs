@@ -11,6 +11,8 @@ use test_case::test_case; // Parametrized tests
 #[test_case("histogram.cql", vec!["histogram.rs"]; "inconclusive - histogram")]
 #[test_case("request_size.cql", vec![]; "request_size")]
 #[test_case("request_size_avg.cql", vec!["avg.rs"]; "request_size_avg")]
+#[test_case("request_size_avg_trace_attr.cql", vec!["avg.rs"]; "request_size_avg_trace_attr")]
+#[test_case("request_time.cql", vec![]; "request_time")]
 #[test_case("latency.cql", vec!["latency.rs"]; "inconclusive - latency")]
 fn check_compilation_envoy(
     query_name: &str,
@@ -69,6 +71,7 @@ fn check_compilation_envoy(
 #[test_case("request_size.cql", vec![]; "request_size")]
 #[test_case("request_size_avg.cql", vec!["avg.rs"]; "request_size_avg")]
 #[test_case("request_size_avg_trace_attr.cql", vec!["avg.rs"]; "request_size_avg_trace_attr")]
+#[test_case("request_time.cql", vec![]; "request_time")]
 #[test_case("latency.cql", vec!["latency.rs"]; "inconclusive - latency")]
 fn check_compilation_sim(
     query_name: &str,

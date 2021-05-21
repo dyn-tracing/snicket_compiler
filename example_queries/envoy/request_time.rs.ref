@@ -26,8 +26,8 @@ pub fn create_target_graph() -> Graph<
         ids_to_properties.insert("a".to_string(), IndexMap::new());
         ids_to_properties.insert("b".to_string(), IndexMap::new());
         ids_to_properties.insert("c".to_string(), IndexMap::new());
-        let mut b_hashmap = ids_to_properties.get_mut("b").unwrap();
-        b_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "reviews-v1".to_string());
+        let mut c_hashmap = ids_to_properties.get_mut("c").unwrap();
+        c_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "ratings-v1".to_string());
         return generate_target_graph(vertices, edges, ids_to_properties);
 
 }
@@ -55,33 +55,17 @@ pub fn collect_envoy_properties(
                 
     
              let property = http_headers
-                            .get_property(vec!["request", "total_size", ].to_vec())
-                            .ok_or_else(|| format!("Failed to retrieve property request.total_size."))?;
+                            .get_property(vec!["request", "time", ].to_vec())
+                            .ok_or_else(|| format!("Failed to retrieve property request.time."))?;
             
     let mut byte_array = [0u8; 8];                                      
                 for (place, element) in byte_array.iter_mut().zip(property.iter()) {
                     *place = *element;                                              
                 }                                                                   
-                let int_val = i64::from_ne_bytes(byte_array);                       
+                let int_val = u64::from_ne_bytes(byte_array);                       
                 fd.unassigned_properties.push(Property::new(
                     http_headers.workload_name.to_string(), 
-                    join_str(&vec!["request", "total_size", ]),
-                    int_val.to_string() 
-                ));
-                
-    
-             let property = http_headers
-                            .get_property(vec!["request", "total_size", ].to_vec())
-                            .ok_or_else(|| format!("Failed to retrieve property request.total_size."))?;
-            
-    let mut byte_array = [0u8; 8];                                      
-                for (place, element) in byte_array.iter_mut().zip(property.iter()) {
-                    *place = *element;                                              
-                }                                                                   
-                let int_val = i64::from_ne_bytes(byte_array);                       
-                fd.unassigned_properties.push(Property::new(
-                    http_headers.workload_name.to_string(), 
-                    join_str(&vec!["request", "total_size", ]),
+                    join_str(&vec!["request", "time", ]),
                     int_val.to_string() 
                 ));
                 
@@ -95,24 +79,7 @@ pub fn execute_udfs_and_check_trace_lvl_prop(http_headers: &HttpHeaders, fd: &mu
     let root_id = "productpage-v1";
     
             if &http_headers.workload_name == root_id {        let mut trace_prop_str : String;
-
-                let root_node = get_node_with_id(&fd.trace_graph, "productpage-v1".to_string()).unwrap();
-                if ! ( fd.trace_graph.node_weight(root_node).unwrap().1.contains_key("request.total_size") &&
-                    fd.trace_graph.node_weight(root_node).unwrap().1["request.total_size"] == "1" ){
-                    // TODO:  replace fd
-                    match serde_json::to_string(&fd) {
-                        Ok(fd_str) => {
-                            return false;
-                        }
-                        Err(e) => {
-                            log::error!("could not serialize baggage {0}
-", e);
-                            return false;
-                        }
-                     }
-                     return false;
-                }
-                       }
+       }
     return true;
 }
 
@@ -151,13 +118,13 @@ pub fn get_value_for_storage(
             .node_weight(trace_node_idx)
             .unwrap()
             .1
-            .contains_key("request.total_size")
+            .contains_key("request.time")
         {
             // we have not yet collected the return property
-            log::error!("Missing return property request.total_size");
+            log::error!("Missing return property request.time");
             return None;
         }
-        let ret = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ "request.total_size" ];
+        let ret = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ "request.time" ];
 
         value = ret.to_string();
 
