@@ -1,7 +1,8 @@
 // ---------------------- Generated Functions ----------------------------
 
-use super::filter_base::fetch_property;
 use super::filter_base::HttpHeaders;
+use super::filter_base::join_str;
+use proxy_wasm::traits::Context;
 use indexmap::IndexMap;
 use petgraph::graph::{Graph, NodeIndex};
 use utils::graph::graph_utils::generate_target_graph;
@@ -56,10 +57,23 @@ pub fn collect_envoy_properties(
     http_headers: &HttpHeaders,
     fd: &mut FerriedData,
 ) -> Result<(), String> {
-    let prop_tuple = fetch_property(&http_headers.workload_name,
-                                        &vec!["node", "metadata", "WORKLOAD_NAME", ],
-                                        http_headers)?;
-    fd.unassigned_properties.push(prop_tuple);
+    
+             let property = http_headers
+                            .get_property(vec!["node", "metadata", "WORKLOAD_NAME", ].to_vec())
+                            .ok_or_else(|| format!("Failed to retrieve property node.metadata.WORKLOAD_NAME."))?;
+            
+    
+                     let property_str = match std::str::from_utf8(&property) {
+                        Ok(property_str_) => {
+                            fd.unassigned_properties.push(Property::new(
+                                http_headers.workload_name.to_string(), 
+                                join_str(&vec!["node", "metadata", "WORKLOAD_NAME", ]),
+                                property_str_.to_string()
+                            ));
+                        }
+                        Err(e) => { return Err(e.to_string()); }
+                    };
+                
     
     return Ok(());
 }

@@ -222,24 +222,153 @@ fn make_aggr_block(agg: &Aggregate, query_data: &VisitorResults) -> String {
 fn generate_property_blocks(
     properties: &IndexSet<Property>,
     scalar_udf_table: &IndexMap<String, ScalarUdf>,
+    property_to_type: &IndexMap<&str, &str>,
 ) -> Vec<String> {
     // TODO:  here, we can have duplicates because they have different entities,
     // but we still just need to collect one version of the property
     let mut property_blocks = Vec::new();
     for property in properties {
         // There is nothing to fetch so ignore.
-        // TODO: What do we actually need here?
+        // TODO: What do we actually need here?  this is no longer relevant because we don't return traces, right?
         if property.members.is_empty() || scalar_udf_table.contains_key(&property.to_dot_string()) {
             continue;
         }
+        // Now collect the property
         let get_prop_block = format!(
-            "let prop_tuple = fetch_property(&http_headers.workload_name,
-                                        &{property},
-                                        http_headers)?;",
-            property = property.as_vec_str(),
-        );
+            "
+             let property = http_headers
+                            .get_property({property}.to_vec())
+                            .ok_or_else(|| format!(\"Failed to retrieve property {property_str}.\"))?;
+            ",
+            property=property.as_vec_str(),
+            property_str = property.to_dot_string());
         property_blocks.push(get_prop_block);
-        property_blocks.push("fd.unassigned_properties.push(prop_tuple);".to_string())
+        let dot_str = property.to_dot_string();
+        match property_to_type[dot_str.as_str()] {
+            "int" => {
+                let cast_block = format!(
+                    "let mut byte_array = [0u8; 8];                                      
+                for (place, element) in byte_array.iter_mut().zip(property.iter()) {{
+                    *place = *element;                                              
+                }}                                                                   
+                let int_val = i64::from_ne_bytes(byte_array);                       
+                fd.unassigned_properties.push(Property::new(
+                    http_headers.workload_name.to_string(), 
+                    join_str(&{property}),
+                    int_val.to_string() 
+                ));
+                ",
+                    property = property.as_vec_str()
+                );
+                property_blocks.push(cast_block.to_string());
+            }
+            "uint" => {
+                let cast_block = format!(
+                    "let mut byte_array = [0u8; 8];                                      
+                for (place, element) in byte_array.iter_mut().zip(property.iter()) {{
+                    *place = *element;                                              
+                }}                                                                   
+                let int_val = u64::from_ne_bytes(byte_array);                       
+                fd.unassigned_properties.push(Property::new(
+                    http_headers.workload_name.to_string(), 
+                    join_str(&{property}),
+                    int_val.to_string() 
+                ));
+                ",
+                    property = property.as_vec_str()
+                );
+                property_blocks.push(cast_block.to_string());
+            }
+            "bool" => {
+                // This has no practical purpose right now, because the only boolean value isn't available on request
+                // However, it's good to have in case they add more properties in future
+                let cast_block = format!(
+                    "let mut byte_array = [0u8; 8];                                      
+                for (place, element) in byte_array.iter_mut().zip(property.iter()) {{
+                    *place = *element;                                              
+                }}                                                                   
+                let int_val = u64::from_ne_bytes(byte_array);                       
+                let bool_val = false;
+                if int_val != 0 {{
+                    bool_val = true;
+                }}
+                fd.unassigned_properties.push(Property::new(
+                    http_headers.workload_name.to_string(), 
+                    join_str(&{property}),
+                    bool_val.to_string() 
+                ));
+                ",
+                    property = property.as_vec_str()
+                );
+                property_blocks.push(cast_block.to_string());
+            }
+            "Map" => {
+                log::error!("Maps have not yet been implemented in the Rust wasm SDK;  they give an \" envoy assert panic: not implemented error\".  Until they are implemented in the SDK, they cannot be implemented here.");
+            }
+            "Timestamp" => {
+                // both timestamp and duration are approximated to nanoseconds
+                let cast_block = format!(
+                    "let mut byte_array = [0u8; 8];                                      
+                for (place, element) in byte_array.iter_mut().zip(property.iter()) {{
+                    *place = *element;                                              
+                }}                                                                   
+                let int_val = u64::from_ne_bytes(byte_array);                       
+                fd.unassigned_properties.push(Property::new(
+                    http_headers.workload_name.to_string(), 
+                    join_str(&{property}),
+                    int_val.to_string() 
+                ));
+                ",
+                    property = property.as_vec_str()
+                );
+                property_blocks.push(cast_block.to_string());
+            }
+            "Duration" => {
+                // both timestamp and duration are approximated to nanoseconds
+                let cast_block = format!(
+                    "let mut byte_array = [0u8; 8];                                      
+                for (place, element) in byte_array.iter_mut().zip(property.iter()) {{
+                    *place = *element;                                              
+                }}                                                                   
+                let int_val = u64::from_ne_bytes(byte_array);                       
+                fd.unassigned_properties.push(Property::new(
+                    http_headers.workload_name.to_string(), 
+                    join_str(&{property}),
+                    int_val.to_string() 
+                ));
+                ",
+                    property = property.as_vec_str()
+                );
+                property_blocks.push(cast_block.to_string());
+            }
+            "metadata" => {
+                log::error!("metadata by itself is not supported.  You must specify some property of metadata");
+            }
+            "Node" => {
+                log::error!(
+                    "node by itself is not supported.  You must specify some property of node"
+                );
+            }
+            _ => {
+                // when in doubt, it's a string
+                let cast_block = format!(
+                    "
+                     let property_str = match std::str::from_utf8(&property) {{
+                        Ok(property_str_) => {{
+                            fd.unassigned_properties.push(Property::new(
+                                http_headers.workload_name.to_string(), 
+                                join_str(&{property}),
+                                property_str_.to_string()
+                            ));
+                        }}
+                        Err(e) => {{ return Err(e.to_string()); }}
+                    }};
+                ",
+                    property = property.as_vec_str()
+                );
+                property_blocks.push(cast_block.to_string());
+            }
+        }
     }
     property_blocks
 }
@@ -299,6 +428,51 @@ fn generate_udf_blocks(
 }
 
 pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) -> CodeStruct {
+    // TODO: dynamically retrieve this from https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/advanced/attributes
+
+    let property_to_type: IndexMap<&str, &str> = [
+        ("request.path", "String"),
+        ("request.url_path", "String"),
+        ("request.host", "String"),
+        ("request.scheme", "String"),
+        ("request.method", "String"),
+        ("request.headers", "Map"),
+        ("request.referer", "String"),
+        ("request.useragent", "String"),
+        ("request.time", "Timestamp"),
+        ("request.id", "String"),
+        ("request.protocol", "String"),
+        ("request.duration", "Duration"),
+        ("request.size", "int"),
+        ("request.total_size", "int"),
+        ("response.code", "int"),
+        ("response.code_details", "String"),
+        ("response.flags", "int"),
+        ("response.grpc_status", "int"),
+        ("response.headers", "Map"),
+        ("response.trailers", "Map"),
+        ("response.size", "int"),
+        ("response.total_size", "int"),
+        ("source.address", "String"),
+        ("source.port", "int"),
+        ("destination.address", "String"),
+        ("destination.port", "int"),
+        ("connection.id", "uint"),
+        ("connection.mlts", "bool"), // More strings here
+        ("upstream.port", "int"),
+        ("metadata", "metadata"), // and more strings here
+        ("filter_state", "Map"),
+        ("node", "Node"),
+        ("cluster_metadata", "metadata"),
+        ("listener_direction", "int"),
+        ("listener_metadata", "metadata"),
+        ("route_metadata", "metadata"),
+        ("upstream_host_metadata", "metadata"),
+        ("node.metadata.WORKLOAD_NAME", "String"),
+    ]
+    .iter()
+    .cloned()
+    .collect();
     let mut code_struct = CodeStruct::new(&query_data.root_id);
     let mut scalar_udf_table: IndexMap<String, ScalarUdf> = IndexMap::new();
     // where we store udf implementations
@@ -316,7 +490,7 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
     }
     // all the properties we collect
     code_struct.request_blocks =
-        generate_property_blocks(&query_data.properties, &scalar_udf_table);
+        generate_property_blocks(&query_data.properties, &scalar_udf_table, &property_to_type);
     code_struct.udf_blocks = generate_udf_blocks(
         &scalar_udf_table,
         &aggregation_udf_table,
