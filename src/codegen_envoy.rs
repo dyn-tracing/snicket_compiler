@@ -276,18 +276,58 @@ fn generate_property_blocks(
                 property_blocks.push(cast_block.to_string());
             }
             "bool" => {
-                // TODO
+                // This has no practical purpose right now, because the only boolean value isn't available on request
+                // However, it's good to have in case they add more properties in future
+                let cast_block = format!("let mut byte_array = [0u8; 8];                                      
+                for (place, element) in byte_array.iter_mut().zip(property.iter()) {{
+                    *place = *element;                                              
+                }}                                                                   
+                let int_val = u64::from_ne_bytes(byte_array);                       
+                let bool_val = false;
+                if int_val != 0 {{
+                    bool_val = true;
+                }}
+                fd.unassigned_properties.push(Property::new(
+                    http_headers.workload_name.to_string(), 
+                    join_str(&{property}),
+                    bool_val.to_string() 
+                ));
+                ", property = property.as_vec_str());
+                property_blocks.push(cast_block.to_string());
             }
             "Map" => {
                 // TODO
             }
             "Timestamp" => {
-                // TODO
+                // both timestamp and duration are approximated to nanoseconds
+                let cast_block = format!("let mut byte_array = [0u8; 8];                                      
+                for (place, element) in byte_array.iter_mut().zip(property.iter()) {{
+                    *place = *element;                                              
+                }}                                                                   
+                let int_val = u64::from_ne_bytes(byte_array);                       
+                fd.unassigned_properties.push(Property::new(
+                    http_headers.workload_name.to_string(), 
+                    join_str(&{property}),
+                    int_val.to_string() 
+                ));
+                ", property = property.as_vec_str());
+                property_blocks.push(cast_block.to_string());
 
             }
             "Duration" => {
-                // TODO
-
+                // both timestamp and duration are approximated to nanoseconds
+                let cast_block = format!("let mut byte_array = [0u8; 8];                                      
+                for (place, element) in byte_array.iter_mut().zip(property.iter()) {{
+                    *place = *element;                                              
+                }}                                                                   
+                let int_val = u64::from_ne_bytes(byte_array);                       
+                fd.unassigned_properties.push(Property::new(
+                    http_headers.workload_name.to_string(), 
+                    join_str(&{property}),
+                    int_val.to_string() 
+                ));
+                ", property = property.as_vec_str());
+                property_blocks.push(cast_block.to_string());
             }
             "metadata" => {
                 // TODO
