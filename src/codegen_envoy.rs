@@ -222,7 +222,7 @@ fn make_aggr_block(agg: &Aggregate, query_data: &VisitorResults) -> String {
 fn generate_property_blocks(
     properties: &IndexSet<Property>,
     scalar_udf_table: &IndexMap<String, ScalarUdf>,
-    property_to_type: &IndexMap<&str, &str>
+    property_to_type: &IndexMap<&str, &str>,
 ) -> Vec<String> {
     // TODO:  here, we can have duplicates because they have different entities,
     // but we still just need to collect one version of the property
@@ -246,7 +246,8 @@ fn generate_property_blocks(
         let dot_str = property.to_dot_string();
         match property_to_type[dot_str.as_str()] {
             "int" => {
-                let cast_block = format!("let mut byte_array = [0u8; 8];                                      
+                let cast_block = format!(
+                    "let mut byte_array = [0u8; 8];                                      
                 for (place, element) in byte_array.iter_mut().zip(property.iter()) {{
                     *place = *element;                                              
                 }}                                                                   
@@ -256,12 +257,14 @@ fn generate_property_blocks(
                     join_str(&{property}),
                     int_val.to_string() 
                 ));
-                ", property = property.as_vec_str());
+                ",
+                    property = property.as_vec_str()
+                );
                 property_blocks.push(cast_block.to_string());
-
             }
             "uint" => {
-                let cast_block = format!("let mut byte_array = [0u8; 8];                                      
+                let cast_block = format!(
+                    "let mut byte_array = [0u8; 8];                                      
                 for (place, element) in byte_array.iter_mut().zip(property.iter()) {{
                     *place = *element;                                              
                 }}                                                                   
@@ -271,13 +274,16 @@ fn generate_property_blocks(
                     join_str(&{property}),
                     int_val.to_string() 
                 ));
-                ", property = property.as_vec_str());
+                ",
+                    property = property.as_vec_str()
+                );
                 property_blocks.push(cast_block.to_string());
             }
             "bool" => {
                 // This has no practical purpose right now, because the only boolean value isn't available on request
                 // However, it's good to have in case they add more properties in future
-                let cast_block = format!("let mut byte_array = [0u8; 8];                                      
+                let cast_block = format!(
+                    "let mut byte_array = [0u8; 8];                                      
                 for (place, element) in byte_array.iter_mut().zip(property.iter()) {{
                     *place = *element;                                              
                 }}                                                                   
@@ -291,7 +297,9 @@ fn generate_property_blocks(
                     join_str(&{property}),
                     bool_val.to_string() 
                 ));
-                ", property = property.as_vec_str());
+                ",
+                    property = property.as_vec_str()
+                );
                 property_blocks.push(cast_block.to_string());
             }
             "Map" => {
@@ -299,7 +307,8 @@ fn generate_property_blocks(
             }
             "Timestamp" => {
                 // both timestamp and duration are approximated to nanoseconds
-                let cast_block = format!("let mut byte_array = [0u8; 8];                                      
+                let cast_block = format!(
+                    "let mut byte_array = [0u8; 8];                                      
                 for (place, element) in byte_array.iter_mut().zip(property.iter()) {{
                     *place = *element;                                              
                 }}                                                                   
@@ -309,13 +318,15 @@ fn generate_property_blocks(
                     join_str(&{property}),
                     int_val.to_string() 
                 ));
-                ", property = property.as_vec_str());
+                ",
+                    property = property.as_vec_str()
+                );
                 property_blocks.push(cast_block.to_string());
-
             }
             "Duration" => {
                 // both timestamp and duration are approximated to nanoseconds
-                let cast_block = format!("let mut byte_array = [0u8; 8];                                      
+                let cast_block = format!(
+                    "let mut byte_array = [0u8; 8];                                      
                 for (place, element) in byte_array.iter_mut().zip(property.iter()) {{
                     *place = *element;                                              
                 }}                                                                   
@@ -325,18 +336,23 @@ fn generate_property_blocks(
                     join_str(&{property}),
                     int_val.to_string() 
                 ));
-                ", property = property.as_vec_str());
+                ",
+                    property = property.as_vec_str()
+                );
                 property_blocks.push(cast_block.to_string());
             }
             "metadata" => {
                 log::error!("metadata by itself is not supported.  You must specify some property of metadata");
             }
             "Node" => {
-                log::error!("node by itself is not supported.  You must specify some property of node");
+                log::error!(
+                    "node by itself is not supported.  You must specify some property of node"
+                );
             }
             _ => {
                 // when in doubt, it's a string
-                let cast_block = format!("
+                let cast_block = format!(
+                    "
                      let property_str = match std::str::from_utf8(&property) {{
                         Ok(property_str_) => {{
                             fd.unassigned_properties.push(Property::new(
@@ -347,12 +363,11 @@ fn generate_property_blocks(
                         }}
                         Err(e) => {{ return Err(e.to_string()); }}
                     }};
-                ", property = property.as_vec_str());
+                ",
+                    property = property.as_vec_str()
+                );
                 property_blocks.push(cast_block.to_string());
-                
             }
-
-
         }
     }
     property_blocks
@@ -415,7 +430,7 @@ fn generate_udf_blocks(
 pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) -> CodeStruct {
     // TODO: dynamically retrieve this from https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/advanced/attributes
 
-    let property_to_type : IndexMap<&str, &str> = [
+    let property_to_type: IndexMap<&str, &str> = [
         ("request.path", "String"),
         ("request.url_path", "String"),
         ("request.host", "String"),
@@ -443,7 +458,7 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
         ("destination.address", "String"),
         ("destination.port", "int"),
         ("connection.id", "uint"),
-        ("connection.mlts", "bool"),// More strings here
+        ("connection.mlts", "bool"), // More strings here
         ("upstream.port", "int"),
         ("metadata", "metadata"), // and more strings here
         ("filter_state", "Map"),
@@ -453,8 +468,11 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
         ("listener_metadata", "metadata"),
         ("route_metadata", "metadata"),
         ("upstream_host_metadata", "metadata"),
-        ("node.metadata.WORKLOAD_NAME", "String")
-    ].iter().cloned().collect();
+        ("node.metadata.WORKLOAD_NAME", "String"),
+    ]
+    .iter()
+    .cloned()
+    .collect();
     let mut code_struct = CodeStruct::new(&query_data.root_id);
     let mut scalar_udf_table: IndexMap<String, ScalarUdf> = IndexMap::new();
     // where we store udf implementations
