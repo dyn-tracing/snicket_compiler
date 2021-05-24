@@ -1,4 +1,5 @@
 use super::codegen_common::parse_udf;
+use super::codegen_common::assign_id_to_property;
 use super::codegen_common::AggregationUdf;
 use super::codegen_common::CodeStruct;
 use super::codegen_common::ScalarOrAggregationUdf;
@@ -21,6 +22,7 @@ use indexmap::IndexSet;
 fn make_struct_filter_blocks(
     attr_filters: &[AttributeFilter],
     struct_filters: &[StructuralFilter],
+    id_to_property: &IndexMap<String, u64>
 ) -> Vec<String> {
     let mut target_blocks = Vec::new();
 
@@ -64,7 +66,7 @@ fn make_struct_filter_blocks(
                 target_blocks.push(get_hashmap);
                 let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
                                                node=property_filter.node,
-                                               property_name=property_name_without_period,
+                                               property_name=id_to_property[&property_name_without_period],
                                                property_value=property_filter.value);
                 target_blocks.push(fill_in_hashmap);
             }
@@ -204,6 +206,7 @@ fn make_aggr_block(agg: &Aggregate, query_data: &VisitorResults) -> String {
 fn generate_property_blocks(
     properties: &IndexSet<Property>,
     scalar_udf_table: &IndexMap<String, ScalarUdf>,
+    id_to_property: &IndexMap<String, u64>
 ) -> Vec<String> {
     let mut property_blocks = Vec::new();
     // some "properties" are created by UDFs, and if so, shouldn't be collected here
@@ -216,7 +219,7 @@ fn generate_property_blocks(
                                                    \"{property}\".to_string(),
                                                    filter.filter_state[\"{property}\"].clone());
                                             ",
-            property = property.to_dot_string(),
+            property = id_to_property[&property.to_dot_string()],
         );
         let insert_hdr_block = "fd.unassigned_properties.push(prop_tuple);".to_string();
         property_blocks.push(get_prop_block);
@@ -278,6 +281,7 @@ fn generate_udf_blocks(
 
 pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) -> CodeStruct {
     let mut code_struct = CodeStruct::new(&query_data.root_id);
+    code_struct.id_to_property = assign_id_to_property(&query_data.properties);
     let mut scalar_udf_table: IndexMap<String, ScalarUdf> = IndexMap::new();
     // where we store udf implementations
     let mut aggregation_udf_table: IndexMap<String, AggregationUdf> = IndexMap::new();
@@ -294,14 +298,14 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
     }
     // all the properties we collect
     code_struct.collect_properties_blocks =
-        generate_property_blocks(&query_data.properties, &scalar_udf_table);
+        generate_property_blocks(&query_data.properties, &scalar_udf_table, &code_struct.id_to_property);
     code_struct.udf_blocks = generate_udf_blocks(
         &scalar_udf_table,
         &aggregation_udf_table,
         &query_data.udf_calls,
     );
     code_struct.target_blocks =
-        make_struct_filter_blocks(&query_data.attr_filters, &query_data.struct_filters);
+        make_struct_filter_blocks(&query_data.attr_filters, &query_data.struct_filters, &code_struct.id_to_property);
     code_struct.trace_lvl_prop_blocks =
         make_attr_filter_blocks(&query_data.root_id, &query_data.attr_filters);
 
@@ -397,17 +401,15 @@ mod tests {
         let _codegen = generate_code_blocks(result, [COUNT.to_string()].to_vec());
     }
 
-    /*
     #[test]
     fn get_group_by() {
         let result = get_codegen_from_query(
-            "MATCH (a) WHERE a.node.metadata.WORKLOAD_NAME = 'productpage-v1' RETURN agg(a.count), a.count".to_string(),
+            "MATCH (a) WHERE a.node.metadata.WORKLOAD_NAME = 'productpage-v1' RETURN a.request.total_size, count(a.request.total_size)".to_string(),
         );
         assert!(!result.struct_filters.is_empty());
         let _codegen = generate_code_blocks(result, [COUNT.to_string()].to_vec());
         assert!(!_codegen.target_blocks.is_empty());
     }
-    */
 
     #[test]
     fn test_where() {

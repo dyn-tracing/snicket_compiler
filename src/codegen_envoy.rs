@@ -1,4 +1,5 @@
 use super::codegen_common::parse_udf;
+use super::codegen_common::assign_id_to_property;
 use super::codegen_common::AggregationUdf;
 use super::codegen_common::CodeStruct;
 use super::codegen_common::ScalarOrAggregationUdf;
@@ -21,6 +22,7 @@ use indexmap::IndexSet;
 fn make_struct_filter_blocks(
     attr_filters: &[AttributeFilter],
     struct_filters: &[StructuralFilter],
+    id_to_property: &IndexMap<String, u64>
 ) -> Vec<String> {
     let mut target_blocks = Vec::new();
     for struct_filter in struct_filters {
@@ -63,7 +65,7 @@ fn make_struct_filter_blocks(
                 target_blocks.push(get_hashmap);
                 let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
                                                    node=property_filter.node,
-                                                   property_name=property_name_without_period,
+                                                   property_name=id_to_property[&property_name_without_period],
                                                    property_value=property_filter.value);
                 target_blocks.push(fill_in_hashmap);
             }
@@ -78,6 +80,7 @@ fn make_struct_filter_blocks(
 }
 
 fn make_attr_filter_blocks(root_id: &str, attr_filters: &[AttributeFilter]) -> Vec<String> {
+    // TODO: does the numbering of properties work here?
     // for everything except trace level attributes, the UDF/envoy property
     // collection will make the attribute filtering happen at the same time as
     // the struct filtering.  This is not the case for trace-level attributes
@@ -223,6 +226,7 @@ fn generate_property_blocks(
     properties: &IndexSet<Property>,
     scalar_udf_table: &IndexMap<String, ScalarUdf>,
     property_to_type: &IndexMap<&str, &str>,
+    id_to_property: &IndexMap<String, u64>
 ) -> Vec<String> {
     // TODO:  here, we can have duplicates because they have different entities,
     // but we still just need to collect one version of the property
@@ -254,15 +258,15 @@ fn generate_property_blocks(
                 let int_val = i64::from_ne_bytes(byte_array);                       
                 fd.unassigned_properties.push(Property::new(
                     http_headers.workload_name.to_string(), 
-                    join_str(&{property}),
+                    {property},
                     int_val.to_string() 
                 ));
                 ",
-                    property = property.as_vec_str()
+                    property = id_to_property[&dot_str]
                 );
                 property_blocks.push(cast_block.to_string());
             }
-            "uint" => {
+            "u64" => {
                 let cast_block = format!(
                     "let mut byte_array = [0u8; 8];                                      
                 for (place, element) in byte_array.iter_mut().zip(property.iter()) {{
@@ -271,11 +275,11 @@ fn generate_property_blocks(
                 let int_val = u64::from_ne_bytes(byte_array);                       
                 fd.unassigned_properties.push(Property::new(
                     http_headers.workload_name.to_string(), 
-                    join_str(&{property}),
+                    {property},
                     int_val.to_string() 
                 ));
                 ",
-                    property = property.as_vec_str()
+                    property = id_to_property[&dot_str]
                 );
                 property_blocks.push(cast_block.to_string());
             }
@@ -294,11 +298,11 @@ fn generate_property_blocks(
                 }}
                 fd.unassigned_properties.push(Property::new(
                     http_headers.workload_name.to_string(), 
-                    join_str(&{property}),
+                    {property},
                     bool_val.to_string() 
                 ));
                 ",
-                    property = property.as_vec_str()
+                    property = id_to_property[&dot_str]
                 );
                 property_blocks.push(cast_block.to_string());
             }
@@ -315,11 +319,11 @@ fn generate_property_blocks(
                 let int_val = u64::from_ne_bytes(byte_array);                       
                 fd.unassigned_properties.push(Property::new(
                     http_headers.workload_name.to_string(), 
-                    join_str(&{property}),
+                    {property},
                     int_val.to_string() 
                 ));
                 ",
-                    property = property.as_vec_str()
+                    property = id_to_property[&dot_str]
                 );
                 property_blocks.push(cast_block.to_string());
             }
@@ -333,11 +337,11 @@ fn generate_property_blocks(
                 let int_val = u64::from_ne_bytes(byte_array);                       
                 fd.unassigned_properties.push(Property::new(
                     http_headers.workload_name.to_string(), 
-                    join_str(&{property}),
+                    {property},
                     int_val.to_string() 
                 ));
                 ",
-                    property = property.as_vec_str()
+                    property = id_to_property[&dot_str]
                 );
                 property_blocks.push(cast_block.to_string());
             }
@@ -357,14 +361,14 @@ fn generate_property_blocks(
                         Ok(property_str_) => {{
                             fd.unassigned_properties.push(Property::new(
                                 http_headers.workload_name.to_string(), 
-                                join_str(&{property}),
+                                {property},
                                 property_str_.to_string()
                             ));
                         }}
                         Err(e) => {{ return Err(e.to_string()); }}
                     }};
                 ",
-                    property = property.as_vec_str()
+                    property = id_to_property[&dot_str]
                 );
                 property_blocks.push(cast_block.to_string());
             }
@@ -457,7 +461,7 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
         ("source.port", "int"),
         ("destination.address", "String"),
         ("destination.port", "int"),
-        ("connection.id", "uint"),
+        ("connection.id", "u64"),
         ("connection.mlts", "bool"), // More strings here
         ("upstream.port", "int"),
         ("metadata", "metadata"), // and more strings here
@@ -474,6 +478,8 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
     .cloned()
     .collect();
     let mut code_struct = CodeStruct::new(&query_data.root_id);
+    code_struct.id_to_property = assign_id_to_property(&query_data.properties);
+
     let mut scalar_udf_table: IndexMap<String, ScalarUdf> = IndexMap::new();
     // where we store udf implementations
     let mut aggregation_udf_table: IndexMap<String, AggregationUdf> = IndexMap::new();
@@ -490,14 +496,15 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
     }
     // all the properties we collect
     code_struct.collect_properties_blocks =
-        generate_property_blocks(&query_data.properties, &scalar_udf_table, &property_to_type);
+        generate_property_blocks(&query_data.properties, &scalar_udf_table, 
+            &property_to_type, &code_struct.id_to_property);
     code_struct.udf_blocks = generate_udf_blocks(
         &scalar_udf_table,
         &aggregation_udf_table,
         &query_data.udf_calls,
     );
     code_struct.target_blocks =
-        make_struct_filter_blocks(&query_data.attr_filters, &query_data.struct_filters);
+        make_struct_filter_blocks(&query_data.attr_filters, &query_data.struct_filters, &code_struct.id_to_property);
     code_struct.trace_lvl_prop_blocks =
         make_attr_filter_blocks(&query_data.root_id, &query_data.attr_filters);
 

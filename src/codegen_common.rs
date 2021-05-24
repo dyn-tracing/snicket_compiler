@@ -3,6 +3,8 @@ use regex::Regex;
 use serde::Serialize;
 use std::str::FromStr;
 use strum_macros::EnumString;
+use super::ir::Property;
+use indexmap::IndexSet;
 
 /********************************/
 // Helper structs
@@ -43,8 +45,10 @@ pub struct AggregationUdf {
 pub struct CodeStruct {
     // the IR, as defined in to_ir.rs
     pub root_id: String,
-    // code blocks used in incoming requests
+    // code blocks used in incoming requests to collect properties
     pub collect_properties_blocks: Vec<String>,
+    // map of numbers to properties in order to compress the messages
+    pub id_to_property: IndexMap<String, u64>,
     // code blocks in outgoing responses, after matching
     pub response_blocks: Vec<String>,
     // code blocks to create target graph
@@ -64,6 +68,7 @@ impl CodeStruct {
         CodeStruct {
             root_id: root_id.to_string(),
             collect_properties_blocks: Vec::new(),
+            id_to_property: IndexMap::default(),
             response_blocks: Vec::new(),
             target_blocks: Vec::new(),
             udf_blocks: Vec::new(),
@@ -119,4 +124,15 @@ pub fn parse_udf(udf: String) -> ScalarOrAggregationUdf {
     }
     log::error!("Unable to parse input udf {:?}", udf);
     std::process::exit(1);
+}
+
+pub fn assign_id_to_property(properties: &IndexSet<Property>) -> IndexMap<String, u64> {
+    let mut id_to_property = IndexMap::new();
+    let mut i : u64 = 0;
+    for property in properties {
+        id_to_property.insert(property.to_dot_string(), i);
+        i += 1;
+    }
+    id_to_property
+
 }
