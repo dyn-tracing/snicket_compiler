@@ -139,6 +139,12 @@ fn make_trace_rpc_value(code_struct: &mut CodeStruct) {
 }
 
 fn make_storage_rpc_value_from_trace(entity: String, property: &str, id_to_property: &IndexMap<String, u64>) -> String {
+    let prop : String;
+    if id_to_property.contains_key(property) {
+        prop = id_to_property[property].to_string();
+    } else {
+        prop = property.to_string();
+    }
     return format!(
         "let trace_node_idx = get_node_with_id(&fd.trace_graph, \"{node_id}\".to_string());
         if trace_node_idx.is_none() {{
@@ -148,11 +154,18 @@ fn make_storage_rpc_value_from_trace(entity: String, property: &str, id_to_prope
         let ret = &fd.trace_graph.node_weight(trace_node_idx.unwrap()).unwrap().1[\"{prop}\"];\n
         value = ret.to_string();\n",
         node_id = entity,
-        prop = id_to_property[property]
+        prop = prop
     );
 }
 
 fn make_storage_rpc_value_from_target(entity: &str, property: &str, id_to_property: &IndexMap<String, u64>) -> String {
+    let prop : String;
+    if id_to_property.contains_key(property) {
+        prop = id_to_property[property].to_string();
+    } else {
+        prop = property.to_string();
+    }
+
     let ret_block = format!(
         "let node_ptr = get_node_with_id(target_graph, \"{node_id}\".to_string());
         if node_ptr.is_none() {{
@@ -186,7 +199,7 @@ fn make_storage_rpc_value_from_target(entity: &str, property: &str, id_to_proper
         let ret = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ \"{property}\" ];\n
         value = ret.to_string();\n",
                 node_id = entity,
-                property = id_to_property[property]
+                property = prop
         );
 
     ret_block
@@ -258,7 +271,7 @@ fn generate_property_blocks(
                 let int_val = i64::from_ne_bytes(byte_array);                       
                 fd.unassigned_properties.push(Property::new(
                     http_headers.workload_name.to_string(), 
-                    {property},
+                    \"{property}\".to_string(),
                     int_val.to_string() 
                 ));
                 ",
@@ -275,7 +288,7 @@ fn generate_property_blocks(
                 let int_val = u64::from_ne_bytes(byte_array);                       
                 fd.unassigned_properties.push(Property::new(
                     http_headers.workload_name.to_string(), 
-                    {property},
+                    \"{property}\".to_string(),
                     int_val.to_string() 
                 ));
                 ",
@@ -298,7 +311,7 @@ fn generate_property_blocks(
                 }}
                 fd.unassigned_properties.push(Property::new(
                     http_headers.workload_name.to_string(), 
-                    {property},
+                    \"{property}\".to_string(),
                     bool_val.to_string() 
                 ));
                 ",
@@ -319,7 +332,7 @@ fn generate_property_blocks(
                 let int_val = u64::from_ne_bytes(byte_array);                       
                 fd.unassigned_properties.push(Property::new(
                     http_headers.workload_name.to_string(), 
-                    {property},
+                    \"{property}\".to_string(),
                     int_val.to_string() 
                 ));
                 ",
@@ -337,7 +350,7 @@ fn generate_property_blocks(
                 let int_val = u64::from_ne_bytes(byte_array);                       
                 fd.unassigned_properties.push(Property::new(
                     http_headers.workload_name.to_string(), 
-                    {property},
+                    \"{property}\".to_string(),
                     int_val.to_string() 
                 ));
                 ",
@@ -361,7 +374,7 @@ fn generate_property_blocks(
                         Ok(property_str_) => {{
                             fd.unassigned_properties.push(Property::new(
                                 http_headers.workload_name.to_string(), 
-                                {property},
+                                \"{property}\".to_string(),
                                 property_str_.to_string()
                             ));
                         }}

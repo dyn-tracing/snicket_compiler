@@ -135,6 +135,12 @@ fn make_trace_rpc_value(code_struct: &mut CodeStruct) {
 }
 
 fn make_storage_rpc_value_from_trace(entity: String, property: &str, id_to_property: &IndexMap<String, u64>) -> String {
+    let prop : String;
+    if id_to_property.contains_key(property) {
+        prop = id_to_property[property].to_string();
+    } else {
+        prop = property.to_string();
+    }
     format!(
     "let trace_node_index = graph_utils::get_node_with_id(&fd.trace_graph, \"{node_id}\".to_string());
     if trace_node_index.is_none() {{
@@ -144,7 +150,7 @@ fn make_storage_rpc_value_from_trace(entity: String, property: &str, id_to_prope
     let mut ret = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
     value = ret.to_string();\n",
             node_id = entity,
-            prop = id_to_property[property],
+            prop = prop,
     )
 }
 
