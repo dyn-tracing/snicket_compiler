@@ -489,7 +489,7 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
         }
     }
     // all the properties we collect
-    code_struct.request_blocks =
+    code_struct.collect_properties_blocks =
         generate_property_blocks(&query_data.properties, &scalar_udf_table, &property_to_type);
     code_struct.udf_blocks = generate_udf_blocks(
         &scalar_udf_table,
@@ -592,22 +592,18 @@ mod tests {
         assert!(!result.struct_filters.is_empty());
         let _codegen = generate_code_blocks(result, [COUNT.to_string()].to_vec());
     }
-    /*
     #[test]
     fn get_group_by() {
-        // TODO: These tests are odd, not sure what we want to test here
         let result = get_codegen_from_query(
-            "MATCH (a {}) WHERE a.node.metadata.WORKLOAD_NAME = 'productpage-v1' RETURN count(a), agg".to_string(),
+            "MATCH (a {}) WHERE a.node.metadata.WORKLOAD_NAME = 'productpage-v1' RETURN a.request.total_size, count(a.request.total_size)".to_string(),
         );
         assert!(!result.struct_filters.is_empty());
         // Do not throw an error parsing this expression.
         let _codegen = generate_code_blocks(result, [COUNT.to_string()].to_vec());
     }
-    */
 
     #[test]
     fn test_where() {
-        // TODO: These tests are odd, not sure what we want to test here
         let result = get_codegen_from_query(
             "MATCH (a) -[]-> (b)-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' AND trace.request.total_size = 1 RETURN a.request.total_size, avg(a.request.total_size)".to_string(),
         );

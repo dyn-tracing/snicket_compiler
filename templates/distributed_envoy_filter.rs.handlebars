@@ -30,7 +30,7 @@ pub fn collect_envoy_properties(
     http_headers: &HttpHeaders,
     fd: &mut FerriedData,
 ) -> Result<(), String> {
-    {{#each request_blocks}}
+    {{#each collect_properties_blocks}}
     {{{~this}}}
     {{/each}}
     return Ok(());

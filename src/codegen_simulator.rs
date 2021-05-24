@@ -293,7 +293,7 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
         }
     }
     // all the properties we collect
-    code_struct.request_blocks =
+    code_struct.collect_properties_blocks =
         generate_property_blocks(&query_data.properties, &scalar_udf_table);
     code_struct.udf_blocks = generate_udf_blocks(
         &scalar_udf_table,

@@ -87,7 +87,7 @@ pub fn collect_envoy_properties(
     fd: &mut FerriedData,
 ) {
     let mut prop_tuple: Property;
-    {{#each request_blocks}}{{{this}}} {{/each}}
+    {{#each collect_properties_blocks}}{{{this}}} {{/each}}
 }
 
 pub fn execute_udfs_and_check_trace_lvl_prop(filter: &Filter, fd: &mut FerriedData) -> bool{
