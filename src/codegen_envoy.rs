@@ -101,7 +101,7 @@ fn make_attr_filter_blocks(root_id: &str, attr_filters: &[AttributeFilter], id_t
             }
             let trace_filter_block = format!(
                 "
-                let root_node = get_node_with_id(&fd.trace_graph, \"{root_id}\".to_string()).unwrap();
+                let root_node = get_node_with_id(&fd.trace_graph, \"{root_id}\").unwrap();
                 if ! ( fd.trace_graph.node_weight(root_node).unwrap().1.contains_key(\"{prop_name}\") &&
                     fd.trace_graph.node_weight(root_node).unwrap().1[\"{prop_name}\"] == \"{value}\" ){{
                     // TODO:  replace fd
@@ -146,7 +146,7 @@ fn make_storage_rpc_value_from_trace(entity: String, property: &str, id_to_prope
         prop = property.to_string();
     }
     return format!(
-        "let trace_node_idx = get_node_with_id(&fd.trace_graph, \"{node_id}\".to_string());
+        "let trace_node_idx = get_node_with_id(&fd.trace_graph, \"{node_id}\");
         if trace_node_idx.is_none() {{
            log::error!(\"Node {node_id} not found\");
                 return None;
@@ -167,7 +167,7 @@ fn make_storage_rpc_value_from_target(entity: &str, property: &str, id_to_proper
     }
 
     let ret_block = format!(
-        "let node_ptr = get_node_with_id(target_graph, \"{node_id}\".to_string());
+        "let node_ptr = get_node_with_id(target_graph, \"{node_id}\");
         if node_ptr.is_none() {{
            log::error!(\"Node {node_id} not found\");
                 return None;
@@ -269,7 +269,7 @@ fn generate_property_blocks(
                     *place = *element;                                              
                 }}                                                                   
                 let int_val = i64::from_ne_bytes(byte_array);                       
-                fd.unassigned_properties.push(Property::new(
+                fd.unassigned_properties.insert(Property::new(
                     http_headers.workload_name.to_string(), 
                     \"{property}\".to_string(),
                     int_val.to_string() 
@@ -286,7 +286,7 @@ fn generate_property_blocks(
                     *place = *element;                                              
                 }}                                                                   
                 let int_val = u64::from_ne_bytes(byte_array);                       
-                fd.unassigned_properties.push(Property::new(
+                fd.unassigned_properties.insert(Property::new(
                     http_headers.workload_name.to_string(), 
                     \"{property}\".to_string(),
                     int_val.to_string() 
@@ -309,7 +309,7 @@ fn generate_property_blocks(
                 if int_val != 0 {{
                     bool_val = true;
                 }}
-                fd.unassigned_properties.push(Property::new(
+                fd.unassigned_properties.insert(Property::new(
                     http_headers.workload_name.to_string(), 
                     \"{property}\".to_string(),
                     bool_val.to_string() 
@@ -330,7 +330,7 @@ fn generate_property_blocks(
                     *place = *element;                                              
                 }}                                                                   
                 let int_val = u64::from_ne_bytes(byte_array);                       
-                fd.unassigned_properties.push(Property::new(
+                fd.unassigned_properties.insert(Property::new(
                     http_headers.workload_name.to_string(), 
                     \"{property}\".to_string(),
                     int_val.to_string() 
@@ -348,7 +348,7 @@ fn generate_property_blocks(
                     *place = *element;                                              
                 }}                                                                   
                 let int_val = u64::from_ne_bytes(byte_array);                       
-                fd.unassigned_properties.push(Property::new(
+                fd.unassigned_properties.insert(Property::new(
                     http_headers.workload_name.to_string(), 
                     \"{property}\".to_string(),
                     int_val.to_string() 
@@ -372,7 +372,7 @@ fn generate_property_blocks(
                     "
                      let property_str = match std::str::from_utf8(&property) {{
                         Ok(property_str_) => {{
-                            fd.unassigned_properties.push(Property::new(
+                            fd.unassigned_properties.insert(Property::new(
                                 http_headers.workload_name.to_string(), 
                                 \"{property}\".to_string(),
                                 property_str_.to_string()
@@ -408,7 +408,7 @@ fn generate_udf_blocks(
         let get_udf_vals = format!(
             "let my_{id}_value;
             let child_iterator = fd.trace_graph.neighbors_directed(
-                get_node_with_id(&fd.trace_graph, http_headers.workload_name.clone()).unwrap(),
+                get_node_with_id(&fd.trace_graph, &http_headers.workload_name).unwrap(),
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
             for child in child_iterator {{
@@ -429,7 +429,7 @@ fn generate_udf_blocks(
 
         let save_udf_vals = format!(
             "
-        let node = get_node_with_id(&fd.trace_graph, http_headers.workload_name.clone()).unwrap();
+        let node = get_node_with_id(&fd.trace_graph, &http_headers.workload_name).unwrap();
         // if we already have the property, don't add it
         if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key(\"{id}\") &&
                fd.trace_graph.node_weight(node).unwrap().1[\"{id}\"] == my_{id}_value ) {{

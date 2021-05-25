@@ -12,7 +12,7 @@ use petgraph::{Incoming, Outgoing};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 extern crate test;
 
-type SetSType = IndexMap<SetSKey, IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>>;
+pub type SetSType = IndexMap<SetSKey, IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>>;
 // -------------- Shamir Isomorphism Algorithm Helper Functions---------------
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct SetSKey {

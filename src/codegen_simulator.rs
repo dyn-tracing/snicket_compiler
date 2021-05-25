@@ -98,7 +98,7 @@ fn make_attr_filter_blocks(root_id: &str, attr_filters: &[AttributeFilter], id_t
             }
             let trace_filter_block = format!(
             "
-            let root_node = graph_utils::get_node_with_id(&fd.trace_graph, \"{root_id}\".to_string()).unwrap();
+            let root_node = graph_utils::get_node_with_id(&fd.trace_graph, \"{root_id}\").unwrap();
             if ! ( fd.trace_graph.node_weight(root_node).unwrap().1.contains_key(\"{prop_name}\") &&
                 fd.trace_graph.node_weight(root_node).unwrap().1[\"{prop_name}\"] == \"{value}\" ){{
                 // TODO:  replace fd
@@ -142,7 +142,7 @@ fn make_storage_rpc_value_from_trace(entity: String, property: &str, id_to_prope
         prop = property.to_string();
     }
     format!(
-    "let trace_node_index = graph_utils::get_node_with_id(&fd.trace_graph, \"{node_id}\".to_string());
+    "let trace_node_index = graph_utils::get_node_with_id(&fd.trace_graph, \"{node_id}\");
     if trace_node_index.is_none() {{
        log::warn!(\"Node {node_id} not found\");
             return None;
@@ -162,7 +162,7 @@ fn make_storage_rpc_value_from_target(entity: &str, property: &str, id_to_proper
         prop = property.to_string();
     }
     format!(
-    "let node_ptr = graph_utils::get_node_with_id(target_graph, \"{node_id}\".to_string());
+    "let node_ptr = graph_utils::get_node_with_id(target_graph, \"{node_id}\");
     if node_ptr.is_none() {{
        log::warn!(\"Node {node_id} not found\");
             return None;
@@ -234,7 +234,7 @@ fn generate_property_blocks(
             property = id_to_property[&property.to_dot_string()],
             property_name = property.to_dot_string()
         );
-        let insert_hdr_block = "fd.unassigned_properties.push(prop_tuple);".to_string();
+        let insert_hdr_block = "fd.unassigned_properties.insert(prop_tuple);".to_string();
         property_blocks.push(get_prop_block);
         property_blocks.push(insert_hdr_block);
     }
@@ -258,7 +258,7 @@ fn generate_udf_blocks(
         let get_udf_vals = format!(
             "let my_{id}_value;
             let child_iterator = fd.trace_graph.neighbors_directed(
-                graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap().clone()).unwrap(),
+                graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap()).unwrap(),
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
             for child in child_iterator {{
@@ -278,7 +278,7 @@ fn generate_udf_blocks(
         udf_blocks.push(get_udf_vals);
 
         let save_udf_vals = format!("
-        let node = graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap().to_string()).unwrap();
+        let node = graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap()).unwrap();
         // if we already have the property, don't add it
         if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key(\"{id}\") &&
                fd.trace_graph.node_weight(node).unwrap().1[\"{id}\"] == my_{id}_value ) {{
