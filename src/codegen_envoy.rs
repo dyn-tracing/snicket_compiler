@@ -370,7 +370,7 @@ fn generate_property_blocks(
                 // when in doubt, it's a string
                 let cast_block = format!(
                     "
-                     let property_str = match std::str::from_utf8(&property) {{
+                     match std::str::from_utf8(&property) {{
                         Ok(property_str_) => {{
                             fd.unassigned_properties.insert(Property::new(
                                 http_headers.workload_name.to_string(), 

@@ -1,14 +1,13 @@
 // ---------------------- Generated Functions ----------------------------
 
 use super::filter_base::HttpHeaders;
-use super::filter_base::FerriedData;
-use super::filter_base::join_str;
 use proxy_wasm::traits::Context;
 use indexmap::IndexMap;
 use petgraph::graph::{Graph, NodeIndex};
 use utils::graph::graph_utils::generate_target_graph;
 use utils::graph::graph_utils::get_node_with_id;
 use utils::graph::serde::Property;
+use utils::graph::serde::FerriedData;
 
 // insert UDFs here
 {{#each scalar_udf_table}}{{{this.func_impl}}}{{/each}}
