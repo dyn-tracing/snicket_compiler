@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
 pub struct Property {
     pub entity: String,
-    pub property_name: String,
+    pub property_name: u64,
     pub value: String,
 }
 
@@ -19,12 +19,12 @@ impl Property {
     pub fn default() -> Property {
         Property {
             entity: String::new(),
-            property_name: String::new(),
+            property_name: 0,
             value: String::new(),
         }
     }
 
-    pub fn new(entity: String, property_name: String, value: String) -> Property {
+    pub fn new(entity: String, property_name: u64, value: String) -> Property {
         Property {
             entity,
             property_name,
@@ -37,7 +37,7 @@ impl Property {
 pub struct FerriedData {
     pub set_s: Option<SetSType>,
     pub found_match: bool,
-    pub trace_graph: Graph<(String, IndexMap<String, String>), ()>,
+    pub trace_graph: Graph<(String, IndexMap<u64, String>), ()>,
     pub unassigned_properties: IndexSet<Property>, // entity property value
 }
 
@@ -140,7 +140,7 @@ impl FerriedData {
 
 
 pub fn remove_assigned_properties(unassigned_properties: &mut IndexSet<Property>,
-                                  graph: &Graph<(String, IndexMap<String, String>), ()>) {
+                                  graph: &Graph<(String, IndexMap<u64, String>), ()>) {
     unassigned_properties.retain(|x|
         graph_utils::get_node_with_id(graph, &x.entity) == None
     );
