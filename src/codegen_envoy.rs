@@ -1,5 +1,5 @@
-use super::codegen_common::parse_udf;
 use super::codegen_common::assign_id_to_property;
+use super::codegen_common::parse_udf;
 use super::codegen_common::AggregationUdf;
 use super::codegen_common::CodeStruct;
 use super::codegen_common::ScalarOrAggregationUdf;
@@ -22,7 +22,7 @@ use indexmap::IndexSet;
 fn make_struct_filter_blocks(
     attr_filters: &[AttributeFilter],
     struct_filters: &[StructuralFilter],
-    id_to_property: &IndexMap<String, u64>
+    id_to_property: &IndexMap<String, u64>,
 ) -> Vec<String> {
     let mut target_blocks = Vec::new();
     for struct_filter in struct_filters {
@@ -79,7 +79,11 @@ fn make_struct_filter_blocks(
     target_blocks
 }
 
-fn make_attr_filter_blocks(root_id: &str, attr_filters: &[AttributeFilter], id_to_property: &IndexMap<String, u64>) -> Vec<String> {
+fn make_attr_filter_blocks(
+    root_id: &str,
+    attr_filters: &[AttributeFilter],
+    id_to_property: &IndexMap<String, u64>,
+) -> Vec<String> {
     // TODO: does the numbering of properties work here?
     // for everything except trace level attributes, the UDF/envoy property
     // collection will make the attribute filtering happen at the same time as
@@ -116,7 +120,11 @@ fn make_attr_filter_blocks(root_id: &str, attr_filters: &[AttributeFilter], id_t
                      }}
                      return false;
                 }}
-                ", root_id=root_id, prop_name=id_to_property[&prop], value=attr_filter.value);
+                ",
+                root_id = root_id,
+                prop_name = id_to_property[&prop],
+                value = attr_filter.value
+            );
             trace_lvl_prop_blocks.push(trace_filter_block);
         }
     }
@@ -138,7 +146,11 @@ fn make_trace_rpc_value(code_struct: &mut CodeStruct) {
     code_struct.response_blocks.push(ret_block);
 }
 
-fn make_storage_rpc_value_from_trace(entity: String, property: &str, id_to_property: &IndexMap<String, u64>) -> String {
+fn make_storage_rpc_value_from_trace(
+    entity: String,
+    property: &str,
+    id_to_property: &IndexMap<String, u64>,
+) -> String {
     format!(
         "let trace_node_idx = get_node_with_id(&fd.trace_graph, \"{node_id}\");
         if trace_node_idx.is_none() {{
@@ -152,7 +164,11 @@ fn make_storage_rpc_value_from_trace(entity: String, property: &str, id_to_prope
     )
 }
 
-fn make_storage_rpc_value_from_target(entity: &str, property: &str, id_to_property: &IndexMap<String, u64>) -> String {
+fn make_storage_rpc_value_from_target(
+    entity: &str,
+    property: &str,
+    id_to_property: &IndexMap<String, u64>,
+) -> String {
     format!(
         "let node_ptr = get_node_with_id(target_graph, \"{node_id}\");
         if node_ptr.is_none() {{
@@ -185,19 +201,29 @@ fn make_storage_rpc_value_from_target(entity: &str, property: &str, id_to_proper
         }}
         let ret = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ {property} ];\n
         value = ret.to_string();\n",
-                node_id = entity,
-                property = id_to_property[property],
-                property_name = property
-        )
+        node_id = entity,
+        property = id_to_property[property],
+        property_name = property
+    )
 }
 
-fn make_return_block(entity_ref: &PropertyOrUDF, query_data: &VisitorResults, id_to_property: &IndexMap<String, u64>) -> String {
+fn make_return_block(
+    entity_ref: &PropertyOrUDF,
+    query_data: &VisitorResults,
+    id_to_property: &IndexMap<String, u64>,
+) -> String {
     match entity_ref {
         PropertyOrUDF::Property(prop) => match prop.parent.as_str() {
-            "trace" => {
-                make_storage_rpc_value_from_trace(query_data.root_id.clone(), &prop.to_dot_string(), id_to_property)
-            }
-            _ => make_storage_rpc_value_from_target(&prop.parent, &prop.to_dot_string(), id_to_property),
+            "trace" => make_storage_rpc_value_from_trace(
+                query_data.root_id.clone(),
+                &prop.to_dot_string(),
+                id_to_property,
+            ),
+            _ => make_storage_rpc_value_from_target(
+                &prop.parent,
+                &prop.to_dot_string(),
+                id_to_property,
+            ),
         },
         PropertyOrUDF::UdfCall(call) => {
             // Because of quirky design we need to get the first arg
@@ -206,14 +232,22 @@ fn make_return_block(entity_ref: &PropertyOrUDF, query_data: &VisitorResults, id
             }
             let node = &call.args[0];
             match node.as_str() {
-                "trace" => make_storage_rpc_value_from_trace(query_data.root_id.clone(), &call.id, id_to_property),
+                "trace" => make_storage_rpc_value_from_trace(
+                    query_data.root_id.clone(),
+                    &call.id,
+                    id_to_property,
+                ),
                 _ => make_storage_rpc_value_from_target(&node, &call.id, id_to_property),
             }
         }
     }
 }
 
-fn make_aggr_block(agg: &Aggregate, query_data: &VisitorResults, id_to_property: &IndexMap<String, u64>) -> String {
+fn make_aggr_block(
+    agg: &Aggregate,
+    query_data: &VisitorResults,
+    id_to_property: &IndexMap<String, u64>,
+) -> String {
     let mut to_return = String::new();
     for arg in &agg.args {
         to_return.push_str(&make_return_block(&arg, query_data, id_to_property));
@@ -225,7 +259,7 @@ fn generate_property_blocks(
     properties: &IndexSet<Property>,
     scalar_udf_table: &IndexMap<String, ScalarUdf>,
     property_to_type: &IndexMap<&str, &str>,
-    id_to_property: &IndexMap<String, u64>
+    id_to_property: &IndexMap<String, u64>,
 ) -> Vec<String> {
     // TODO:  here, we can have duplicates because they have different entities,
     // but we still just need to collect one version of the property
@@ -497,23 +531,36 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
     code_struct.id_to_property = assign_id_to_property(&query_data.properties, &scalar_udf_table);
 
     // all the properties we collect
-    code_struct.collect_properties_blocks =
-        generate_property_blocks(&query_data.properties, &scalar_udf_table, 
-            &property_to_type, &code_struct.id_to_property);
+    code_struct.collect_properties_blocks = generate_property_blocks(
+        &query_data.properties,
+        &scalar_udf_table,
+        &property_to_type,
+        &code_struct.id_to_property,
+    );
     code_struct.udf_blocks = generate_udf_blocks(
         &scalar_udf_table,
         &aggregation_udf_table,
         &query_data.udf_calls,
         &code_struct.id_to_property,
     );
-    code_struct.target_blocks =
-        make_struct_filter_blocks(&query_data.attr_filters, &query_data.struct_filters, &code_struct.id_to_property);
-    code_struct.trace_lvl_prop_blocks =
-        make_attr_filter_blocks(&query_data.root_id, &query_data.attr_filters, &code_struct.id_to_property);
+    code_struct.target_blocks = make_struct_filter_blocks(
+        &query_data.attr_filters,
+        &query_data.struct_filters,
+        &code_struct.id_to_property,
+    );
+    code_struct.trace_lvl_prop_blocks = make_attr_filter_blocks(
+        &query_data.root_id,
+        &query_data.attr_filters,
+        &code_struct.id_to_property,
+    );
 
     let resp_block = match query_data.return_expr {
-        IrReturnEnum::PropertyOrUDF(ref entity_ref) => make_return_block(entity_ref, &query_data, &code_struct.id_to_property),
-        IrReturnEnum::Aggregate(ref agg) => make_aggr_block(&agg, &query_data, &code_struct.id_to_property),
+        IrReturnEnum::PropertyOrUDF(ref entity_ref) => {
+            make_return_block(entity_ref, &query_data, &code_struct.id_to_property)
+        }
+        IrReturnEnum::Aggregate(ref agg) => {
+            make_aggr_block(&agg, &query_data, &code_struct.id_to_property)
+        }
     };
     code_struct.response_blocks.push(resp_block);
     code_struct.aggregation_udf_table = aggregation_udf_table;

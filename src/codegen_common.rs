@@ -1,10 +1,10 @@
+use super::ir::Property;
 use indexmap::IndexMap;
+use indexmap::IndexSet;
 use regex::Regex;
 use serde::Serialize;
 use std::str::FromStr;
 use strum_macros::EnumString;
-use super::ir::Property;
-use indexmap::IndexSet;
 
 /********************************/
 // Helper structs
@@ -126,11 +126,12 @@ pub fn parse_udf(udf: String) -> ScalarOrAggregationUdf {
     std::process::exit(1);
 }
 
-pub fn assign_id_to_property(properties: &IndexSet<Property>,
-                             scalar_udfs: &IndexMap<String, ScalarUdf>
+pub fn assign_id_to_property(
+    properties: &IndexSet<Property>,
+    scalar_udfs: &IndexMap<String, ScalarUdf>,
 ) -> IndexMap<String, u64> {
     let mut id_to_property = IndexMap::new();
-    let mut i : u64 = 0;
+    let mut i: u64 = 0;
     id_to_property.insert("node.metadata.WORKLOAD_NAME".to_string(), i);
     i += 1;
     for property in properties {
