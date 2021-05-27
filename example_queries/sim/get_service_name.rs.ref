@@ -74,18 +74,18 @@ fn put_ferried_data_in_hdrs(fd: &mut FerriedData, hdr: &mut IndexMap<String,Stri
 pub fn create_target_graph() -> Graph<
     (
         std::string::String,
-        IndexMap<std::string::String, std::string::String>,
+        IndexMap<u64, std::string::String>,
     ),
     (),
 > {
      let vertices = vec!(  "a".to_string(), "b".to_string(), "c".to_string(),  );
          let edges = vec!(   ("a".to_string(), "b".to_string() ),   ("b".to_string(), "c".to_string() ),   );
-         let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
+         let mut ids_to_properties: IndexMap<String, IndexMap<u64, String>> = IndexMap::new();
          ids_to_properties.insert("a".to_string(), IndexMap::new());
          ids_to_properties.insert("b".to_string(), IndexMap::new());
          ids_to_properties.insert("c".to_string(), IndexMap::new());
          let mut c_hashmap = ids_to_properties.get_mut("c").unwrap();
-         c_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "ratings-v1".to_string());
+         c_hashmap.insert(0, "ratings-v1".to_string());
          return graph_utils::generate_target_graph(vertices, edges, ids_to_properties);
  
 
@@ -97,12 +97,12 @@ pub fn collect_envoy_properties(
 ) {
     let mut prop_tuple: Property;
     prop_tuple = Property::new(filter.whoami.as_ref().unwrap().to_string(),
-                                                   "node.metadata.WORKLOAD_NAME".to_string(),
+                                                   0,
                                                    filter.filter_state["node.metadata.WORKLOAD_NAME"].clone());
-                                             fd.unassigned_properties.push(prop_tuple); prop_tuple = Property::new(filter.whoami.as_ref().unwrap().to_string(),
-                                                   "node.metadata.WORKLOAD_NAME".to_string(),
+                                             fd.unassigned_properties.insert(prop_tuple); prop_tuple = Property::new(filter.whoami.as_ref().unwrap().to_string(),
+                                                   0,
                                                    filter.filter_state["node.metadata.WORKLOAD_NAME"].clone());
-                                             fd.unassigned_properties.push(prop_tuple); 
+                                             fd.unassigned_properties.insert(prop_tuple); 
 }
 
 pub fn execute_udfs_and_check_trace_lvl_prop(filter: &Filter, fd: &mut FerriedData) -> bool{
@@ -118,7 +118,7 @@ pub fn get_value_for_storage(
     target_graph: &Graph<                                                       
         (                                                                       
             std::string::String,                                                
-            IndexMap<std::string::String, std::string::String>,                 
+            IndexMap<u64, std::string::String>,                 
         ),                                                                      
         (),                                                    
     >,                                                                          
@@ -126,7 +126,7 @@ pub fn get_value_for_storage(
     fd: &FerriedData,                                                  
 ) -> Option<String> {
     let mut value : String;
-    let node_ptr = graph_utils::get_node_with_id(target_graph, "a".to_string());
+    let node_ptr = graph_utils::get_node_with_id(target_graph, "a");
     if node_ptr.is_none() {
        log::warn!("Node a not found");
             return None;
@@ -138,11 +138,11 @@ pub fn get_value_for_storage(
             break;
         }
     }
-    if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("node.metadata.WORKLOAD_NAME") {
+    if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key(&0) {
         // we have not yet collected the return property or have a mapping error
         return None;
     }
-    let mut ret = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "node.metadata.WORKLOAD_NAME" ];
+    let mut ret = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ 0 ];
 
     value = ret.to_string();
  
@@ -153,7 +153,7 @@ pub fn get_value_for_storage(
 #[derive(Clone, Debug)]
 pub struct Filter {
     pub whoami: Option<String>,
-    pub target_graph: Option<Graph<(String, IndexMap<String, String>), ()>>,
+    pub target_graph: Option<Graph<(String, IndexMap<u64, String>), ()>>,
     pub filter_state: IndexMap<String, String>,
     pub envoy_shared_data: IndexMap<String, String>, // trace ID to stored ferried data as string 
     pub collected_properties: Vec<String>, //properties to collect
@@ -226,37 +226,7 @@ impl Filter {
             Err(e) => { log::error!("could not parse envoy shared data: {0}\n", e); return; }
         }
 
-
-        // 2. Merge the graphs by simply adding it - later, when we merge, we will
-        //    make a root
-
-        // add node
-        for node in data.trace_graph.node_indices() {
-            stored_data.trace_graph.add_node(data.trace_graph.node_weight(node).unwrap().clone());
-        }
-        // add edges
-        for edge in data.trace_graph.edge_indices() {
-            match data.trace_graph.edge_endpoints(edge) {
-                Some((edge0, edge1)) => {
-                    let edge0_weight = &data.trace_graph.node_weight(edge0).unwrap().0;
-                    let edge1_weight = &data.trace_graph.node_weight(edge1).unwrap().0;
-                    let edge0_in_stored_graph = graph_utils::get_node_with_id(&stored_data.trace_graph, edge0_weight.to_string()).unwrap();
-                    let edge1_in_stored_graph = graph_utils::get_node_with_id(&stored_data.trace_graph, edge1_weight.to_string()).unwrap();
-                    stored_data.trace_graph.add_edge(edge0_in_stored_graph, edge1_in_stored_graph, ());
-                }
-                None => {
-                    log::error!("no edge endpoints found \n");
-                    return;
-                }
-            }
-        }
-
-        // 3. merge unassigned properties
-        //    these are properties we have collected but are not yet in the graph
-        stored_data.unassigned_properties.append(&mut data.unassigned_properties);
-        stored_data.unassigned_properties.sort_unstable();
-        stored_data.unassigned_properties.dedup();
-        stored_data.assign_properties();
+        stored_data.merge(data);        
 
         match serde_json::to_string(&stored_data) {
             Ok(stored_data_string) => {
@@ -272,7 +242,7 @@ impl Filter {
     pub fn merge_headers(&mut self, uid: u64, mut new_rpc_headers: IndexMap<String, String>) -> IndexMap<String, String> {
         let uid_str = uid.to_string();
         let mut my_indexmap = IndexMap::new();
-        my_indexmap.insert("node.metadata.WORKLOAD_NAME".to_string(), self.whoami.as_ref().unwrap().clone());
+        my_indexmap.insert(0, self.whoami.as_ref().unwrap().clone());
 
         if self.envoy_shared_data.contains_key(&uid_str) {
             match serde_json::from_str(&self.envoy_shared_data[&uid_str]) {

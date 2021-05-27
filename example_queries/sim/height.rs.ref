@@ -74,12 +74,12 @@ fn put_ferried_data_in_hdrs(fd: &mut FerriedData, hdr: &mut IndexMap<String,Stri
 // mid_func: mid_height
 // id: height
 
-fn leaf_height(_graph: &Graph<(String, IndexMap<String, String>), ()>) -> u32 {
+fn leaf_height(_graph: &Graph<(String, IndexMap<u64, String>), ()>) -> u32 {
     return 0;
 }
 
 // TODO:  must children's responses always be in string form?  can we generalize?
-fn mid_height(_graph: &Graph<(String, IndexMap<String, String>), ()>, children_responses: Vec<String>) -> u32 {
+fn mid_height(_graph: &Graph<(String, IndexMap<u64, String>), ()>, children_responses: Vec<String>) -> u32 {
     let mut max = 0;
     for response in children_responses {
         let response_as_u32 = response.parse::<u32>();
@@ -95,13 +95,13 @@ fn mid_height(_graph: &Graph<(String, IndexMap<String, String>), ()>, children_r
 pub fn create_target_graph() -> Graph<
     (
         std::string::String,
-        IndexMap<std::string::String, std::string::String>,
+        IndexMap<u64, std::string::String>,
     ),
     (),
 > {
      let vertices = vec!(  "a".to_string(), "b".to_string(), "c".to_string(),  );
          let edges = vec!(   ("a".to_string(), "b".to_string() ),   ("b".to_string(), "c".to_string() ),   );
-         let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
+         let mut ids_to_properties: IndexMap<String, IndexMap<u64, String>> = IndexMap::new();
          ids_to_properties.insert("a".to_string(), IndexMap::new());
          ids_to_properties.insert("b".to_string(), IndexMap::new());
          ids_to_properties.insert("c".to_string(), IndexMap::new());
@@ -121,11 +121,11 @@ pub fn collect_envoy_properties(
 pub fn execute_udfs_and_check_trace_lvl_prop(filter: &Filter, fd: &mut FerriedData) -> bool{
     let my_height_value;
             let child_iterator = fd.trace_graph.neighbors_directed(
-                graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap().clone()).unwrap(),
+                graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap()).unwrap(),
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
             for child in child_iterator {
-                child_values.push(fd.trace_graph.node_weight(child).unwrap().1["height"].clone());
+                child_values.push(fd.trace_graph.node_weight(child).unwrap().1[&1].clone());
             }
             if child_values.len() == 0 {
                 my_height_value = leaf_height(&fd.trace_graph).to_string();
@@ -134,12 +134,12 @@ pub fn execute_udfs_and_check_trace_lvl_prop(filter: &Filter, fd: &mut FerriedDa
             }
 
          
-        let node = graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap().to_string()).unwrap();
+        let node = graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap()).unwrap();
         // if we already have the property, don't add it
-        if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key("height") &&
-               fd.trace_graph.node_weight(node).unwrap().1["height"] == my_height_value ) {
+        if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key(&1) &&
+               fd.trace_graph.node_weight(node).unwrap().1[1] == my_height_value ) {
            fd.trace_graph.node_weight_mut(node).unwrap().1.insert(
-               "height".to_string(), my_height_value);
+               1, my_height_value);
         }
          
     let root_id = "productpage-v1";
@@ -153,7 +153,7 @@ pub fn get_value_for_storage(
     target_graph: &Graph<                                                       
         (                                                                       
             std::string::String,                                                
-            IndexMap<std::string::String, std::string::String>,                 
+            IndexMap<u64, std::string::String>,                 
         ),                                                                      
         (),                                                    
     >,                                                                          
@@ -161,7 +161,7 @@ pub fn get_value_for_storage(
     fd: &FerriedData,                                                  
 ) -> Option<String> {
     let mut value : String;
-    let node_ptr = graph_utils::get_node_with_id(target_graph, "a".to_string());
+    let node_ptr = graph_utils::get_node_with_id(target_graph, "a");
     if node_ptr.is_none() {
        log::warn!("Node a not found");
             return None;
@@ -173,11 +173,11 @@ pub fn get_value_for_storage(
             break;
         }
     }
-    if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key("height") {
+    if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key(&1) {
         // we have not yet collected the return property or have a mapping error
         return None;
     }
-    let mut ret = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ "height" ];
+    let mut ret = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ 1 ];
 
     value = ret.to_string();
  
@@ -188,7 +188,7 @@ pub fn get_value_for_storage(
 #[derive(Clone, Debug)]
 pub struct Filter {
     pub whoami: Option<String>,
-    pub target_graph: Option<Graph<(String, IndexMap<String, String>), ()>>,
+    pub target_graph: Option<Graph<(String, IndexMap<u64, String>), ()>>,
     pub filter_state: IndexMap<String, String>,
     pub envoy_shared_data: IndexMap<String, String>, // trace ID to stored ferried data as string 
     pub collected_properties: Vec<String>, //properties to collect
@@ -261,37 +261,7 @@ impl Filter {
             Err(e) => { log::error!("could not parse envoy shared data: {0}\n", e); return; }
         }
 
-
-        // 2. Merge the graphs by simply adding it - later, when we merge, we will
-        //    make a root
-
-        // add node
-        for node in data.trace_graph.node_indices() {
-            stored_data.trace_graph.add_node(data.trace_graph.node_weight(node).unwrap().clone());
-        }
-        // add edges
-        for edge in data.trace_graph.edge_indices() {
-            match data.trace_graph.edge_endpoints(edge) {
-                Some((edge0, edge1)) => {
-                    let edge0_weight = &data.trace_graph.node_weight(edge0).unwrap().0;
-                    let edge1_weight = &data.trace_graph.node_weight(edge1).unwrap().0;
-                    let edge0_in_stored_graph = graph_utils::get_node_with_id(&stored_data.trace_graph, edge0_weight.to_string()).unwrap();
-                    let edge1_in_stored_graph = graph_utils::get_node_with_id(&stored_data.trace_graph, edge1_weight.to_string()).unwrap();
-                    stored_data.trace_graph.add_edge(edge0_in_stored_graph, edge1_in_stored_graph, ());
-                }
-                None => {
-                    log::error!("no edge endpoints found \n");
-                    return;
-                }
-            }
-        }
-
-        // 3. merge unassigned properties
-        //    these are properties we have collected but are not yet in the graph
-        stored_data.unassigned_properties.append(&mut data.unassigned_properties);
-        stored_data.unassigned_properties.sort_unstable();
-        stored_data.unassigned_properties.dedup();
-        stored_data.assign_properties();
+        stored_data.merge(data);        
 
         match serde_json::to_string(&stored_data) {
             Ok(stored_data_string) => {
@@ -307,7 +277,7 @@ impl Filter {
     pub fn merge_headers(&mut self, uid: u64, mut new_rpc_headers: IndexMap<String, String>) -> IndexMap<String, String> {
         let uid_str = uid.to_string();
         let mut my_indexmap = IndexMap::new();
-        my_indexmap.insert("node.metadata.WORKLOAD_NAME".to_string(), self.whoami.as_ref().unwrap().clone());
+        my_indexmap.insert(0, self.whoami.as_ref().unwrap().clone());
 
         if self.envoy_shared_data.contains_key(&uid_str) {
             match serde_json::from_str(&self.envoy_shared_data[&uid_str]) {

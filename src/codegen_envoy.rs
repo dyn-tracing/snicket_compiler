@@ -42,7 +42,7 @@ fn make_struct_filter_blocks(
         }
         target_blocks.push(" );\n".to_string());
 
-        let ids_to_prop_block = "        let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();\n".to_string();
+        let ids_to_prop_block = "        let mut ids_to_properties: IndexMap<String, IndexMap<u64, String>> = IndexMap::new();\n".to_string();
         target_blocks.push(ids_to_prop_block);
 
         for vertex in &struct_filter.vertices {
@@ -63,7 +63,7 @@ fn make_struct_filter_blocks(
                     node = property_filter.node
                 );
                 target_blocks.push(get_hashmap);
-                let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
+                let fill_in_hashmap = format!("        {node}_hashmap.insert({property_name}, \"{property_value}\".to_string());\n",
                                                    node=property_filter.node,
                                                    property_name=id_to_property[&property_name_without_period],
                                                    property_value=property_filter.value);
@@ -102,8 +102,8 @@ fn make_attr_filter_blocks(root_id: &str, attr_filters: &[AttributeFilter], id_t
             let trace_filter_block = format!(
                 "
                 let root_node = get_node_with_id(&fd.trace_graph, \"{root_id}\").unwrap();
-                if ! ( fd.trace_graph.node_weight(root_node).unwrap().1.contains_key(\"{prop_name}\") &&
-                    fd.trace_graph.node_weight(root_node).unwrap().1[\"{prop_name}\"] == \"{value}\" ){{
+                if ! ( fd.trace_graph.node_weight(root_node).unwrap().1.contains_key({prop_name}) &&
+                    fd.trace_graph.node_weight(root_node).unwrap().1[{prop_name}] == \"{value}\" ){{
                     // TODO:  replace fd
                     match serde_json::to_string(&fd) {{
                         Ok(fd_str) => {{
@@ -139,34 +139,21 @@ fn make_trace_rpc_value(code_struct: &mut CodeStruct) {
 }
 
 fn make_storage_rpc_value_from_trace(entity: String, property: &str, id_to_property: &IndexMap<String, u64>) -> String {
-    let prop : String;
-    if id_to_property.contains_key(property) {
-        prop = id_to_property[property].to_string();
-    } else {
-        prop = property.to_string();
-    }
-    return format!(
+    format!(
         "let trace_node_idx = get_node_with_id(&fd.trace_graph, \"{node_id}\");
         if trace_node_idx.is_none() {{
            log::error!(\"Node {node_id} not found\");
                 return None;
         }}
-        let ret = &fd.trace_graph.node_weight(trace_node_idx.unwrap()).unwrap().1[\"{prop}\"];\n
+        let ret = &fd.trace_graph.node_weight(trace_node_idx.unwrap()).unwrap().1[{prop}];\n
         value = ret.to_string();\n",
         node_id = entity,
-        prop = prop
-    );
+        prop = id_to_property[property]
+    )
 }
 
 fn make_storage_rpc_value_from_target(entity: &str, property: &str, id_to_property: &IndexMap<String, u64>) -> String {
-    let prop : String;
-    if id_to_property.contains_key(property) {
-        prop = id_to_property[property].to_string();
-    } else {
-        prop = property.to_string();
-    }
-
-    let ret_block = format!(
+    format!(
         "let node_ptr = get_node_with_id(target_graph, \"{node_id}\");
         if node_ptr.is_none() {{
            log::error!(\"Node {node_id} not found\");
@@ -190,19 +177,18 @@ fn make_storage_rpc_value_from_target(entity: &str, property: &str, id_to_proper
             .node_weight(trace_node_idx)
             .unwrap()
             .1
-            .contains_key(\"{property}\")
+            .contains_key(&{property})
         {{
             // we have not yet collected the return property
-            log::error!(\"Missing return property {property}\");
+            log::error!(\"Missing return property {property_name}\");
             return None;
         }}
-        let ret = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ \"{property}\" ];\n
+        let ret = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ {property} ];\n
         value = ret.to_string();\n",
                 node_id = entity,
-                property = prop
-        );
-
-    ret_block
+                property = id_to_property[property],
+                property_name = property
+        )
 }
 
 fn make_return_block(entity_ref: &PropertyOrUDF, query_data: &VisitorResults, id_to_property: &IndexMap<String, u64>) -> String {
@@ -271,7 +257,7 @@ fn generate_property_blocks(
                 let int_val = i64::from_ne_bytes(byte_array);                       
                 fd.unassigned_properties.insert(Property::new(
                     http_headers.workload_name.to_string(), 
-                    \"{property}\".to_string(),
+                    {property},
                     int_val.to_string() 
                 ));
                 ",
@@ -288,7 +274,7 @@ fn generate_property_blocks(
                 let int_val = u64::from_ne_bytes(byte_array);                       
                 fd.unassigned_properties.insert(Property::new(
                     http_headers.workload_name.to_string(), 
-                    \"{property}\".to_string(),
+                    {property},
                     int_val.to_string() 
                 ));
                 ",
@@ -311,7 +297,7 @@ fn generate_property_blocks(
                 }}
                 fd.unassigned_properties.insert(Property::new(
                     http_headers.workload_name.to_string(), 
-                    \"{property}\".to_string(),
+                    {property},
                     bool_val.to_string() 
                 ));
                 ",
@@ -332,7 +318,7 @@ fn generate_property_blocks(
                 let int_val = u64::from_ne_bytes(byte_array);                       
                 fd.unassigned_properties.insert(Property::new(
                     http_headers.workload_name.to_string(), 
-                    \"{property}\".to_string(),
+                    {property},
                     int_val.to_string() 
                 ));
                 ",
@@ -350,7 +336,7 @@ fn generate_property_blocks(
                 let int_val = u64::from_ne_bytes(byte_array);                       
                 fd.unassigned_properties.insert(Property::new(
                     http_headers.workload_name.to_string(), 
-                    \"{property}\".to_string(),
+                    {property},
                     int_val.to_string() 
                 ));
                 ",
@@ -374,7 +360,7 @@ fn generate_property_blocks(
                         Ok(property_str_) => {{
                             fd.unassigned_properties.insert(Property::new(
                                 http_headers.workload_name.to_string(), 
-                                \"{property}\".to_string(),
+                                {property},
                                 property_str_.to_string()
                             ));
                         }}
@@ -394,6 +380,7 @@ fn generate_udf_blocks(
     scalar_udf_table: &IndexMap<String, ScalarUdf>,
     aggregation_udf_table: &IndexMap<String, AggregationUdf>,
     udf_calls: &IndexSet<UdfCall>,
+    id_to_property: &IndexMap<String, u64>,
 ) -> Vec<String> {
     let mut udf_blocks = Vec::new();
     for call in udf_calls {
@@ -406,22 +393,23 @@ fn generate_udf_blocks(
             std::process::exit(1);
         }
         let get_udf_vals = format!(
-            "let my_{id}_value;
+            "let my_{name}_value;
             let child_iterator = fd.trace_graph.neighbors_directed(
                 get_node_with_id(&fd.trace_graph, &http_headers.workload_name).unwrap(),
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
             for child in child_iterator {{
-                child_values.push(fd.trace_graph.node_weight(child).unwrap().1[\"{id}\"].clone());
+                child_values.push(fd.trace_graph.node_weight(child).unwrap().1[{id}].clone());
             }}
             if child_values.len() == 0 {{
-                my_{id}_value = {leaf_func}(&fd.trace_graph).to_string();
+                my_{name}_value = {leaf_func}(&fd.trace_graph).to_string();
             }} else {{
-                my_{id}_value = {mid_func}(&fd.trace_graph, child_values).to_string();
+                my_{name}_value = {mid_func}(&fd.trace_graph, child_values).to_string();
             }}
 
         ",
-            id = call.id,
+            id = id_to_property[&call.id],
+            name = call.id,
             leaf_func = scalar_udf_table[&call.id].leaf_func,
             mid_func = scalar_udf_table[&call.id].mid_func
         );
@@ -431,13 +419,14 @@ fn generate_udf_blocks(
             "
         let node = get_node_with_id(&fd.trace_graph, &http_headers.workload_name).unwrap();
         // if we already have the property, don't add it
-        if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key(\"{id}\") &&
-               fd.trace_graph.node_weight(node).unwrap().1[\"{id}\"] == my_{id}_value ) {{
+        if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key(&{id}) &&
+               fd.trace_graph.node_weight(node).unwrap().1[{id}] == my_{name}_value ) {{
            fd.trace_graph.node_weight_mut(node).unwrap().1.insert(
-               \"{id}\".to_string(), my_{id}_value);
+               {id}, my_{name}_value);
         }}
         ",
-            id = call.id,
+            id = id_to_property[&call.id],
+            name = call.id
         );
         udf_blocks.push(save_udf_vals);
     }
@@ -491,13 +480,11 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
     .cloned()
     .collect();
     let mut code_struct = CodeStruct::new(&query_data.root_id);
-    code_struct.id_to_property = assign_id_to_property(&query_data.properties);
 
     let mut scalar_udf_table: IndexMap<String, ScalarUdf> = IndexMap::new();
     // where we store udf implementations
     let mut aggregation_udf_table: IndexMap<String, AggregationUdf> = IndexMap::new();
     for udf_path in udf_paths {
-        log::debug!("UDF: {:?}", udf_path);
         match parse_udf(udf_path) {
             ScalarOrAggregationUdf::ScalarUdf(udf) => {
                 scalar_udf_table.insert(udf.id.clone(), udf);
@@ -507,6 +494,8 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
             }
         }
     }
+    code_struct.id_to_property = assign_id_to_property(&query_data.properties, &scalar_udf_table);
+
     // all the properties we collect
     code_struct.collect_properties_blocks =
         generate_property_blocks(&query_data.properties, &scalar_udf_table, 
@@ -515,6 +504,7 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
         &scalar_udf_table,
         &aggregation_udf_table,
         &query_data.udf_calls,
+        &code_struct.id_to_property,
     );
     code_struct.target_blocks =
         make_struct_filter_blocks(&query_data.attr_filters, &query_data.struct_filters, &code_struct.id_to_property);

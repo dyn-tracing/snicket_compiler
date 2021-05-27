@@ -32,7 +32,7 @@ fn put_ferried_data_in_hdrs(fd: &mut FerriedData, hdr: &mut IndexMap<String,Stri
 pub fn create_target_graph() -> Graph<
     (
         std::string::String,
-        IndexMap<std::string::String, std::string::String>,
+        IndexMap<u64, std::string::String>,
     ),
     (),
 > {
@@ -62,7 +62,7 @@ pub fn get_value_for_storage(
     target_graph: &Graph<
         (
             std::string::String,
-            IndexMap<std::string::String, std::string::String>,
+            IndexMap<u64, std::string::String>,
         ),
         (),
     >,
@@ -78,7 +78,7 @@ pub fn get_value_for_storage(
 #[derive(Clone, Debug)]
 pub struct Filter {
     pub whoami: Option<String>,
-    pub target_graph: Option<Graph<(String, IndexMap<String, String>), ()>>,
+    pub target_graph: Option<Graph<(String, IndexMap<u64, String>), ()>>,
     pub filter_state: IndexMap<String, String>,
     pub envoy_shared_data: IndexMap<String, String>, // trace ID to stored ferried data as string 
     pub collected_properties: Vec<String>, //properties to collect
@@ -165,7 +165,7 @@ impl Filter {
     pub fn merge_headers(&mut self, uid: u64, mut new_rpc_headers: IndexMap<String, String>) -> IndexMap<String, String> {
         let uid_str = uid.to_string();
         let mut my_indexmap = IndexMap::new();
-        my_indexmap.insert("node.metadata.WORKLOAD_NAME".to_string(), self.whoami.as_ref().unwrap().clone());
+        my_indexmap.insert(0, self.whoami.as_ref().unwrap().clone());
 
         if self.envoy_shared_data.contains_key(&uid_str) {
             match serde_json::from_str(&self.envoy_shared_data[&uid_str]) {

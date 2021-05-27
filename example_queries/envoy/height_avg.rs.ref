@@ -1,7 +1,6 @@
 // ---------------------- Generated Functions ----------------------------
 
 use super::filter_base::HttpHeaders;
-use super::filter_base::join_str;
 use proxy_wasm::traits::Context;
 use indexmap::IndexMap;
 use petgraph::graph::{Graph, NodeIndex};
@@ -16,12 +15,12 @@ use utils::graph::serde::Property;
 // mid_func: mid_height
 // id: height
 
-fn leaf_height(_graph: &Graph<(String, IndexMap<String, String>), ()>) -> u32 {
+fn leaf_height(_graph: &Graph<(String, IndexMap<u64, String>), ()>) -> u32 {
     return 0;
 }
 
 // TODO:  must children's responses always be in string form?  can we generalize?
-fn mid_height(_graph: &Graph<(String, IndexMap<String, String>), ()>, children_responses: Vec<String>) -> u32 {
+fn mid_height(_graph: &Graph<(String, IndexMap<u64, String>), ()>, children_responses: Vec<String>) -> u32 {
     let mut max = 0;
     for response in children_responses {
         let response_as_u32 = response.parse::<u32>();
@@ -37,18 +36,18 @@ fn mid_height(_graph: &Graph<(String, IndexMap<String, String>), ()>, children_r
 pub fn create_target_graph() -> Graph<
     (
         std::string::String,
-        IndexMap<std::string::String, std::string::String>,
+        IndexMap<u64, std::string::String>,
     ),
     (),
 > {
      let vertices = vec!( "a".to_string(),"b".to_string(),"c".to_string(), );
         let edges = vec!(  ("a".to_string(), "b".to_string() ),  ("b".to_string(), "c".to_string() ),  );
-        let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
+        let mut ids_to_properties: IndexMap<String, IndexMap<u64, String>> = IndexMap::new();
         ids_to_properties.insert("a".to_string(), IndexMap::new());
         ids_to_properties.insert("b".to_string(), IndexMap::new());
         ids_to_properties.insert("c".to_string(), IndexMap::new());
         let mut c_hashmap = ids_to_properties.get_mut("c").unwrap();
-        c_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "ratings-v1".to_string());
+        c_hashmap.insert(0, "ratings-v1".to_string());
         return generate_target_graph(vertices, edges, ids_to_properties);
 
 }
@@ -63,11 +62,11 @@ pub fn collect_envoy_properties(
                             .ok_or_else(|| format!("Failed to retrieve property node.metadata.WORKLOAD_NAME."))?;
             
     
-                     let property_str = match std::str::from_utf8(&property) {
+                     match std::str::from_utf8(&property) {
                         Ok(property_str_) => {
-                            fd.unassigned_properties.push(Property::new(
+                            fd.unassigned_properties.insert(Property::new(
                                 http_headers.workload_name.to_string(), 
-                                join_str(&vec!["node", "metadata", "WORKLOAD_NAME", ]),
+                                0,
                                 property_str_.to_string()
                             ));
                         }
@@ -82,11 +81,11 @@ pub fn execute_udfs_and_check_trace_lvl_prop(http_headers: &HttpHeaders, fd: &mu
     // Empty for this query, but in general, will be useful
     let my_height_value;
             let child_iterator = fd.trace_graph.neighbors_directed(
-                get_node_with_id(&fd.trace_graph, http_headers.workload_name.clone()).unwrap(),
+                get_node_with_id(&fd.trace_graph, &http_headers.workload_name).unwrap(),
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
             for child in child_iterator {
-                child_values.push(fd.trace_graph.node_weight(child).unwrap().1["height"].clone());
+                child_values.push(fd.trace_graph.node_weight(child).unwrap().1[1].clone());
             }
             if child_values.len() == 0 {
                 my_height_value = leaf_height(&fd.trace_graph).to_string();
@@ -95,12 +94,12 @@ pub fn execute_udfs_and_check_trace_lvl_prop(http_headers: &HttpHeaders, fd: &mu
             }
 
         
-        let node = get_node_with_id(&fd.trace_graph, http_headers.workload_name.clone()).unwrap();
+        let node = get_node_with_id(&fd.trace_graph, &http_headers.workload_name).unwrap();
         // if we already have the property, don't add it
-        if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key("height") &&
-               fd.trace_graph.node_weight(node).unwrap().1["height"] == my_height_value ) {
+        if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key(&1) &&
+               fd.trace_graph.node_weight(node).unwrap().1[1] == my_height_value ) {
            fd.trace_graph.node_weight_mut(node).unwrap().1.insert(
-               "height".to_string(), my_height_value);
+               1, my_height_value);
         }
         
     let root_id = "productpage-v1";
@@ -114,7 +113,7 @@ pub fn get_value_for_storage(
     target_graph: &Graph<
         (
             std::string::String,
-            IndexMap<std::string::String, std::string::String>,
+            IndexMap<u64, std::string::String>,
         ),
         (),
     >,
@@ -122,7 +121,7 @@ pub fn get_value_for_storage(
     stored_data: &FerriedData,
 ) -> Option<String> {
     let value: String;
-    let node_ptr = get_node_with_id(target_graph, "a".to_string());
+    let node_ptr = get_node_with_id(target_graph, "a");
         if node_ptr.is_none() {
            log::error!("Node a not found");
                 return None;
@@ -145,13 +144,13 @@ pub fn get_value_for_storage(
             .node_weight(trace_node_idx)
             .unwrap()
             .1
-            .contains_key("height")
+            .contains_key(&1)
         {
             // we have not yet collected the return property
             log::error!("Missing return property height");
             return None;
         }
-        let ret = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ "height" ];
+        let ret = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ 1 ];
 
         value = ret.to_string();
 

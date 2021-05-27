@@ -15,7 +15,7 @@ use utils::graph::serde::Property;
 pub fn create_target_graph() -> Graph<
     (
         std::string::String,
-        IndexMap<std::string::String, std::string::String>,
+        IndexMap<u64, std::string::String>,
     ),
     (),
 > {
@@ -44,7 +44,7 @@ pub fn get_value_for_storage(
     target_graph: &Graph<
         (
             std::string::String,
-            IndexMap<std::string::String, std::string::String>,
+            IndexMap<u64, std::string::String>,
         ),
         (),
     >,

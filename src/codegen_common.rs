@@ -126,13 +126,23 @@ pub fn parse_udf(udf: String) -> ScalarOrAggregationUdf {
     std::process::exit(1);
 }
 
-pub fn assign_id_to_property(properties: &IndexSet<Property>) -> IndexMap<String, u64> {
+pub fn assign_id_to_property(properties: &IndexSet<Property>,
+                             scalar_udfs: &IndexMap<String, ScalarUdf>
+) -> IndexMap<String, u64> {
     let mut id_to_property = IndexMap::new();
     let mut i : u64 = 0;
+    id_to_property.insert("node.metadata.WORKLOAD_NAME".to_string(), i);
+    i += 1;
     for property in properties {
-        id_to_property.insert(property.to_dot_string(), i);
-        i += 1;
+        let dot_str = property.to_dot_string();
+        if !id_to_property.contains_key(&dot_str) {
+            id_to_property.insert(dot_str.to_string(), i);
+            i += 1;
+        }
+    }
+    for udf in scalar_udfs.keys() {
+        id_to_property.insert(udf.to_string(), i);
+        i += 1
     }
     id_to_property
-
 }
