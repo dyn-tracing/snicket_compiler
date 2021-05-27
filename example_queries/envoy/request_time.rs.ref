@@ -1,7 +1,6 @@
 // ---------------------- Generated Functions ----------------------------
 
 use super::filter_base::HttpHeaders;
-use super::filter_base::join_str;
 use proxy_wasm::traits::Context;
 use indexmap::IndexMap;
 use petgraph::graph::{Graph, NodeIndex};
@@ -16,18 +15,18 @@ use utils::graph::serde::Property;
 pub fn create_target_graph() -> Graph<
     (
         std::string::String,
-        IndexMap<std::string::String, std::string::String>,
+        IndexMap<u64, std::string::String>,
     ),
     (),
 > {
      let vertices = vec!( "a".to_string(),"b".to_string(),"c".to_string(), );
         let edges = vec!(  ("a".to_string(), "b".to_string() ),  ("b".to_string(), "c".to_string() ),  );
-        let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
+        let mut ids_to_properties: IndexMap<String, IndexMap<u64, String>> = IndexMap::new();
         ids_to_properties.insert("a".to_string(), IndexMap::new());
         ids_to_properties.insert("b".to_string(), IndexMap::new());
         ids_to_properties.insert("c".to_string(), IndexMap::new());
         let mut c_hashmap = ids_to_properties.get_mut("c").unwrap();
-        c_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "ratings-v1".to_string());
+        c_hashmap.insert(0, "ratings-v1".to_string());
         return generate_target_graph(vertices, edges, ids_to_properties);
 
 }
@@ -42,11 +41,11 @@ pub fn collect_envoy_properties(
                             .ok_or_else(|| format!("Failed to retrieve property node.metadata.WORKLOAD_NAME."))?;
             
     
-                     let property_str = match std::str::from_utf8(&property) {
+                     match std::str::from_utf8(&property) {
                         Ok(property_str_) => {
-                            fd.unassigned_properties.push(Property::new(
+                            fd.unassigned_properties.insert(Property::new(
                                 http_headers.workload_name.to_string(), 
-                                join_str(&vec!["node", "metadata", "WORKLOAD_NAME", ]),
+                                0,
                                 property_str_.to_string()
                             ));
                         }
@@ -63,9 +62,9 @@ pub fn collect_envoy_properties(
                     *place = *element;                                              
                 }                                                                   
                 let int_val = u64::from_ne_bytes(byte_array);                       
-                fd.unassigned_properties.push(Property::new(
+                fd.unassigned_properties.insert(Property::new(
                     http_headers.workload_name.to_string(), 
-                    join_str(&vec!["request", "time", ]),
+                    1,
                     int_val.to_string() 
                 ));
                 
@@ -87,7 +86,7 @@ pub fn get_value_for_storage(
     target_graph: &Graph<
         (
             std::string::String,
-            IndexMap<std::string::String, std::string::String>,
+            IndexMap<u64, std::string::String>,
         ),
         (),
     >,
@@ -95,7 +94,7 @@ pub fn get_value_for_storage(
     stored_data: &FerriedData,
 ) -> Option<String> {
     let value: String;
-    let node_ptr = get_node_with_id(target_graph, "a".to_string());
+    let node_ptr = get_node_with_id(target_graph, "a");
         if node_ptr.is_none() {
            log::error!("Node a not found");
                 return None;
@@ -118,13 +117,13 @@ pub fn get_value_for_storage(
             .node_weight(trace_node_idx)
             .unwrap()
             .1
-            .contains_key("request.time")
+            .contains_key(&1)
         {
             // we have not yet collected the return property
             log::error!("Missing return property request.time");
             return None;
         }
-        let ret = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ "request.time" ];
+        let ret = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ 1 ];
 
         value = ret.to_string();
 

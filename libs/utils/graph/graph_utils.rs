@@ -5,6 +5,7 @@ use petgraph::graph::{Graph, NodeIndex};
 use petgraph::visit::DfsPostOrder;
 use petgraph::Incoming;
 
+pub type GraphType = Graph<(String, IndexMap<u64, String>), ()>;
 /* This function creates a petgraph graph representing the query given by the user.
  * For example, if the cql query were MATCH n -> m, e WHERE ... the input to this function
  * would be vertices = [n, m], edges = [(n,m)].
@@ -20,8 +21,8 @@ use petgraph::Incoming;
 pub fn generate_target_graph(
     vertices: Vec<String>,
     edges: Vec<(String, String)>,
-    ids_to_properties: IndexMap<String, IndexMap<String, String>>,
-) -> Graph<(String, IndexMap<String, String>), ()> {
+    ids_to_properties: IndexMap<String, IndexMap<u64, String>>,
+) -> GraphType {
     let mut graph = Graph::new();
 
     // In order to make edges, we have to know the handles of the nodes, and you
@@ -55,8 +56,8 @@ pub fn generate_target_graph(
 }
 
 pub fn get_node_with_id(
-    graph: &Graph<(String, IndexMap<String, String>), ()>,
-    node_name: String,
+    graph: &GraphType,
+    node_name: &str,
 ) -> Option<NodeIndex> {
     for index in graph.node_indices() {
         if graph.node_weight(index).unwrap().0 == node_name {
@@ -68,7 +69,7 @@ pub fn get_node_with_id(
 
 pub fn find_leaves(
     node: NodeIndex,
-    graph: &Graph<(String, IndexMap<String, String>), ()>,
+    graph: &GraphType,
 ) -> Vec<NodeIndex> {
     let mut post_order = DfsPostOrder::new(&graph, node);
     let mut to_return = Vec::new();
@@ -80,7 +81,7 @@ pub fn find_leaves(
     to_return
 }
 
-pub fn find_root(graph: &Graph<(String, IndexMap<String, String>), ()>) -> NodeIndex {
+pub fn find_root(graph: &GraphType) -> NodeIndex {
     for node in graph.node_indices() {
         if graph.neighbors_directed(node, Incoming).count() == 0 {
             return node;
@@ -90,8 +91,8 @@ pub fn find_root(graph: &Graph<(String, IndexMap<String, String>), ()>) -> NodeI
 }
 
 pub fn has_property_subset(
-    property_set_1: &IndexMap<String, String>, // set
-    property_set_2: &IndexMap<String, String>, // subset
+    property_set_1: &IndexMap<u64, String>, // set
+    property_set_2: &IndexMap<u64, String>, // subset
 ) -> bool {
     for property in property_set_2.keys() {
         if !property_set_1.contains_key(property) {
@@ -108,7 +109,7 @@ pub fn has_property_subset(
 mod tests {
     use super::*;
 
-    fn make_small_target_graph() -> Graph<(String, IndexMap<String, String>), ()> {
+    fn make_small_target_graph() -> GraphType {
         let a = String::from("a");
         let b = String::from("b");
         let c = String::from("c");
@@ -117,15 +118,15 @@ mod tests {
         let mut ids_to_properties = IndexMap::new();
 
         let mut a_hashmap = IndexMap::new();
-        a_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "a".to_string());
+        a_hashmap.insert(0, "a".to_string());
         ids_to_properties.insert("a".to_string(), a_hashmap);
 
         let mut b_hashmap = IndexMap::new();
-        b_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "b".to_string());
+        b_hashmap.insert(0, "b".to_string());
         ids_to_properties.insert("b".to_string(), b_hashmap);
 
         let mut c_hashmap = IndexMap::new();
-        c_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "c".to_string());
+        c_hashmap.insert(0, "c".to_string());
         ids_to_properties.insert("c".to_string(), c_hashmap);
 
         assert!(ids_to_properties.keys().len() == 3);
@@ -138,14 +139,14 @@ mod tests {
         let graph = generate_target_graph(vertices, edges, ids_to_properties);
         graph
     }
-    fn little_branching_graph() -> Graph<(String, IndexMap<String, String>), ()> {
-        let mut graph = Graph::<(String, IndexMap<String, String>), ()>::new();
+    fn little_branching_graph() -> GraphType {
+        let mut graph : GraphType = Graph::new();
         graph.extend_with_edges(&[(0, 1), (0, 2), (0, 3), (1, 4), (3, 5)]);
         return graph;
     }
 
-    fn little_graph() -> Graph<(String, IndexMap<String, String>), ()> {
-        let mut graph = Graph::<(String, IndexMap<String, String>), ()>::new();
+    fn little_graph() -> GraphType {
+        let mut graph : GraphType = Graph::new();
         let a = graph.add_node(("a".to_string(), IndexMap::new()));
         let b = graph.add_node(("b".to_string(), IndexMap::new()));
         let c = graph.add_node(("c".to_string(), IndexMap::new()));
@@ -164,7 +165,7 @@ mod tests {
     #[test]
     fn test_get_node_with_id() {
         let graph = little_graph();
-        let ret = get_node_with_id(&graph, "a".to_string());
+        let ret = get_node_with_id(&graph, "a");
         assert!(ret.is_some());
     }
 

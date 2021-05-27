@@ -1,7 +1,6 @@
 // ---------------------- Generated Functions ----------------------------
 
 use super::filter_base::HttpHeaders;
-use super::filter_base::join_str;
 use proxy_wasm::traits::Context;
 use indexmap::IndexMap;
 use petgraph::graph::{Graph, NodeIndex};
@@ -16,18 +15,18 @@ use utils::graph::serde::Property;
 pub fn create_target_graph() -> Graph<
     (
         std::string::String,
-        IndexMap<std::string::String, std::string::String>,
+        IndexMap<u64, std::string::String>,
     ),
     (),
 > {
      let vertices = vec!( "a".to_string(),"b".to_string(),"c".to_string(), );
         let edges = vec!(  ("a".to_string(), "b".to_string() ),  ("b".to_string(), "c".to_string() ),  );
-        let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
+        let mut ids_to_properties: IndexMap<String, IndexMap<u64, String>> = IndexMap::new();
         ids_to_properties.insert("a".to_string(), IndexMap::new());
         ids_to_properties.insert("b".to_string(), IndexMap::new());
         ids_to_properties.insert("c".to_string(), IndexMap::new());
         let mut b_hashmap = ids_to_properties.get_mut("b").unwrap();
-        b_hashmap.insert("node.metadata.WORKLOAD_NAME".to_string(), "reviews-v1".to_string());
+        b_hashmap.insert(0, "reviews-v1".to_string());
         return generate_target_graph(vertices, edges, ids_to_properties);
 
 }
@@ -42,11 +41,11 @@ pub fn collect_envoy_properties(
                             .ok_or_else(|| format!("Failed to retrieve property node.metadata.WORKLOAD_NAME."))?;
             
     
-                     let property_str = match std::str::from_utf8(&property) {
+                     match std::str::from_utf8(&property) {
                         Ok(property_str_) => {
-                            fd.unassigned_properties.push(Property::new(
+                            fd.unassigned_properties.insert(Property::new(
                                 http_headers.workload_name.to_string(), 
-                                join_str(&vec!["node", "metadata", "WORKLOAD_NAME", ]),
+                                0,
                                 property_str_.to_string()
                             ));
                         }
@@ -63,9 +62,9 @@ pub fn collect_envoy_properties(
                     *place = *element;                                              
                 }                                                                   
                 let int_val = i64::from_ne_bytes(byte_array);                       
-                fd.unassigned_properties.push(Property::new(
+                fd.unassigned_properties.insert(Property::new(
                     http_headers.workload_name.to_string(), 
-                    join_str(&vec!["request", "total_size", ]),
+                    1,
                     int_val.to_string() 
                 ));
                 
@@ -79,9 +78,9 @@ pub fn collect_envoy_properties(
                     *place = *element;                                              
                 }                                                                   
                 let int_val = i64::from_ne_bytes(byte_array);                       
-                fd.unassigned_properties.push(Property::new(
+                fd.unassigned_properties.insert(Property::new(
                     http_headers.workload_name.to_string(), 
-                    join_str(&vec!["request", "total_size", ]),
+                    1,
                     int_val.to_string() 
                 ));
                 
@@ -96,9 +95,9 @@ pub fn execute_udfs_and_check_trace_lvl_prop(http_headers: &HttpHeaders, fd: &mu
     
             if &http_headers.workload_name == root_id {        let mut trace_prop_str : String;
 
-                let root_node = get_node_with_id(&fd.trace_graph, "productpage-v1".to_string()).unwrap();
-                if ! ( fd.trace_graph.node_weight(root_node).unwrap().1.contains_key("request.total_size") &&
-                    fd.trace_graph.node_weight(root_node).unwrap().1["request.total_size"] == "1" ){
+                let root_node = get_node_with_id(&fd.trace_graph, "productpage-v1").unwrap();
+                if ! ( fd.trace_graph.node_weight(root_node).unwrap().1.contains_key(1) &&
+                    fd.trace_graph.node_weight(root_node).unwrap().1[1] == "1" ){
                     // TODO:  replace fd
                     match serde_json::to_string(&fd) {
                         Ok(fd_str) => {
@@ -120,7 +119,7 @@ pub fn get_value_for_storage(
     target_graph: &Graph<
         (
             std::string::String,
-            IndexMap<std::string::String, std::string::String>,
+            IndexMap<u64, std::string::String>,
         ),
         (),
     >,
@@ -128,7 +127,7 @@ pub fn get_value_for_storage(
     stored_data: &FerriedData,
 ) -> Option<String> {
     let value: String;
-    let node_ptr = get_node_with_id(target_graph, "a".to_string());
+    let node_ptr = get_node_with_id(target_graph, "a");
         if node_ptr.is_none() {
            log::error!("Node a not found");
                 return None;
@@ -151,13 +150,13 @@ pub fn get_value_for_storage(
             .node_weight(trace_node_idx)
             .unwrap()
             .1
-            .contains_key("request.total_size")
+            .contains_key(&1)
         {
             // we have not yet collected the return property
             log::error!("Missing return property request.total_size");
             return None;
         }
-        let ret = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ "request.total_size" ];
+        let ret = &stored_data.trace_graph.node_weight(trace_node_idx).unwrap().1[ 1 ];
 
         value = ret.to_string();
 

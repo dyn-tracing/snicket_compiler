@@ -1,3 +1,4 @@
+use super::codegen_common::assign_id_to_property;
 use super::codegen_common::parse_udf;
 use super::codegen_common::AggregationUdf;
 use super::codegen_common::CodeStruct;
@@ -21,6 +22,7 @@ use indexmap::IndexSet;
 fn make_struct_filter_blocks(
     attr_filters: &[AttributeFilter],
     struct_filters: &[StructuralFilter],
+    id_to_property: &IndexMap<String, u64>,
 ) -> Vec<String> {
     let mut target_blocks = Vec::new();
 
@@ -41,7 +43,7 @@ fn make_struct_filter_blocks(
         }
         target_blocks.push(" );\n".to_string());
 
-        let ids_to_prop_block = "        let mut ids_to_properties: IndexMap<String, IndexMap<String, String>> = IndexMap::new();\n".to_string();
+        let ids_to_prop_block = "        let mut ids_to_properties: IndexMap<String, IndexMap<u64, String>> = IndexMap::new();\n".to_string();
         target_blocks.push(ids_to_prop_block);
 
         for vertex in &struct_filter.vertices {
@@ -62,9 +64,9 @@ fn make_struct_filter_blocks(
                     node = property_filter.node
                 );
                 target_blocks.push(get_hashmap);
-                let fill_in_hashmap = format!("        {node}_hashmap.insert(\"{property_name}\".to_string(), \"{property_value}\".to_string());\n",
+                let fill_in_hashmap = format!("        {node}_hashmap.insert({property_name}, \"{property_value}\".to_string());\n",
                                                node=property_filter.node,
-                                               property_name=property_name_without_period,
+                                               property_name=id_to_property[&property_name_without_period],
                                                property_value=property_filter.value);
                 target_blocks.push(fill_in_hashmap);
             }
@@ -75,7 +77,11 @@ fn make_struct_filter_blocks(
     target_blocks
 }
 
-fn make_attr_filter_blocks(root_id: &str, attr_filters: &[AttributeFilter]) -> Vec<String> {
+fn make_attr_filter_blocks(
+    root_id: &str,
+    attr_filters: &[AttributeFilter],
+    id_to_property: &IndexMap<String, u64>,
+) -> Vec<String> {
     // for everything except trace level attributes, the UDF/envoy property
     // collection will make the attribute filtering happen at the same time as
     // the struct filtering.  This is not the case for trace-level attributes
@@ -95,10 +101,10 @@ fn make_attr_filter_blocks(root_id: &str, attr_filters: &[AttributeFilter]) -> V
                 prop.remove(0);
             }
             let trace_filter_block = format!(
-            "
-            let root_node = graph_utils::get_node_with_id(&fd.trace_graph, \"{root_id}\".to_string()).unwrap();
-            if ! ( fd.trace_graph.node_weight(root_node).unwrap().1.contains_key(\"{prop_name}\") &&
-                fd.trace_graph.node_weight(root_node).unwrap().1[\"{prop_name}\"] == \"{value}\" ){{
+                "
+            let root_node = graph_utils::get_node_with_id(&fd.trace_graph, \"{root_id}\").unwrap();
+            if ! ( fd.trace_graph.node_weight(root_node).unwrap().1.contains_key(&{prop_name}) &&
+                fd.trace_graph.node_weight(root_node).unwrap().1[{prop_name}] == \"{value}\" ){{
                 // TODO:  replace fd
                 match serde_json::to_string(&fd) {{
                     Ok(fd_str) => {{
@@ -111,7 +117,11 @@ fn make_attr_filter_blocks(root_id: &str, attr_filters: &[AttributeFilter]) -> V
                  }}
                  return false;
             }}
-            ", root_id=root_id, prop_name=prop, value=attr_filter.value);
+            ",
+                root_id = root_id,
+                prop_name = id_to_property[&prop],
+                value = attr_filter.value
+            );
             trace_lvl_prop_blocks.push(trace_filter_block);
         }
     }
@@ -132,23 +142,32 @@ fn make_trace_rpc_value(code_struct: &mut CodeStruct) {
     code_struct.response_blocks.push(ret_block);
 }
 
-fn make_storage_rpc_value_from_trace(entity: String, property: &str) -> String {
+fn make_storage_rpc_value_from_trace(
+    entity: String,
+    property: &str,
+    id_to_property: &IndexMap<String, u64>,
+) -> String {
     format!(
-    "let trace_node_index = graph_utils::get_node_with_id(&fd.trace_graph, \"{node_id}\".to_string());
+        "let trace_node_index = graph_utils::get_node_with_id(&fd.trace_graph, \"{node_id}\");
     if trace_node_index.is_none() {{
        log::warn!(\"Node {node_id} not found\");
             return None;
     }}
-    let mut ret = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
+    let mut ret = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ {prop} ];\n
     value = ret.to_string();\n",
-            node_id = entity,
-            prop = property,
+        node_id = entity,
+        prop = id_to_property[property],
     )
 }
 
-fn make_storage_rpc_value_from_target(entity: &str, property: &str) -> String {
+fn make_storage_rpc_value_from_target(
+    entity: &str,
+    property: &str,
+    id_to_property: &IndexMap<String, u64>,
+) -> String {
+    print!("property: {:?}", property);
     format!(
-    "let node_ptr = graph_utils::get_node_with_id(target_graph, \"{node_id}\".to_string());
+    "let node_ptr = graph_utils::get_node_with_id(target_graph, \"{node_id}\");
     if node_ptr.is_none() {{
        log::warn!(\"Node {node_id} not found\");
             return None;
@@ -160,24 +179,34 @@ fn make_storage_rpc_value_from_target(entity: &str, property: &str) -> String {
             break;
         }}
     }}
-    if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key(\"{prop}\") {{
+    if trace_node_index == None || !&fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1.contains_key(&{prop}) {{
         // we have not yet collected the return property or have a mapping error
         return None;
     }}
-    let mut ret = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ \"{prop}\" ];\n
+    let mut ret = &fd.trace_graph.node_weight(trace_node_index.unwrap()).unwrap().1[ {prop} ];\n
     value = ret.to_string();\n",
             node_id = entity,
-            prop = property
+            prop = id_to_property[property]
     )
 }
 
-fn make_return_block(entity_ref: &PropertyOrUDF, query_data: &VisitorResults) -> String {
+fn make_return_block(
+    entity_ref: &PropertyOrUDF,
+    query_data: &VisitorResults,
+    id_to_property: &IndexMap<String, u64>,
+) -> String {
     match entity_ref {
         PropertyOrUDF::Property(prop) => match prop.parent.as_str() {
-            "trace" => {
-                make_storage_rpc_value_from_trace(query_data.root_id.clone(), &prop.to_dot_string())
-            }
-            _ => make_storage_rpc_value_from_target(&prop.parent, &prop.to_dot_string()),
+            "trace" => make_storage_rpc_value_from_trace(
+                query_data.root_id.clone(),
+                &prop.to_dot_string(),
+                id_to_property,
+            ),
+            _ => make_storage_rpc_value_from_target(
+                &prop.parent,
+                &prop.to_dot_string(),
+                id_to_property,
+            ),
         },
         PropertyOrUDF::UdfCall(call) => {
             // Because of quirky design we need to get the first arg
@@ -186,17 +215,25 @@ fn make_return_block(entity_ref: &PropertyOrUDF, query_data: &VisitorResults) ->
             }
             let node = &call.args[0];
             match node.as_str() {
-                "trace" => make_storage_rpc_value_from_trace(query_data.root_id.clone(), &call.id),
-                _ => make_storage_rpc_value_from_target(&node, &call.id),
+                "trace" => make_storage_rpc_value_from_trace(
+                    query_data.root_id.clone(),
+                    &call.id,
+                    id_to_property,
+                ),
+                _ => make_storage_rpc_value_from_target(&node, &call.id, id_to_property),
             }
         }
     }
 }
 
-fn make_aggr_block(agg: &Aggregate, query_data: &VisitorResults) -> String {
+fn make_aggr_block(
+    agg: &Aggregate,
+    query_data: &VisitorResults,
+    id_to_property: &IndexMap<String, u64>,
+) -> String {
     let mut to_return = String::new();
     for arg in &agg.args {
-        to_return.push_str(&make_return_block(&arg, query_data));
+        to_return.push_str(&make_return_block(&arg, query_data, id_to_property));
     }
     to_return
 }
@@ -204,6 +241,7 @@ fn make_aggr_block(agg: &Aggregate, query_data: &VisitorResults) -> String {
 fn generate_property_blocks(
     properties: &IndexSet<Property>,
     scalar_udf_table: &IndexMap<String, ScalarUdf>,
+    id_to_property: &IndexMap<String, u64>,
 ) -> Vec<String> {
     let mut property_blocks = Vec::new();
     // some "properties" are created by UDFs, and if so, shouldn't be collected here
@@ -213,12 +251,13 @@ fn generate_property_blocks(
         }
         let get_prop_block = format!(
             "prop_tuple = Property::new(filter.whoami.as_ref().unwrap().to_string(),
-                                                   \"{property}\".to_string(),
-                                                   filter.filter_state[\"{property}\"].clone());
+                                                   {property},
+                                                   filter.filter_state[\"{property_name}\"].clone());
                                             ",
-            property = property.to_dot_string(),
+            property = id_to_property[&property.to_dot_string()],
+            property_name = property.to_dot_string()
         );
-        let insert_hdr_block = "fd.unassigned_properties.push(prop_tuple);".to_string();
+        let insert_hdr_block = "fd.unassigned_properties.insert(prop_tuple);".to_string();
         property_blocks.push(get_prop_block);
         property_blocks.push(insert_hdr_block);
     }
@@ -229,6 +268,7 @@ fn generate_udf_blocks(
     scalar_udf_table: &IndexMap<String, ScalarUdf>,
     aggregation_udf_table: &IndexMap<String, AggregationUdf>,
     udf_calls: &IndexSet<UdfCall>,
+    id_to_property: &IndexMap<String, u64>,
 ) -> Vec<String> {
     let mut udf_blocks = Vec::new();
     for call in udf_calls {
@@ -240,36 +280,37 @@ fn generate_udf_blocks(
             std::process::exit(1);
         }
         let get_udf_vals = format!(
-            "let my_{id}_value;
+            "let my_{name}_value;
             let child_iterator = fd.trace_graph.neighbors_directed(
-                graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap().clone()).unwrap(),
+                graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap()).unwrap(),
                 petgraph::Outgoing);
             let mut child_values = Vec::new();
             for child in child_iterator {{
-                child_values.push(fd.trace_graph.node_weight(child).unwrap().1[\"{id}\"].clone());
+                child_values.push(fd.trace_graph.node_weight(child).unwrap().1[&{id}].clone());
             }}
             if child_values.len() == 0 {{
-                my_{id}_value = {leaf_func}(&fd.trace_graph).to_string();
+                my_{name}_value = {leaf_func}(&fd.trace_graph).to_string();
             }} else {{
-                my_{id}_value = {mid_func}(&fd.trace_graph, child_values).to_string();
+                my_{name}_value = {mid_func}(&fd.trace_graph, child_values).to_string();
             }}
 
         ",
-            id = call.id,
+            id = id_to_property[&call.id],
+            name = call.id,
             leaf_func = scalar_udf_table[&call.id].leaf_func,
             mid_func = scalar_udf_table[&call.id].mid_func
         );
         udf_blocks.push(get_udf_vals);
 
         let save_udf_vals = format!("
-        let node = graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap().to_string()).unwrap();
+        let node = graph_utils::get_node_with_id(&fd.trace_graph, filter.whoami.as_ref().unwrap()).unwrap();
         // if we already have the property, don't add it
-        if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key(\"{id}\") &&
-               fd.trace_graph.node_weight(node).unwrap().1[\"{id}\"] == my_{id}_value ) {{
+        if !( fd.trace_graph.node_weight(node).unwrap().1.contains_key(&{id}) &&
+               fd.trace_graph.node_weight(node).unwrap().1[{id}] == my_{call}_value ) {{
            fd.trace_graph.node_weight_mut(node).unwrap().1.insert(
-               \"{id}\".to_string(), my_{id}_value);
+               {id}, my_{call}_value);
         }}
-        ", id=call.id);
+        ", id=id_to_property[&call.id], call=call.id);
 
         udf_blocks.push(save_udf_vals);
     }
@@ -292,22 +333,37 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
             }
         }
     }
+    code_struct.id_to_property = assign_id_to_property(&query_data.properties, &scalar_udf_table);
     // all the properties we collect
-    code_struct.request_blocks =
-        generate_property_blocks(&query_data.properties, &scalar_udf_table);
+    code_struct.collect_properties_blocks = generate_property_blocks(
+        &query_data.properties,
+        &scalar_udf_table,
+        &code_struct.id_to_property,
+    );
     code_struct.udf_blocks = generate_udf_blocks(
         &scalar_udf_table,
         &aggregation_udf_table,
         &query_data.udf_calls,
+        &code_struct.id_to_property,
     );
-    code_struct.target_blocks =
-        make_struct_filter_blocks(&query_data.attr_filters, &query_data.struct_filters);
-    code_struct.trace_lvl_prop_blocks =
-        make_attr_filter_blocks(&query_data.root_id, &query_data.attr_filters);
+    code_struct.target_blocks = make_struct_filter_blocks(
+        &query_data.attr_filters,
+        &query_data.struct_filters,
+        &code_struct.id_to_property,
+    );
+    code_struct.trace_lvl_prop_blocks = make_attr_filter_blocks(
+        &query_data.root_id,
+        &query_data.attr_filters,
+        &code_struct.id_to_property,
+    );
 
     let resp_block = match query_data.return_expr {
-        IrReturnEnum::PropertyOrUDF(ref entity_ref) => make_return_block(entity_ref, &query_data),
-        IrReturnEnum::Aggregate(ref agg) => make_aggr_block(&agg, &query_data),
+        IrReturnEnum::PropertyOrUDF(ref entity_ref) => {
+            make_return_block(entity_ref, &query_data, &code_struct.id_to_property)
+        }
+        IrReturnEnum::Aggregate(ref agg) => {
+            make_aggr_block(&agg, &query_data, &code_struct.id_to_property)
+        }
     };
     code_struct.response_blocks.push(resp_block);
     code_struct.aggregation_udf_table = aggregation_udf_table;
@@ -397,31 +453,30 @@ mod tests {
         let _codegen = generate_code_blocks(result, [COUNT.to_string()].to_vec());
     }
 
-    /*
     #[test]
     fn get_group_by() {
         let result = get_codegen_from_query(
-            "MATCH (a) WHERE a.node.metadata.WORKLOAD_NAME = 'productpage-v1' RETURN agg(a.count), a.count".to_string(),
+            "MATCH (a) WHERE a.node.metadata.WORKLOAD_NAME = 'productpage-v1' RETURN a.request.total_size, count(a.request.total_size)".to_string(),
         );
         assert!(!result.struct_filters.is_empty());
         let _codegen = generate_code_blocks(result, [COUNT.to_string()].to_vec());
         assert!(!_codegen.target_blocks.is_empty());
     }
-    */
 
     #[test]
     fn test_where() {
         let result = get_codegen_from_query(
-            "MATCH (a) -[]-> (b)-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' AND trace.request.total_size = 1 RETURN avg(a.request.total_size)".to_string(),
+            "MATCH (a) -[]-> (b)-[]->(c) WHERE b.node.metadata.WORKLOAD_NAME = 'reviews-v1' AND trace.request.total_size = 1 RETURN a.request.total_size, avg(a.request.total_size)".to_string(),
         );
         assert!(!result.struct_filters.is_empty());
-        let _codegen = generate_code_blocks(result, [AVG.to_string(), COUNT.to_string()].to_vec());
+        let _codegen = generate_code_blocks(result, [AVG.to_string()].to_vec());
     }
 
     #[test]
     fn test_aggr_udf() {
         let result = get_codegen_from_query(
-            "MATCH (a) -[]-> (b)-[]->(c) RETURN avg(a.request.total_size)".to_string(),
+            "MATCH (a) -[]-> (b)-[]->(c) RETURN a.request.total_size, avg(a.request.total_size)"
+                .to_string(),
         );
         let _codegen = generate_code_blocks(result, [COUNT.to_string(), AVG.to_string()].to_vec());
         assert!(_codegen.aggregation_udf_table.keys().count() == 1);

@@ -15,7 +15,13 @@ path = "filter.rs"
 
 [dependencies]
 petgraph = {version =  "0.*", features = ["serde-1"] }
-rpc_lib = { path = "../rpc_lib" }
-graph_utils = { path = "../graph_utils" }
+rpc_lib = { path = "../../tracing_sim/libs/rpc_lib" }
+utils = { path = "../libs/utils" }
 indexmap = { version = "1.6.1", features = ["serde-1"] }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+log = "*"
+log4rs = "*"
+
+[dependencies.serde_with]
+version = "1.4.0"

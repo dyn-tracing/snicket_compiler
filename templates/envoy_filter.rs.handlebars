@@ -1,7 +1,6 @@
 // ---------------------- Generated Functions ----------------------------
 
 use super::filter_base::HttpHeaders;
-use super::filter_base::join_str;
 use proxy_wasm::traits::Context;
 use indexmap::IndexMap;
 use petgraph::graph::{Graph, NodeIndex};
@@ -16,7 +15,7 @@ use utils::graph::serde::Property;
 pub fn create_target_graph() -> Graph<
     (
         std::string::String,
-        IndexMap<std::string::String, std::string::String>,
+        IndexMap<u64, std::string::String>,
     ),
     (),
 > {
@@ -27,7 +26,7 @@ pub fn collect_envoy_properties(
     http_headers: &HttpHeaders,
     fd: &mut FerriedData,
 ) -> Result<(), String> {
-    {{#each request_blocks}}
+    {{#each collect_properties_blocks}}
     {{{~this}}}
     {{/each}}
     return Ok(());
@@ -45,7 +44,7 @@ pub fn get_value_for_storage(
     target_graph: &Graph<
         (
             std::string::String,
-            IndexMap<std::string::String, std::string::String>,
+            IndexMap<u64, std::string::String>,
         ),
         (),
     >,
