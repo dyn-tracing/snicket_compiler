@@ -191,37 +191,6 @@ fn max_matching<EK: EdmondsKarp<i32>>(
         // set it back the way it was
         ek.set_capacity(source, x_node_to_index[&x_node], 1);
     }
-
-
-
-
-
-
-
-
-
-
-
-    /*
-
-
-    // If we're looking for a different size matching, and we didn't get the
-    // right size, just return none.
-    if costs as usize != target_size {
-        return (costs as usize, None);
-    }
-    let mut matching = Vec::new();
-    for edge_tuple in edges {
-        let edge = edge_tuple.0;
-        if edge.0 != source && edge.1 != sink {
-            matching.push((
-                NodeIndex::new(edge.0 - graph_g.node_count()),
-                NodeIndex::new(edge.1),
-            ));
-        }
-    }
-    (costs as usize, Some(matching))
-    */
 }
 
 // For debugging only
@@ -306,6 +275,7 @@ fn find_mapping_shamir_inner_loop(
         if u_neighbors.len() > v_neighbors.len() + 1 {
             continue;
         }
+        // perform all max matching problems
         max_matching::<DenseCapacity<_>>(
             u, v, &u_neighbors, &v_neighbors, graph_g, graph_h, set_s);
 
