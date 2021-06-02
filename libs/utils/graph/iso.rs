@@ -100,9 +100,9 @@ fn max_matching<EK: EdmondsKarp<i32>>(
 
     // index_to_node is an index, set by i, to (bool, Node)
     // the bool is true if it's part of set X, and false if it's part of set Y
-    let mut index_to_node = IndexMap::new();
-    let mut x_node_to_index = IndexMap::new();
-    let mut y_node_to_index = IndexMap::new();
+    let mut index_to_node = IndexMap::with_capacity(set_x.len()+set_y.len());
+    let mut x_node_to_index = IndexMap::with_capacity(set_x.len());
+    let mut y_node_to_index = IndexMap::with_capacity(set_y.len());
     let mut i = 0;
     for node in set_x {
         index_to_node.insert(i, node);
@@ -229,13 +229,12 @@ fn print_set_s(
 // between the same nodes are clearly not "wrong".  But because of this,
 // the size of the matching returned might be a bit wonky.
 fn get_mapping_from_set_s(
-    _graph_g: &GraphType,
     graph_h: &GraphType,
     set_s: &SetSType,
     root_in_g: &NodeIndex,
 ) -> Vec<(NodeIndex, NodeIndex)> {
     let root_h = find_root(graph_h);
-    let mut to_return = Vec::new();
+    let mut to_return = Vec::with_capacity(graph_h.node_count());
     let mut set_to_find_mapping = vec![(root_h, *root_in_g)];
     while !set_to_find_mapping.is_empty() {
         let key = set_to_find_mapping.pop().unwrap();
@@ -320,8 +319,8 @@ fn initialize_s(
     graph_g: &GraphType,
     graph_h: &GraphType,
 ) -> SetSType {
-    let mut s =
-        IndexMap::<SetSKey, IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>>::new();
+    let mut s : SetSType =
+        IndexMap::with_capacity(graph_g.node_count()*graph_h.node_count());
     for node_g in graph_g.node_indices() {
         for u in graph_h.node_indices() {
             // initialize S entry as empty set
@@ -378,7 +377,6 @@ pub fn find_mapping_shamir_centralized(
             find_mapping_shamir_inner_loop(node, graph_g, graph_h, &mut set_s);
         if mapping_found {
             return Some(get_mapping_from_set_s(
-                graph_g,
                 graph_h,
                 &set_s,
                 &mapping_root.unwrap(),
@@ -443,30 +441,30 @@ pub fn find_mapping_shamir_decentralized(
 
     // 2. For all your children, run inner loop
     let mut mapping_root_for_children = None;
-    for child in graph_g.neighbors_directed(cur_node, Outgoing) {
+    let children : Vec<NodeIndex> = graph_g.neighbors_directed(cur_node, Outgoing).collect();
+    for child in &children {
         let (mapping_found, mapping_root) =
-            find_mapping_shamir_inner_loop(child, graph_g, graph_h, set_s);
+            find_mapping_shamir_inner_loop(*child, graph_g, graph_h, set_s);
         if !am_root && mapping_found {
             mapping_root_for_children = mapping_root;
         }
-        /*
-        // delete extraneous grandchild information if applicable
-        // Although this gets rid of extra, useless info, it absolutely blows
-        // up the runtime from roughly 30,000 ns to 480,000 ns for reasons
-        // I do not understand
-        set_s.retain(|key, value| {
-            let am_child = graph_g.contains_edge(cur_node, key.val1);
-            let am_cur_node = key.val1 == cur_node;
-            let valid_subgraph = value.contains_key(&key.val2);
-            am_child || am_cur_node || valid_subgraph
-            }
-        );
-        */
     }
+    // delete extraneous grandchild information now that you've done inner loop for all children
+    // Although this gets rid of extra, useless info, it absolutely blows
+    // up the runtime from roughly 30,000 ns to 480,000 ns for reasons
+    // I do not understand
+    /*
+    set_s.retain(|key, value| {
+        let am_child = children.contains(&key.val1);
+        let am_cur_node = key.val1 == cur_node;
+        let valid_subgraph = value.contains_key(&key.val2);
+        am_child || am_cur_node || valid_subgraph
+    });
+    */
 
     // 2a. If one of your children matched all of graph_h, return that matching
     if let Some(mrc) = mapping_root_for_children {
-        return Some(get_mapping_from_set_s(graph_g, graph_h, &set_s, &mrc));
+        return Some(get_mapping_from_set_s(graph_h, &set_s, &mrc));
     }
 
     // 3. If you are the root, run the inner loop for yourself as well
@@ -475,7 +473,6 @@ pub fn find_mapping_shamir_decentralized(
             find_mapping_shamir_inner_loop(cur_node, graph_g, graph_h, set_s);
         if mapping_found {
             return Some(get_mapping_from_set_s(
-                graph_g,
                 graph_h,
                 &set_s,
                 &mapping_root.unwrap(),
