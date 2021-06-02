@@ -46,6 +46,7 @@ impl<'de> Deserialize<'de> for SetSKey {
     }
 }
 
+
 /// Given two sets of nodes, set x from graph g, and set y from graph h,
 /// creates a flow graph with the source connected to all nodes in x and
 /// the sink connected to all nodes in y.  Edges between x and y are computed
@@ -64,16 +65,14 @@ impl<'de> Deserialize<'de> for SetSKey {
 /// that is not necessarily reflective of the true maximum flow, but rather a
 /// way of signaling that neither this nor subsequent matchings will be useful.
 fn max_matching<EK: EdmondsKarp<i32>>(
+    u_null: NodeIndex,
+    v_null: NodeIndex,
     set_x: &[NodeIndex],
     set_y: &[NodeIndex],
     graph_g: &GraphType,
     graph_h: &GraphType,
-    set_s: &SetSType,
-    u_null: NodeIndex,
-    target_size: usize,
-) -> (usize, Option<Vec<(NodeIndex, NodeIndex)>>) {
-    let mut vertices = Vec::new();
-    let mut edges = Vec::new();
+    set_s: &mut SetSType,
+) {
     // The NodeIndex objects probably share values between set X and set Y
     // since they refer from distinct graphs.  So we need some way of
     // distinguishing them from one another when they are put into the same
@@ -91,21 +90,44 @@ fn max_matching<EK: EdmondsKarp<i32>>(
     // The numbers for set Y are just their NodeIndex index values.  And
     // finally, source is size(graph_g) + size(graph_h) + 2, and sink is source + 1
 
-    let source: usize = graph_g.node_count() + graph_h.node_count() + 1;
-    let sink: usize = source + 1;
-    vertices.push(source);
-    vertices.push(sink);
+
+    // TODO:  can probably just remove and add nodes/edges to the vertices/edges
+    // vectors instead of making new ones every time - see https://github.com/samueltardieu/pathfinding/blob/b51810f7b4c06f925b044e102efc7a894f8b27a1/tests/edmondskarp.rs#L111
+    // for details
+
+
+    // 1. Set the mappings between the ints and nodes
+
+    // index_to_node is an index, set by i, to (bool, Node)
+    // the bool is true if it's part of set X, and false if it's part of set Y
+    let mut index_to_node = IndexMap::with_capacity(set_x.len()+set_y.len());
+    let mut x_node_to_index = IndexMap::with_capacity(set_x.len());
+    let mut y_node_to_index = IndexMap::with_capacity(set_y.len());
+    let mut i = 0;
+    for node in set_x {
+        index_to_node.insert(i, node);
+        x_node_to_index.insert(node, i);
+        i += 1;
+    }
+    for node in set_y {
+        index_to_node.insert(i, node);
+        y_node_to_index.insert(node, i);
+        i += 1;
+    }
+    let source = i+1;
+    let sink = i+2;
+
+    // 2. Make the graph
+    let mut ek = EK::new(index_to_node.keys().len()+3, source, sink);
 
     for u in set_x {
-        let u_index = u.index() + graph_g.node_count();
-        vertices.push(u_index);
-        edges.push(((source, u_index), 1));
+        ek.set_capacity(source, x_node_to_index[u], 1); 
     }
     for v in set_y {
-        vertices.push(v.index());
-        edges.push(((v.index(), sink), 1));
+        ek.set_capacity(y_node_to_index[v], sink, 1); 
     }
 
+    let mut num_xy_edges = 0;
     for u in set_x {
         for v in set_y {
             if set_s[&SetSKey { val1: *v, val2: *u }].contains_key(&u_null)
@@ -114,36 +136,61 @@ fn max_matching<EK: EdmondsKarp<i32>>(
                     &graph_h.node_weight(*u).unwrap().1,
                 )
             {
-                // 2. add edge between v and u
-                edges.push(((u.index() + graph_g.node_count(), v.index()), 1));
+                num_xy_edges += 1;
+                ek.set_capacity(x_node_to_index[u], y_node_to_index[v], 1);
             }
         }
     }
 
     // If even adding one more edge does not get you near the target size,
     // then there is no hope of having a useful matching.  Just return
-    if edges.len() + 1 < target_size {
-        return (0, None);
+    if num_xy_edges + 1 < set_x.len() {
+        return;
     }
 
-    let (edges, costs) = edmonds_karp::<_, _, _, EK>(&vertices, &source, &sink, edges.into_iter());
-
-    // If we're looking for a different size matching, and we didn't get the
-    // right size, just return none.
-    if costs as usize != target_size {
-        return (costs as usize, None);
-    }
-    let mut matching = Vec::new();
-    for edge_tuple in edges {
-        let edge = edge_tuple.0;
-        if edge.0 != source && edge.1 != sink {
-            matching.push((
-                NodeIndex::new(edge.0 - graph_g.node_count()),
-                NodeIndex::new(edge.1),
-            ));
+    // 2. Try the mapping with the entirety of X
+    let (mapping, cost) = ek.augment();
+    if cost as usize == set_x.len() {
+        if !set_s[&SetSKey { val1: v_null, val2: u_null }].contains_key(&u_null) {
+            // convert mapping from ints to nodes
+            let mut nodes_mapping = Vec::new();
+            for (map, flow) in mapping {
+                if map.0 != source && map.1 != sink && flow != 0 {
+                    nodes_mapping.push((*index_to_node[map.0], *index_to_node[map.1]));
+                }
+            }
+            set_s
+                .get_mut(&SetSKey { val1: v_null, val2: u_null })
+                .unwrap()
+                .insert(u_null, Some(nodes_mapping));
         }
+    } else if (cost as usize) < set_x.len()-1 {
+        return; // you aren't going to get higher flows by taking away edges
     }
-    (costs as usize, Some(matching))
+
+    // 3. Try mapping each of the X_i sets;  instead of creating new graphs
+    //    entirely, you can just zero out the related edges and recompute
+    for x_node in set_x {
+        ek.set_capacity(source, x_node_to_index[x_node], 0);
+        let (mapping, cost) = ek.augment();
+        if cost as usize == set_x.len()-1 {
+            if !set_s[&SetSKey { val1: v_null, val2: u_null }].contains_key(x_node) {
+                // convert mapping from ints to nodes
+                let mut nodes_mapping = Vec::new();
+                for (map, flow) in mapping {
+                    if map.0 != source && map.1 != sink && flow != 0 {
+                        nodes_mapping.push((*index_to_node[map.0], *index_to_node[map.1]));
+                    }
+                }
+                set_s
+                    .get_mut(&SetSKey { val1: v_null, val2: u_null })
+                    .unwrap()
+                    .insert(*x_node, Some(nodes_mapping));
+            }
+        }
+        // set it back the way it was
+        ek.set_capacity(source, x_node_to_index[&x_node], 1);
+    }
 }
 
 // For debugging only
@@ -182,13 +229,12 @@ fn print_set_s(
 // between the same nodes are clearly not "wrong".  But because of this,
 // the size of the matching returned might be a bit wonky.
 fn get_mapping_from_set_s(
-    _graph_g: &GraphType,
     graph_h: &GraphType,
     set_s: &SetSType,
     root_in_g: &NodeIndex,
 ) -> Vec<(NodeIndex, NodeIndex)> {
     let root_h = find_root(graph_h);
-    let mut to_return = Vec::new();
+    let mut to_return = Vec::with_capacity(graph_h.node_count());
     let mut set_to_find_mapping = vec![(root_h, *root_in_g)];
     while !set_to_find_mapping.is_empty() {
         let key = set_to_find_mapping.pop().unwrap();
@@ -228,55 +274,9 @@ fn find_mapping_shamir_inner_loop(
         if u_neighbors.len() > v_neighbors.len() + 1 {
             continue;
         }
-
-        // maximum matching where X0 = X
-        let (cost, p) = max_matching::<DenseCapacity<_>>(
-            &u_neighbors,
-            &v_neighbors,
-            graph_g,
-            graph_h,
-            set_s,
-            u,
-            u_neighbors.len(),
-        );
-        if let Some(path) = p {
-            if set_s[&SetSKey { val1: v, val2: u }].contains_key(&u) {
-            } else {
-                set_s
-                    .get_mut(&SetSKey { val1: v, val2: u })
-                    .unwrap()
-                    .insert(u, Some(path));
-            }
-        }
-
-        // if your maximum matching was of less than u_neighbors.len()-1, don't
-        // even bother with the other matchings - you won't get a higher
-        // matching by removing elements
-
-        if cost >= u_neighbors.len() - 1 {
-            // maximum matching where X0 is X minus an element
-            for vertex in 0..u_neighbors.len() {
-                let mut new_x_set = u_neighbors.clone();
-                let vertex_id = new_x_set.remove(vertex);
-                let (_cost, p) = max_matching::<DenseCapacity<_>>(
-                    &new_x_set,
-                    &v_neighbors,
-                    graph_g,
-                    graph_h,
-                    set_s,
-                    u,
-                    new_x_set.len(),
-                );
-                if let Some(path) = p {
-                    if !set_s[&SetSKey { val1: v, val2: u }].contains_key(&vertex_id) {
-                        set_s
-                            .get_mut(&SetSKey { val1: v, val2: u })
-                            .unwrap()
-                            .insert(vertex_id, Some(path));
-                    }
-                }
-            }
-        }
+        // perform all max matching problems
+        max_matching::<DenseCapacity<_>>(
+            u, v, &u_neighbors, &v_neighbors, graph_g, graph_h, set_s);
 
         // lines 12-14 in Shamir and Tsur pseudocode
         if set_s[&SetSKey {
@@ -319,8 +319,8 @@ fn initialize_s(
     graph_g: &GraphType,
     graph_h: &GraphType,
 ) -> SetSType {
-    let mut s =
-        IndexMap::<SetSKey, IndexMap<NodeIndex, Option<Vec<(NodeIndex, NodeIndex)>>>>::new();
+    let mut s : SetSType =
+        IndexMap::with_capacity(graph_g.node_count()*graph_h.node_count());
     for node_g in graph_g.node_indices() {
         for u in graph_h.node_indices() {
             // initialize S entry as empty set
@@ -377,7 +377,6 @@ pub fn find_mapping_shamir_centralized(
             find_mapping_shamir_inner_loop(node, graph_g, graph_h, &mut set_s);
         if mapping_found {
             return Some(get_mapping_from_set_s(
-                graph_g,
                 graph_h,
                 &set_s,
                 &mapping_root.unwrap(),
@@ -442,30 +441,30 @@ pub fn find_mapping_shamir_decentralized(
 
     // 2. For all your children, run inner loop
     let mut mapping_root_for_children = None;
-    for child in graph_g.neighbors_directed(cur_node, Outgoing) {
+    let children : Vec<NodeIndex> = graph_g.neighbors_directed(cur_node, Outgoing).collect();
+    for child in &children {
         let (mapping_found, mapping_root) =
-            find_mapping_shamir_inner_loop(child, graph_g, graph_h, set_s);
+            find_mapping_shamir_inner_loop(*child, graph_g, graph_h, set_s);
         if !am_root && mapping_found {
             mapping_root_for_children = mapping_root;
         }
-        /*
-        // delete extraneous grandchild information if applicable
-        // Although this gets rid of extra, useless info, it absolutely blows
-        // up the runtime from roughly 30,000 ns to 480,000 ns for reasons
-        // I do not understand
-        set_s.retain(|key, value| {
-            let am_child = graph_g.contains_edge(cur_node, key.val1);
-            let am_cur_node = key.val1 == cur_node;
-            let valid_subgraph = value.contains_key(&key.val2);
-            am_child || am_cur_node || valid_subgraph
-            }
-        );
-        */
     }
+    // delete extraneous grandchild information now that you've done inner loop for all children
+    // Although this gets rid of extra, useless info, it absolutely blows
+    // up the runtime from roughly 30,000 ns to 480,000 ns for reasons
+    // I do not understand
+    /*
+    set_s.retain(|key, value| {
+        let am_child = children.contains(&key.val1);
+        let am_cur_node = key.val1 == cur_node;
+        let valid_subgraph = value.contains_key(&key.val2);
+        am_child || am_cur_node || valid_subgraph
+    });
+    */
 
     // 2a. If one of your children matched all of graph_h, return that matching
     if let Some(mrc) = mapping_root_for_children {
-        return Some(get_mapping_from_set_s(graph_g, graph_h, &set_s, &mrc));
+        return Some(get_mapping_from_set_s(graph_h, &set_s, &mrc));
     }
 
     // 3. If you are the root, run the inner loop for yourself as well
@@ -474,7 +473,6 @@ pub fn find_mapping_shamir_decentralized(
             find_mapping_shamir_inner_loop(cur_node, graph_g, graph_h, set_s);
         if mapping_found {
             return Some(get_mapping_from_set_s(
-                graph_g,
                 graph_h,
                 &set_s,
                 &mapping_root.unwrap(),
