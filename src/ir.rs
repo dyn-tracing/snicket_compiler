@@ -100,7 +100,7 @@ impl Property {
         let mut lst_str = "vec![".to_string();
         for member in &self.members {
             lst_str.push('\"');
-            lst_str.push_str(&member);
+            lst_str.push_str(member);
             lst_str.push_str("\", ");
         }
         lst_str.push(']');
@@ -111,7 +111,7 @@ impl Property {
         let mut udf_str = String::new();
         if let Some((last, front)) = self.members.split_last() {
             for member in front {
-                udf_str.push_str(&member);
+                udf_str.push_str(member);
                 udf_str.push('.');
             }
             udf_str.push_str(last);

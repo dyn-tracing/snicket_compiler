@@ -237,7 +237,7 @@ fn make_return_block(
                     &call.id,
                     id_to_property,
                 ),
-                _ => make_storage_rpc_value_from_target(&node, &call.id, id_to_property),
+                _ => make_storage_rpc_value_from_target(node, &call.id, id_to_property),
             }
         }
     }
@@ -250,7 +250,7 @@ fn make_aggr_block(
 ) -> String {
     let mut to_return = String::new();
     for arg in &agg.args {
-        to_return.push_str(&make_return_block(&arg, query_data, id_to_property));
+        to_return.push_str(&make_return_block(arg, query_data, id_to_property));
     }
     to_return
 }
@@ -559,7 +559,7 @@ pub fn generate_code_blocks(query_data: VisitorResults, udf_paths: Vec<String>) 
             make_return_block(entity_ref, &query_data, &code_struct.id_to_property)
         }
         IrReturnEnum::Aggregate(ref agg) => {
-            make_aggr_block(&agg, &query_data, &code_struct.id_to_property)
+            make_aggr_block(agg, &query_data, &code_struct.id_to_property)
         }
     };
     code_struct.response_blocks.push(resp_block);
