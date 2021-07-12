@@ -1,0 +1,3 @@
+[submodule "libs/antlr4rust"]
+	path = libs/antlr4rust
+	url = git@github.com:dyn-tracing/antlr4rust.git
